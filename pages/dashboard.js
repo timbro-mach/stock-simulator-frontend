@@ -53,7 +53,8 @@ const Dashboard = () => {
     if (isLoggedIn && username) {
       fetchUserData();
     }
-  }, [isLoggedIn, username]);
+  }, [isLoggedIn, username, fetchUserData]);
+  
 
   const fetchUserData = async () => {
     try {
@@ -495,9 +496,9 @@ const renderPortfolioBox = () => {
               />
               <button type="submit">Login</button>
               <p>
-                Don't have an account?{' '}
-                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); }}>
-                  Create Account
+              Don&apos;t have an account?{' '}
+              <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); }}>
+                Create Account
                 </a>
               </p>
             </form>
