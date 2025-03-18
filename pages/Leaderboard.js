@@ -3,26 +3,32 @@ import axios from 'axios';
 
 export default function Leaderboard({ competitionCode }) {
   const [leaderboard, setLeaderboard] = useState([]);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        setError(false); // Reset error state before fetching
+        const backendUrl = 'https://stock-simulator-backend.onrender.com';
+
+        // Check for username in localStorage for global leaderboard
+        const username = localStorage.getItem('username');
+        if (!competitionCode && !username) {
+          setError('No username found. Please log in.');
+          return;
+        }
+
         const url = competitionCode
-          ? `https://your-render-backend-url.onrender.com/competition/${competitionCode}/leaderboard`
-          : `https://your-render-backend-url.onrender.com/global_leaderboard?username=${localStorage.getItem('username')}`;
+          ? `${backendUrl}/competition/${competitionCode}/leaderboard`
+          : `${backendUrl}/global_leaderboard?username=${username}`;
+
+        console.log('Fetching leaderboard from:', url); // For debugging
 
         const res = await axios.get(url);
-
-        if (res.data && res.data.length > 0) {
-          setLeaderboard(res.data);
-        } else {
-          setError(true); // Trigger error if leaderboard is empty
-        }
+        setLeaderboard(res.data);
+        setError(null);
       } catch (error) {
         console.error('Failed to load leaderboard:', error);
-        setError(true);
+        setError('Failed to load leaderboard. Please try again.');
       }
     };
 
@@ -32,9 +38,8 @@ export default function Leaderboard({ competitionCode }) {
   return (
     <div>
       <h2>Leaderboard</h2>
-      {error && leaderboard.length === 0 ? (
-        <p style={{ color: 'red' }}>Failed to load leaderboard. Please try again.</p>
-      ) : (
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {leaderboard.length > 0 ? (
         <ul>
           {leaderboard.map((player, index) => (
             <li key={index}>
@@ -42,6 +47,8 @@ export default function Leaderboard({ competitionCode }) {
             </li>
           ))}
         </ul>
+      ) : (
+        !error && <p>No leaderboard data available.</p>
       )}
     </div>
   );
