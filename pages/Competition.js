@@ -8,6 +8,9 @@ const Competition = () => {
   const [message, setMessage] = useState('');
   const [username, setUsername] = useState('');
 
+  // Set the backend base URL
+  const BASE_URL = 'https://stock-simulator-backend.onrender.com';
+
   useEffect(() => {
     // Ensure this only runs on the client side (to avoid SSR issues)
     if (typeof window !== 'undefined') {
@@ -18,7 +21,7 @@ const Competition = () => {
 
   const createCompetition = async () => {
     try {
-      const response = await axios.post('http://127.0.0.1:5000/competition/create', {
+      const response = await axios.post(`${BASE_URL}/competition/create`, {
         username,
         name: competitionName
       });
@@ -32,7 +35,7 @@ const Competition = () => {
 
   const joinCompetition = async () => {
     try {
-      const response = await axios.post('http://127.0.0.1:5000/competition/join', {
+      const response = await axios.post(`${BASE_URL}/competition/join`, {
         username,
         competition_code: joinCode
       });
