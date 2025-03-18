@@ -1,5 +1,4 @@
-// Competition.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const Competition = () => {
@@ -7,7 +6,15 @@ const Competition = () => {
   const [competitionCode, setCompetitionCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [message, setMessage] = useState('');
-  const username = localStorage.getItem('username') || '';
+  const [username, setUsername] = useState('');
+
+  useEffect(() => {
+    // Ensure this only runs on the client side (to avoid SSR issues)
+    if (typeof window !== 'undefined') {
+      const storedUsername = localStorage.getItem('username') || '';
+      setUsername(storedUsername);
+    }
+  }, []);
 
   const createCompetition = async () => {
     try {
