@@ -1,17 +1,25 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
-export default function Leaderboard() {
+export default function Leaderboard({ competitionCode }) {
   const [leaderboard, setLeaderboard] = useState([]);
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
-      const res = await axios.get('http://127.0.0.1:5000/leaderboard');
-      setLeaderboard(res.data);
+      try {
+        // Use the competition-specific endpoint if competitionCode is provided
+        const url = competitionCode
+          ? `http://127.0.0.1:5000/competition/${competitionCode}/leaderboard`
+          : `http://127.0.0.1:5000/global_leaderboard?username=${localStorage.getItem('username')}`;
+        const res = await axios.get(url);
+        setLeaderboard(res.data);
+      } catch (error) {
+        console.error('Failed to load leaderboard:', error);
+      }
     };
 
     fetchLeaderboard();
-  }, []);
+  }, [competitionCode]);
 
   return (
     <div>

@@ -37,6 +37,24 @@ const Dashboard = () => {
   const [tradeMessage, setTradeMessage] = useState('');
   const [chartData, setChartData] = useState(null);
 
+  // Define fetchUserData before useEffect uses it
+  const fetchUserData = async () => {
+    try {
+      const response = await axios.get('http://127.0.0.1:5000/user', { params: { username } });
+      setGlobalAccount(response.data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
+      setCompetitionAccounts(response.data.competition_accounts || []);
+    } catch (error) {
+      if (error.response && error.response.status === 404) {
+        // Handle case where user isn't found in the database.
+        console.error('User not found. Please register.');
+        localStorage.removeItem('username');
+        setIsLoggedIn(false);
+      } else {
+        console.error('Failed to load user data:', error);
+      }
+    }
+  };
+
   // On mount, load username from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -49,30 +67,12 @@ const Dashboard = () => {
   }, []);
 
   // Fetch user data after login
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isLoggedIn && username) {
       fetchUserData();
     }
-  }, [isLoggedIn, username, fetchUserData]);
-  
-
-  const fetchUserData = async () => {
-    try {
-      const response = await axios.get('http://127.0.0.1:5000/user', { params: { username } });
-      setGlobalAccount(response.data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
-      setCompetitionAccounts(response.data.competition_accounts || []);
-    } catch (error) {
-      if (error.response && error.response.status === 404) {
-        // Handle case where user isn't found in the database.
-        console.error('User not found. Please register.');
-        // Optionally, clear localStorage and set isLoggedIn to false:
-        localStorage.removeItem('username');
-        setIsLoggedIn(false);
-      } else {
-        console.error('Failed to load user data:', error);
-      }
-    }
-  };
+  }, [isLoggedIn, username]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -193,7 +193,6 @@ const Dashboard = () => {
     }
   };
 
-  // For competition trading, assume similar endpoints exist
   const buyStockCompetition = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
@@ -230,7 +229,6 @@ const Dashboard = () => {
     }
   };
 
-  // Render account details based on selected account
   const renderAccountDetails = () => {
     if (selectedAccount === 'global') {
       return (
@@ -254,92 +252,89 @@ const Dashboard = () => {
     }
   };
 
-  // Render portfolio box based on selected account
-const renderPortfolioBox = () => {
-  if (selectedAccount === 'global') {
-    return (
-      <div className="portfolio-box">
-        <h3>Your Global Portfolio</h3>
-        {globalAccount.portfolio && globalAccount.portfolio.length > 0 ? (
-          <table>
-            <thead>
-              <tr>
-                <th>Stock</th>
-                <th>Quantity</th>
-                <th>Current Price</th>
-                <th>Total Value</th>
-                <th>P&L</th>
-              </tr>
-            </thead>
-            <tbody>
-              {globalAccount.portfolio.map((holding, index) => {
-                const pnl = holding.buy_price
-                  ? (holding.current_price - holding.buy_price) * holding.quantity
-                  : 0;
-                return (
-                  <tr key={index}>
-                    <td>{holding.symbol}</td>
-                    <td>{holding.quantity}</td>
-                    <td>${holding.current_price.toFixed(2)}</td>
-                    <td>${holding.total_value.toFixed(2)}</td>
-                    <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>
-                      ${pnl.toFixed(2)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <p>No holdings in your global portfolio.</p>
-        )}
-      </div>
-    );
-  } else {
-    const compAcc = competitionAccounts.find(acc => acc.code === selectedAccount);
-    return (
-      <div className="portfolio-box">
-        <h3>Your Competition Portfolio</h3>
-        {compAcc && compAcc.portfolio && compAcc.portfolio.length > 0 ? (
-          <table>
-            <thead>
-              <tr>
-                <th>Stock</th>
-                <th>Quantity</th>
-                <th>Current Price</th>
-                <th>Total Value</th>
-                <th>P&L</th>
-              </tr>
-            </thead>
-            <tbody>
-              {compAcc.portfolio.map((holding, index) => {
-                const pnl = holding.buy_price
-                  ? (holding.current_price - holding.buy_price) * holding.quantity
-                  : 0;
-                return (
-                  <tr key={index}>
-                    <td>{holding.symbol}</td>
-                    <td>{holding.quantity}</td>
-                    <td>${holding.current_price.toFixed(2)}</td>
-                    <td>${holding.total_value.toFixed(2)}</td>
-                    <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>
-                      ${pnl.toFixed(2)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <p>No holdings in your competition portfolio.</p>
-        )}
-      </div>
-    );
-  }
-};
+  const renderPortfolioBox = () => {
+    if (selectedAccount === 'global') {
+      return (
+        <div className="portfolio-box">
+          <h3>Your Global Portfolio</h3>
+          {globalAccount.portfolio && globalAccount.portfolio.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Stock</th>
+                  <th>Quantity</th>
+                  <th>Current Price</th>
+                  <th>Total Value</th>
+                  <th>P&L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {globalAccount.portfolio.map((holding, index) => {
+                  const pnl = holding.buy_price
+                    ? (holding.current_price - holding.buy_price) * holding.quantity
+                    : 0;
+                  return (
+                    <tr key={index}>
+                      <td>{holding.symbol}</td>
+                      <td>{holding.quantity}</td>
+                      <td>${holding.current_price.toFixed(2)}</td>
+                      <td>${holding.total_value.toFixed(2)}</td>
+                      <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>
+                        ${pnl.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p>No holdings in your global portfolio.</p>
+          )}
+        </div>
+      );
+    } else {
+      const compAcc = competitionAccounts.find(acc => acc.code === selectedAccount);
+      return (
+        <div className="portfolio-box">
+          <h3>Your Competition Portfolio</h3>
+          {compAcc && compAcc.portfolio && compAcc.portfolio.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Stock</th>
+                  <th>Quantity</th>
+                  <th>Current Price</th>
+                  <th>Total Value</th>
+                  <th>P&L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {compAcc.portfolio.map((holding, index) => {
+                  const pnl = holding.buy_price
+                    ? (holding.current_price - holding.buy_price) * holding.quantity
+                    : 0;
+                  return (
+                    <tr key={index}>
+                      <td>{holding.symbol}</td>
+                      <td>{holding.quantity}</td>
+                      <td>${holding.current_price.toFixed(2)}</td>
+                      <td>${holding.total_value.toFixed(2)}</td>
+                      <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>
+                        ${pnl.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p>No holdings in your competition portfolio.</p>
+          )}
+        </div>
+      );
+    }
+  };
 
-
-  // Render trade box based on selected account
   const renderTradeBox = () => {
     if (selectedAccount === 'global') {
       return (
@@ -446,7 +441,8 @@ const renderPortfolioBox = () => {
 
           {/* Global Leaderboard */}
           <div className="leaderboard-box">
-            <Leaderboard />
+            <Leaderboard competitionCode={selectedAccount !== 'global' ? selectedAccount : null} />
+
           </div>
 
           {/* Competition Section for creating/joining competitions */}
@@ -496,9 +492,9 @@ const renderPortfolioBox = () => {
               />
               <button type="submit">Login</button>
               <p>
-              Don&apos;t have an account?{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); }}>
-                Create Account
+                Don&apos;t have an account?{' '}
+                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); }}>
+                  Create Account
                 </a>
               </p>
             </form>
