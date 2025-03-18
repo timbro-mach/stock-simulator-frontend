@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import Leaderboard from '../Leaderboard';
+import Leaderboard from './Leaderboard';
 import Competition from './Competition';
 import { Line } from 'react-chartjs-2';
 import {
