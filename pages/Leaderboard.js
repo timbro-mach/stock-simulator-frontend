@@ -3,21 +3,26 @@ import axios from 'axios';
 
 export default function Leaderboard({ competitionCode }) {
   const [leaderboard, setLeaderboard] = useState([]);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        const backendUrl = 'https://stock-simulator-backend.onrender.com';
+        setError(false); // Reset error state before fetching
         const url = competitionCode
-          ? `${backendUrl}/competition/${competitionCode}/leaderboard`
-          : `${backendUrl}/global_leaderboard?username=${localStorage.getItem('username')}`;
+          ? `https://your-render-backend-url.onrender.com/competition/${competitionCode}/leaderboard`
+          : `https://your-render-backend-url.onrender.com/global_leaderboard?username=${localStorage.getItem('username')}`;
 
         const res = await axios.get(url);
-        setLeaderboard(res.data);
+
+        if (res.data && res.data.length > 0) {
+          setLeaderboard(res.data);
+        } else {
+          setError(true); // Trigger error if leaderboard is empty
+        }
       } catch (error) {
         console.error('Failed to load leaderboard:', error);
-        setError('Failed to load leaderboard. Please try again.');
+        setError(true);
       }
     };
 
@@ -27,8 +32,9 @@ export default function Leaderboard({ competitionCode }) {
   return (
     <div>
       <h2>Leaderboard</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {leaderboard.length > 0 ? (
+      {error && leaderboard.length === 0 ? (
+        <p style={{ color: 'red' }}>Failed to load leaderboard. Please try again.</p>
+      ) : (
         <ul>
           {leaderboard.map((player, index) => (
             <li key={index}>
@@ -36,8 +42,6 @@ export default function Leaderboard({ competitionCode }) {
             </li>
           ))}
         </ul>
-      ) : (
-        <p>No leaderboard data available.</p>
       )}
     </div>
   );
