@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import CompetitionLeaderboard from './CompetitionLeaderboard';
-import TeamLeaderboard from './TeamLeaderboard';
+import Leaderboard from '../components/Leaderboard'; // Use the combined Leaderboard component
 import Competition from './Competition';
 import { Line } from 'react-chartjs-2';
 import {
@@ -28,10 +27,10 @@ const Dashboard = () => {
   const [globalAccount, setGlobalAccount] = useState({ cash_balance: 0, portfolio: [], total_value: 0 });
   // Competition accounts info (array for individuals)
   const [competitionAccounts, setCompetitionAccounts] = useState([]);
-  // Team accounts info (array for teams in global context)
+  // Team accounts info (array for teams)
   const [teamAccounts, setTeamAccounts] = useState([]);
 
-  // Selected account: object with { type: 'global' | 'competition' | 'team', id: identifier }
+  // Selected account: { type: 'global' | 'competition' | 'team', id: identifier }
   // For global, id is null; for competition, id is the competition code; for team, id is the team competition account code.
   const [selectedAccount, setSelectedAccount] = useState({ type: 'global', id: null });
 
@@ -42,7 +41,7 @@ const Dashboard = () => {
   const [tradeMessage, setTradeMessage] = useState('');
   const [chartData, setChartData] = useState(null);
 
-  // Teams state for creating and joining teams (global teams)
+  // Teams state for creating and joining teams
   const [teamName, setTeamName] = useState('');
   const [joinTeamCode, setJoinTeamCode] = useState('');
   const [teamMessage, setTeamMessage] = useState('');
@@ -158,7 +157,7 @@ const Dashboard = () => {
               fill: false,
               borderColor: 'rgba(75,192,192,1)',
               tension: 0.1,
-            }
+            },
           ],
         });
       } else {
@@ -281,7 +280,7 @@ const Dashboard = () => {
     }
   };
 
-  // Teams (global teams) creation and joining functions
+  // Teams creation and joining functions (global teams)
   const createTeam = async () => {
     if (!teamName) {
       setTeamMessage('Please enter a team name.');
@@ -429,7 +428,6 @@ const Dashboard = () => {
         </div>
       );
     } else {
-      // For team competition accounts, you might add a dedicated portfolio view later.
       return (
         <div className="portfolio-box">
           <h3>Team Portfolio</h3>
@@ -592,17 +590,17 @@ const Dashboard = () => {
           {/* Leaderboards */}
           {selectedAccount.type === 'competition' && (
             <div className="leaderboard-box">
-              <CompetitionLeaderboard competitionCode={selectedAccount.id} />
+              <Leaderboard competitionCode={selectedAccount.id} variant="competition" />
             </div>
           )}
           {selectedAccount.type === 'team' && (
             <div className="leaderboard-box">
-              <CompetitionLeaderboard competitionCode={selectedAccount.id} />
-              <TeamLeaderboard competitionCode={selectedAccount.id} />
+              <Leaderboard competitionCode={selectedAccount.id} variant="competition" />
+              <Leaderboard competitionCode={selectedAccount.id} variant="team" />
             </div>
           )}
 
-          {/* Competition Section for creating/joining competitions */}
+          {/* Competition Section */}
           <div className="competition-section">
             <Competition />
           </div>
