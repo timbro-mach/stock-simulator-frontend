@@ -119,6 +119,16 @@ li {
   width: 200px;
 }
 
+/* Account Switcher: display buttons inline */
+.account-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+/* Logout Button */
 .logout-button {
   background-color: #f44336; /* A red color */
   color: white;

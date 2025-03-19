@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import Leaderboard from '../components/Leaderboard'; // Use the combined Leaderboard component
+import Leaderboard from '../components/Leaderboard'; // Combined Leaderboard component
 import Competition from './Competition';
 import { Line } from 'react-chartjs-2';
 import {
@@ -25,14 +25,18 @@ const Dashboard = () => {
 
   // Global account info
   const [globalAccount, setGlobalAccount] = useState({ cash_balance: 0, portfolio: [], total_value: 0 });
-  // Competition accounts info (array for individuals)
+  // Individual competition accounts (from CompetitionMember)
   const [competitionAccounts, setCompetitionAccounts] = useState([]);
-  // Team accounts info (array for teams)
-  const [teamAccounts, setTeamAccounts] = useState([]);
+  // Team competition accounts (from CompetitionTeam)
+  const [teamCompetitionAccounts, setTeamCompetitionAccounts] = useState([]);
+  // Global team accounts (for team creation/join) – if needed
+  const [teams, setTeams] = useState([]);
 
-  // Selected account: { type: 'global' | 'competition' | 'team', id: identifier }
-  // For global, id is null; for competition, id is the competition code; for team, id is the team competition account code.
-  const [selectedAccount, setSelectedAccount] = useState({ type: 'global', id: null });
+  // Selected account:
+  // - For global: { type: 'global' }
+  // - For individual competition: { type: 'competition', id: <competition code> }
+  // - For team competition: { type: 'team', team_id: <team_id>, competition_code: <competition code> }
+  const [selectedAccount, setSelectedAccount] = useState({ type: 'global' });
 
   // Trading and chart state
   const [stockSymbol, setStockSymbol] = useState('');
@@ -41,7 +45,7 @@ const Dashboard = () => {
   const [tradeMessage, setTradeMessage] = useState('');
   const [chartData, setChartData] = useState(null);
 
-  // Teams state for creating and joining teams
+  // Teams state for creating and joining teams (global teams)
   const [teamName, setTeamName] = useState('');
   const [joinTeamCode, setJoinTeamCode] = useState('');
   const [teamMessage, setTeamMessage] = useState('');
@@ -55,7 +59,8 @@ const Dashboard = () => {
       const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
       setGlobalAccount(response.data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
       setCompetitionAccounts(response.data.competition_accounts || []);
-      setTeamAccounts(response.data.teams || []);
+      setTeamCompetitionAccounts(response.data.team_competitions || []);
+      setTeams(response.data.teams || []);
     } catch (error) {
       if (error.response && error.response.status === 404) {
         console.error('User not found. Please register.');
@@ -126,8 +131,9 @@ const Dashboard = () => {
       setIsLoggedIn(false);
       setGlobalAccount({ cash_balance: 0, portfolio: [], total_value: 0 });
       setCompetitionAccounts([]);
-      setTeamAccounts([]);
-      setSelectedAccount({ type: 'global', id: null });
+      setTeamCompetitionAccounts([]);
+      setTeams([]);
+      setSelectedAccount({ type: 'global' });
     }
   };
 
@@ -243,14 +249,21 @@ const Dashboard = () => {
     }
   };
 
-  // Team trading functions (for team competition account)
+  // Team trading functions (for team competition accounts)
   const buyStockTeam = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
     try {
-      const buyData = { username, team_id: selectedAccount.id, symbol: stockSymbol, quantity: tradeQuantity };
+      // Use selectedAccount.team_id and selectedAccount.competition_code
+      const buyData = { 
+        username, 
+        team_id: selectedAccount.team_id, 
+        competition_code: selectedAccount.competition_code, 
+        symbol: stockSymbol, 
+        quantity: tradeQuantity 
+      };
       const response = await axios.post(`${BASE_URL}/competition/team/buy`, buyData);
       if (response.data.message) {
         setTradeMessage(response.data.message);
@@ -268,7 +281,13 @@ const Dashboard = () => {
       return;
     }
     try {
-      const sellData = { username, team_id: selectedAccount.id, symbol: stockSymbol, quantity: tradeQuantity };
+      const sellData = { 
+        username, 
+        team_id: selectedAccount.team_id, 
+        competition_code: selectedAccount.competition_code, 
+        symbol: stockSymbol, 
+        quantity: tradeQuantity 
+      };
       const response = await axios.post(`${BASE_URL}/competition/team/sell`, sellData);
       if (response.data.message) {
         setTradeMessage(response.data.message);
@@ -328,25 +347,26 @@ const Dashboard = () => {
       if (!compAcc) return null;
       return (
         <div className="account-box">
-          <h2>Competition Account for {username}</h2>
+          <h2>Competition Account (Individual) for {username}</h2>
           <p>Competition: {compAcc.name} (Code: {compAcc.code})</p>
           <p>Cash Balance: ${ (compAcc.competition_cash ?? 0).toFixed(2) }</p>
           <p>Total Account Value: ${ (compAcc.total_value ?? 0).toFixed(2) }</p>
         </div>
       );
     } else if (selectedAccount.type === 'team') {
-      const teamAcc = teamAccounts.find(team => team.team_id === selectedAccount.id);
+      const teamAcc = teamCompetitionAccounts.find(acc => acc.team_id === selectedAccount.team_id && acc.code === selectedAccount.competition_code);
       if (!teamAcc) return null;
       return (
         <div className="account-box">
-          <h2>Team Competition Account: {teamAcc.team_name}</h2>
-          <p>Cash Balance: ${ (teamAcc.team_cash ?? 0).toFixed(2) }</p>
+          <h2>Competition Account (Team) - {teamAcc.name}</h2>
+          <p>Cash Balance: ${ (teamAcc.competition_cash ?? 0).toFixed(2) }</p>
+          <p>Total Account Value: ${ (teamAcc.total_value ?? 0).toFixed(2) }</p>
         </div>
       );
     }
   };
 
-  // Render portfolio details (for Global and Competition accounts)
+  // Render portfolio details
   const renderPortfolioBox = () => {
     if (selectedAccount.type === 'global') {
       return (
@@ -391,7 +411,7 @@ const Dashboard = () => {
       const compAcc = competitionAccounts.find(acc => acc.code === selectedAccount.id);
       return (
         <div className="portfolio-box">
-          <h3>Your Competition Portfolio</h3>
+          <h3>Your Competition Portfolio (Individual)</h3>
           {compAcc && compAcc.portfolio && compAcc.portfolio.length > 0 ? (
             <table>
               <thead>
@@ -423,15 +443,48 @@ const Dashboard = () => {
               </tbody>
             </table>
           ) : (
-            <p>No holdings in your competition portfolio.</p>
+            <p>No holdings in your individual competition portfolio.</p>
           )}
         </div>
       );
-    } else {
+    } else if (selectedAccount.type === 'team') {
+      const teamAcc = teamCompetitionAccounts.find(acc => acc.team_id === selectedAccount.team_id && acc.code === selectedAccount.competition_code);
       return (
         <div className="portfolio-box">
-          <h3>Team Portfolio</h3>
-          <p>Team portfolio details coming soon...</p>
+          <h3>Your Competition Portfolio (Team)</h3>
+          {teamAcc && teamAcc.portfolio && teamAcc.portfolio.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Stock</th>
+                  <th>Quantity</th>
+                  <th>Current Price</th>
+                  <th>Total Value</th>
+                  <th>P&L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teamAcc.portfolio.map((holding, index) => {
+                  const pnl = holding.buy_price
+                    ? (holding.current_price - holding.buy_price) * holding.quantity
+                    : 0;
+                  return (
+                    <tr key={index}>
+                      <td>{holding.symbol}</td>
+                      <td>{holding.quantity}</td>
+                      <td>${holding.current_price.toFixed(2)}</td>
+                      <td>${holding.total_value.toFixed(2)}</td>
+                      <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>
+                        ${pnl.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p>No holdings in your team competition portfolio.</p>
+          )}
         </div>
       );
     }
@@ -574,9 +627,12 @@ const Dashboard = () => {
                 {acc.name} ({acc.code})
               </button>
             ))}
-            {teamAccounts.map(team => (
-              <button key={team.team_id} onClick={() => setSelectedAccount({ type: 'team', id: team.team_id })}>
-                {team.team_name} (Team)
+            {teamCompetitionAccounts.map(acc => (
+              <button
+                key={acc.team_id + acc.code}
+                onClick={() => setSelectedAccount({ type: 'team', team_id: acc.team_id, competition_code: acc.code })}
+              >
+                {acc.name} (Team - {acc.code})
               </button>
             ))}
           </div>
@@ -595,8 +651,7 @@ const Dashboard = () => {
           )}
           {selectedAccount.type === 'team' && (
             <div className="leaderboard-box">
-              <Leaderboard competitionCode={selectedAccount.id} variant="competition" />
-              <Leaderboard competitionCode={selectedAccount.id} variant="team" />
+              <Leaderboard competitionCode={selectedAccount.competition_code} variant="team" />
             </div>
           )}
 
