@@ -30,9 +30,7 @@ const Dashboard = () => {
   // Team accounts info (array) from login response
   const [teamAccounts, setTeamAccounts] = useState([]);
 
-  // Which account is currently active.
-  // selectedAccount is an object with { type: 'global' | 'competition' | 'team', id: <identifier> }
-  // For global, id is null; for competition, id is competition code; for team, id is team_id.
+  // Selected account: object with { type: 'global' | 'competition' | 'team', id: identifier }
   const [selectedAccount, setSelectedAccount] = useState({ type: 'global', id: null });
 
   // Trading and chart state
@@ -41,6 +39,11 @@ const Dashboard = () => {
   const [tradeQuantity, setTradeQuantity] = useState(0);
   const [tradeMessage, setTradeMessage] = useState('');
   const [chartData, setChartData] = useState(null);
+
+  // Teams state for creating and joining teams
+  const [teamName, setTeamName] = useState('');
+  const [joinTeamCode, setJoinTeamCode] = useState('');
+  const [teamMessage, setTeamMessage] = useState('');
 
   // Base URL for API calls
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
@@ -51,7 +54,6 @@ const Dashboard = () => {
       const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
       setGlobalAccount(response.data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
       setCompetitionAccounts(response.data.competition_accounts || []);
-      // Assume teams are returned in the login response under "teams"
       setTeamAccounts(response.data.teams || []);
     } catch (error) {
       if (error.response && error.response.status === 404) {
@@ -274,6 +276,39 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error selling team stock:', error);
       setTradeMessage('Error selling team stock.');
+    }
+  };
+
+  // Teams: create and join
+  const createTeam = async () => {
+    if (!teamName) {
+      setTeamMessage('Please enter a team name.');
+      return;
+    }
+    try {
+      const response = await axios.post(`${BASE_URL}/team/create`, { username, team_name: teamName });
+      setTeamMessage(`Team created successfully! Your Team Code is ${response.data.team_code}`);
+      setTeamName('');
+      fetchUserData();
+    } catch (error) {
+      console.error('Error creating team:', error);
+      setTeamMessage('Error creating team.');
+    }
+  };
+
+  const joinTeam = async () => {
+    if (!joinTeamCode) {
+      setTeamMessage('Please enter a team code.');
+      return;
+    }
+    try {
+      const response = await axios.post(`${BASE_URL}/team/join`, { username, team_code: joinTeamCode });
+      setTeamMessage(response.data.message);
+      setJoinTeamCode('');
+      fetchUserData();
+    } catch (error) {
+      console.error('Error joining team:', error);
+      setTeamMessage('Error joining team.');
     }
   };
 
@@ -551,6 +586,32 @@ const Dashboard = () => {
           {renderAccountDetails()}
           {renderPortfolioBox()}
           {renderTradeBox()}
+
+          {/* Teams Section */}
+          <div className="teams-section">
+            <h2>Teams</h2>
+            <div className="team-form">
+              <h3>Create Team</h3>
+              <input
+                type="text"
+                placeholder="Enter Team Name"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+              />
+              <button className="team-button" onClick={createTeam}>Create Team</button>
+            </div>
+            <div className="team-form">
+              <h3>Join Team</h3>
+              <input
+                type="text"
+                placeholder="Enter Team Code"
+                value={joinTeamCode}
+                onChange={(e) => setJoinTeamCode(e.target.value)}
+              />
+              <button className="team-button" onClick={joinTeam}>Join Team</button>
+            </div>
+            {teamMessage && <p>{teamMessage}</p>}
+          </div>
 
           {/* Unified Leaderboard (only show for competition accounts) */}
           {selectedAccount.type === 'competition' && (
