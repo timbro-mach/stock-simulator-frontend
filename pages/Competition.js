@@ -5,6 +5,7 @@ const Competition = () => {
   const [competitionName, setCompetitionName] = useState('');
   const [competitionCode, setCompetitionCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  const [teamJoinCode, setTeamJoinCode] = useState('');
   const [message, setMessage] = useState('');
   const [username, setUsername] = useState('');
 
@@ -23,7 +24,7 @@ const Competition = () => {
     try {
       const response = await axios.post(`${BASE_URL}/competition/create`, {
         username,
-        name: competitionName
+        name: competitionName,
       });
       setCompetitionCode(response.data.competition_code);
       setMessage(response.data.message);
@@ -37,13 +38,33 @@ const Competition = () => {
     try {
       const response = await axios.post(`${BASE_URL}/competition/join`, {
         username,
-        competition_code: joinCode
+        competition_code: joinCode,
       });
       setMessage(response.data.message);
     } catch (error) {
-      setMessage('Error joining competition');
+      setMessage('Error joining competition as individual');
       console.error(error);
     }
+  };
+
+  const joinCompetitionAsTeam = async () => {
+    try {
+      const response = await axios.post(`${BASE_URL}/competition/team/join`, {
+        username,
+        competition_code: teamJoinCode.competition_code, // competition code to join
+        team_code: teamJoinCode.team_code,              // team code from your team account
+      });
+      setMessage(response.data.message);
+    } catch (error) {
+      setMessage('Error joining competition as team');
+      console.error(error);
+    }
+  };
+
+  // For team join input, we use an object with competition_code and team_code fields.
+  const handleTeamJoinInputChange = (e) => {
+    const { name, value } = e.target;
+    setTeamJoinCode(prev => ({ ...prev, [name]: value }));
   };
 
   return (
@@ -61,7 +82,7 @@ const Competition = () => {
         {competitionCode && <p>Your Competition Code: {competitionCode}</p>}
       </div>
       <div>
-        <h3>Join Competition</h3>
+        <h3>Join Competition (Individual)</h3>
         <input
           type="text"
           placeholder="Enter Competition Code"
@@ -69,6 +90,24 @@ const Competition = () => {
           onChange={(e) => setJoinCode(e.target.value)}
         />
         <button onClick={joinCompetition}>Join Competition</button>
+      </div>
+      <div>
+        <h3>Join Competition (As Team)</h3>
+        <input
+          type="text"
+          placeholder="Enter Competition Code"
+          name="competition_code"
+          value={teamJoinCode.competition_code || ''}
+          onChange={handleTeamJoinInputChange}
+        />
+        <input
+          type="text"
+          placeholder="Enter Your Team Code"
+          name="team_code"
+          value={teamJoinCode.team_code || ''}
+          onChange={handleTeamJoinInputChange}
+        />
+        <button onClick={joinCompetitionAsTeam}>Join Competition as Team</button>
       </div>
       {message && <p>{message}</p>}
     </div>
