@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import Leaderboard from './Leaderboard';
+import CompetitionLeaderboard from './CompetitionLeaderboard';
+import TeamLeaderboard from './TeamLeaderboard';
 import Competition from './Competition';
 import { Line } from 'react-chartjs-2';
 import {
@@ -25,12 +26,13 @@ const Dashboard = () => {
 
   // Global account info
   const [globalAccount, setGlobalAccount] = useState({ cash_balance: 0, portfolio: [], total_value: 0 });
-  // Competition accounts info (array)
+  // Competition accounts info (array for individuals)
   const [competitionAccounts, setCompetitionAccounts] = useState([]);
-  // Team accounts info (array) from login response
+  // Team accounts info (array for teams in global context)
   const [teamAccounts, setTeamAccounts] = useState([]);
 
   // Selected account: object with { type: 'global' | 'competition' | 'team', id: identifier }
+  // For global, id is null; for competition, id is the competition code; for team, id is the team competition account code.
   const [selectedAccount, setSelectedAccount] = useState({ type: 'global', id: null });
 
   // Trading and chart state
@@ -40,7 +42,7 @@ const Dashboard = () => {
   const [tradeMessage, setTradeMessage] = useState('');
   const [chartData, setChartData] = useState(null);
 
-  // Teams state for creating and joining teams
+  // Teams state for creating and joining teams (global teams)
   const [teamName, setTeamName] = useState('');
   const [joinTeamCode, setJoinTeamCode] = useState('');
   const [teamMessage, setTeamMessage] = useState('');
@@ -205,7 +207,7 @@ const Dashboard = () => {
     }
   };
 
-  // Competition trading functions
+  // Competition trading functions (individual)
   const buyStockCompetition = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
@@ -242,7 +244,7 @@ const Dashboard = () => {
     }
   };
 
-  // Team trading functions
+  // Team trading functions (for team competition account)
   const buyStockTeam = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
@@ -250,7 +252,7 @@ const Dashboard = () => {
     }
     try {
       const buyData = { username, team_id: selectedAccount.id, symbol: stockSymbol, quantity: tradeQuantity };
-      const response = await axios.post(`${BASE_URL}/team/buy`, buyData);
+      const response = await axios.post(`${BASE_URL}/competition/team/buy`, buyData);
       if (response.data.message) {
         setTradeMessage(response.data.message);
         fetchUserData();
@@ -268,7 +270,7 @@ const Dashboard = () => {
     }
     try {
       const sellData = { username, team_id: selectedAccount.id, symbol: stockSymbol, quantity: tradeQuantity };
-      const response = await axios.post(`${BASE_URL}/team/sell`, sellData);
+      const response = await axios.post(`${BASE_URL}/competition/team/sell`, sellData);
       if (response.data.message) {
         setTradeMessage(response.data.message);
         fetchUserData();
@@ -279,7 +281,7 @@ const Dashboard = () => {
     }
   };
 
-  // Teams: create and join
+  // Teams (global teams) creation and joining functions
   const createTeam = async () => {
     if (!teamName) {
       setTeamMessage('Please enter a team name.');
@@ -338,14 +340,14 @@ const Dashboard = () => {
       if (!teamAcc) return null;
       return (
         <div className="account-box">
-          <h2>Team Account: {teamAcc.team_name}</h2>
+          <h2>Team Competition Account: {teamAcc.team_name}</h2>
           <p>Cash Balance: ${ (teamAcc.team_cash ?? 0).toFixed(2) }</p>
         </div>
       );
     }
   };
 
-  // Render portfolio details (only for Global and Competition accounts in this example)
+  // Render portfolio details (for Global and Competition accounts)
   const renderPortfolioBox = () => {
     if (selectedAccount.type === 'global') {
       return (
@@ -427,7 +429,7 @@ const Dashboard = () => {
         </div>
       );
     } else {
-      // For team accounts, you may want to implement a separate portfolio view.
+      // For team competition accounts, you might add a dedicated portfolio view later.
       return (
         <div className="portfolio-box">
           <h3>Team Portfolio</h3>
@@ -482,7 +484,7 @@ const Dashboard = () => {
     } else if (selectedAccount.type === 'competition') {
       return (
         <div className="trade-box">
-          <h3>Trade Stocks (Competition)</h3>
+          <h3>Trade Stocks (Competition - Individual)</h3>
           <div className="trade-chart-container" style={{ display: 'flex', gap: '20px' }}>
             <div className="trade-inputs" style={{ flex: 1 }}>
               <div>
@@ -522,7 +524,7 @@ const Dashboard = () => {
     } else if (selectedAccount.type === 'team') {
       return (
         <div className="trade-box">
-          <h3>Trade Stocks (Team)</h3>
+          <h3>Trade Stocks (Competition - Team)</h3>
           <div className="trade-chart-container" style={{ display: 'flex', gap: '20px' }}>
             <div className="trade-inputs" style={{ flex: 1 }}>
               <div>
@@ -587,6 +589,24 @@ const Dashboard = () => {
           {renderPortfolioBox()}
           {renderTradeBox()}
 
+          {/* Leaderboards */}
+          {selectedAccount.type === 'competition' && (
+            <div className="leaderboard-box">
+              <CompetitionLeaderboard competitionCode={selectedAccount.id} />
+            </div>
+          )}
+          {selectedAccount.type === 'team' && (
+            <div className="leaderboard-box">
+              <CompetitionLeaderboard competitionCode={selectedAccount.id} />
+              <TeamLeaderboard competitionCode={selectedAccount.id} />
+            </div>
+          )}
+
+          {/* Competition Section for creating/joining competitions */}
+          <div className="competition-section">
+            <Competition />
+          </div>
+
           {/* Teams Section */}
           <div className="teams-section">
             <h2>Teams</h2>
@@ -611,18 +631,6 @@ const Dashboard = () => {
               <button className="team-button" onClick={joinTeam}>Join Team</button>
             </div>
             {teamMessage && <p>{teamMessage}</p>}
-          </div>
-
-          {/* Unified Leaderboard (only show for competition accounts) */}
-          {selectedAccount.type === 'competition' && (
-            <div className="leaderboard-box">
-              <Leaderboard competitionCode={selectedAccount.id} />
-            </div>
-          )}
-
-          {/* Competition Section for creating/joining competitions */}
-          <div className="competition-section">
-            <Competition />
           </div>
         </div>
       ) : (
