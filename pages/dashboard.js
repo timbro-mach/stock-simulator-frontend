@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import Leaderboard from '../components/Leaderboard'; // Combined Leaderboard component
+import Leaderboard from '../components/Leaderboard';
 import Competition from './Competition';
 import { Line } from 'react-chartjs-2';
 import {
@@ -24,19 +24,16 @@ const Dashboard = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // New state to toggle between Community view and Trading view
+  const [showTrading, setShowTrading] = useState(false);
+
   // Global account info
   const [globalAccount, setGlobalAccount] = useState({ cash_balance: 0, portfolio: [], total_value: 0 });
-  // Individual competition accounts (from CompetitionMember)
   const [competitionAccounts, setCompetitionAccounts] = useState([]);
-  // Team competition accounts (from CompetitionTeam)
   const [teamCompetitionAccounts, setTeamCompetitionAccounts] = useState([]);
-  // Global team accounts (for team creation/join) – if needed
   const [teams, setTeams] = useState([]);
 
-  // Selected account:
-  // - For global: { type: 'global' }
-  // - For individual competition: { type: 'competition', id: <competition code> }
-  // - For team competition: { type: 'team', team_id: <team_id>, competition_code: <competition code> }
+  // Selected account info
   const [selectedAccount, setSelectedAccount] = useState({ type: 'global' });
 
   // Trading and chart state
@@ -46,32 +43,46 @@ const Dashboard = () => {
   const [tradeMessage, setTradeMessage] = useState('');
   const [chartData, setChartData] = useState(null);
 
-  // Teams state for creating and joining teams (global teams)
+  // State for Teams
   const [teamName, setTeamName] = useState('');
   const [joinTeamCode, setJoinTeamCode] = useState('');
   const [teamMessage, setTeamMessage] = useState('');
 
-  // Group Competitions state (for creating/joining individual competitions)
+  // State for Group Competitions (for individual competitions)
   const [competitionName, setCompetitionName] = useState('');
+  const [compStartDate, setCompStartDate] = useState('');
+  const [compEndDate, setCompEndDate] = useState('');
+  const [maxPositionLimit, setMaxPositionLimit] = useState('100%');
+  const [featureCompetition, setFeatureCompetition] = useState(false);
   const [joinCompetitionCode, setJoinCompetitionCode] = useState('');
   const [competitionMessage, setCompetitionMessage] = useState('');
 
-  // Team Competitions state (for teams joining competitions)
+  // State for Team Competitions
   const [joinTeamCompetitionTeamCode, setJoinTeamCompetitionTeamCode] = useState('');
   const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
   const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
-  // Featured Competitions state (upcoming competitions)
+  // Featured Competitions (typically shown on community/landing view)
   const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
-
-  // Modal state for joining a featured competition
   const [showModal, setShowModal] = useState(false);
   const [modalCompetition, setModalCompetition] = useState(null);
 
   // Base URL for API calls
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
-  // Wrap fetchUserData in useCallback so it can be safely added as a dependency
+  // Helper: Check if current time (in PST) is within trading hours (6:30 AM to 1:00 PM PST)
+  const isTradingHours = () => {
+    const pstDateString = new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+    const pstDate = new Date(pstDateString);
+    const hours = pstDate.getHours();
+    const minutes = pstDate.getMinutes();
+    const current = hours * 60 + minutes;
+    const start = 6 * 60 + 30; // 6:30 AM
+    const end = 13 * 60; // 1:00 PM
+    return current >= start && current < end;
+  };
+
+  // Wrap fetchUserData in useCallback
   const fetchUserData = useCallback(async () => {
     try {
       const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
@@ -113,6 +124,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (isLoggedIn && username) {
       fetchUserData();
+      // In community mode we may want to display featured competitions.
       fetchFeaturedCompetitions();
     }
   }, [isLoggedIn, username, fetchUserData]);
@@ -163,10 +175,15 @@ const Dashboard = () => {
       setTeamCompetitionAccounts([]);
       setTeams([]);
       setSelectedAccount({ type: 'global' });
+      setShowTrading(false);
     }
   };
 
   const getStockPrice = async () => {
+    if (!isTradingHours()) {
+      setTradeMessage("Market is closed. Trading hours are 6:30 AM to 1:00 PM PST.");
+      return;
+    }
     if (!stockSymbol) {
       setTradeMessage('Please enter a stock symbol.');
       return;
@@ -204,12 +221,22 @@ const Dashboard = () => {
     }
   };
 
-  // Global trading functions
+  // Add trading hours check to all trade functions
+  const checkTradingHoursAndProceed = (action) => {
+    if (!isTradingHours()) {
+      setTradeMessage("Market is closed. Trading hours are 6:30 AM to 1:00 PM PST.");
+      return false;
+    }
+    action();
+    return true;
+  };
+
   const buyStockGlobal = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
+    if (!checkTradingHoursAndProceed(async () => {})) return;
     try {
       const buyData = { username, symbol: stockSymbol, quantity: tradeQuantity };
       const response = await axios.post(`${BASE_URL}/buy`, buyData);
@@ -228,6 +255,7 @@ const Dashboard = () => {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
+    if (!checkTradingHoursAndProceed(async () => {})) return;
     try {
       const sellData = { username, symbol: stockSymbol, quantity: tradeQuantity };
       const response = await axios.post(`${BASE_URL}/sell`, sellData);
@@ -241,12 +269,12 @@ const Dashboard = () => {
     }
   };
 
-  // Competition trading functions (individual)
   const buyStockCompetition = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
+    if (!checkTradingHoursAndProceed(async () => {})) return;
     try {
       const buyData = { username, competition_code: selectedAccount.id, symbol: stockSymbol, quantity: tradeQuantity };
       const response = await axios.post(`${BASE_URL}/competition/buy`, buyData);
@@ -265,6 +293,7 @@ const Dashboard = () => {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
+    if (!checkTradingHoursAndProceed(async () => {})) return;
     try {
       const sellData = { username, competition_code: selectedAccount.id, symbol: stockSymbol, quantity: tradeQuantity };
       const response = await axios.post(`${BASE_URL}/competition/sell`, sellData);
@@ -278,12 +307,12 @@ const Dashboard = () => {
     }
   };
 
-  // Team trading functions (for team competition accounts)
   const buyStockTeam = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
+    if (!checkTradingHoursAndProceed(async () => {})) return;
     try {
       const buyData = { 
         username, 
@@ -308,6 +337,7 @@ const Dashboard = () => {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
+    if (!checkTradingHoursAndProceed(async () => {})) return;
     try {
       const sellData = { 
         username, 
@@ -360,20 +390,28 @@ const Dashboard = () => {
     }
   };
 
-  // Group Competitions creation and joining functions (for individual competitions)
+  // Group Competitions: create and join (for individual competitions)
   const createCompetition = async () => {
     if (!competitionName) {
       setCompetitionMessage('Please enter a competition name.');
       return;
     }
     try {
-      const response = await axios.post(`${BASE_URL}/competition/create`, { 
-        username, 
+      const payload = {
+        username,
         competition_name: competitionName,
-        // For admin users you could extend this to include start_date, end_date, and featured.
-      });
+        start_date: compStartDate,
+        end_date: compEndDate,
+        max_position_limit: maxPositionLimit,
+        featured: featureCompetition,
+      };
+      const response = await axios.post(`${BASE_URL}/competition/create`, payload);
       setCompetitionMessage(`Competition created successfully! Code: ${response.data.competition_code}`);
       setCompetitionName('');
+      setCompStartDate('');
+      setCompEndDate('');
+      setMaxPositionLimit('100%');
+      setFeatureCompetition(false);
       fetchUserData();
     } catch (error) {
       console.error('Error creating competition:', error);
@@ -397,7 +435,7 @@ const Dashboard = () => {
     }
   };
 
-  // Team Competitions: Join an existing competition as a team via modal
+  // Team Competitions: Join as team via modal
   const joinCompetitionAsTeam = async () => {
     if (!joinTeamCompetitionTeamCode || !joinTeamCompetitionCode) {
       setTeamCompetitionMessage('Please enter both team code and competition code.');
@@ -437,7 +475,6 @@ const Dashboard = () => {
         alert(response.data.message);
         closeModal();
         fetchUserData();
-        fetchFeaturedCompetitions();
       } catch (error) {
         console.error('Error joining competition:', error);
         alert('Error joining competition.');
@@ -445,7 +482,7 @@ const Dashboard = () => {
     }
   };
 
-  // Render account details based on selected account
+  // Render account details
   const renderAccountDetails = () => {
     if (selectedAccount.type === 'global') {
       return (
@@ -730,60 +767,156 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container">
-      {/* Global header visible for all users */}
+      {/* Global header */}
       <header>
         <h1>Stock Market Simulator</h1>
       </header>
       {isLoggedIn ? (
         <div>
-          {/* Featured Competitions Section (for upcoming competitions) */}
-          <div className="featured-competitions-section">
-            <h2>Upcoming Competitions</h2>
-            {featuredCompetitions.length > 0 ? (
-              featuredCompetitions.map((comp) => (
-                <div key={comp.code} className="competition-card">
-                  <h3>{comp.name}</h3>
-                  <p>Starts: {new Date(comp.start_date).toLocaleDateString()}</p>
-                  <p>Ends: {new Date(comp.end_date).toLocaleDateString()}</p>
-                  <button onClick={() => openJoinModal(comp)}>Join</button>
-                </div>
-              ))
+          {/* Toggle between Community view and Trading view */}
+          <div style={{ marginBottom: '20px' }}>
+            {showTrading ? (
+              <button onClick={() => setShowTrading(false)}>Back to Community</button>
             ) : (
-              <p>No upcoming competitions.</p>
+              <button onClick={() => setShowTrading(true)}>Start Trading</button>
             )}
           </div>
-          {/* Account Switcher */}
-          <div className="account-switcher">
-            <button onClick={() => setSelectedAccount({ type: 'global', id: null })}>Global Account</button>
-            {competitionAccounts.map(acc => (
-              <button key={acc.code} onClick={() => setSelectedAccount({ type: 'competition', id: acc.code })}>
-                {acc.name} ({acc.code})
-              </button>
-            ))}
-            {teamCompetitionAccounts.map(acc => (
-              <button
-                key={acc.team_id + acc.code}
-                onClick={() => setSelectedAccount({ type: 'team', team_id: acc.team_id, competition_code: acc.code })}
-              >
-                {acc.name} (Team - {acc.code})
-              </button>
-            ))}
-          </div>
-          {/* Logout Button */}
-          <button className="logout-button" onClick={handleLogout}>Logout</button>
-          {renderAccountDetails()}
-          {renderPortfolioBox()}
-          {renderTradeBox()}
-          {/* Leaderboards */}
-          {selectedAccount.type === 'competition' && (
-            <div className="leaderboard-box">
-              <Leaderboard competitionCode={selectedAccount.id} variant="competition" />
-            </div>
-          )}
-          {selectedAccount.type === 'team' && (
-            <div className="leaderboard-box">
-              <Leaderboard competitionCode={selectedAccount.competition_code} variant="team" />
-            </div>
+          {showTrading ? (
+            <>
+              {/* Trading view */}
+              <div className="account-switcher">
+                <button onClick={() => setSelectedAccount({ type: 'global', id: null })}>Global Account</button>
+                {competitionAccounts.map(acc => (
+                  <button key={acc.code} onClick={() => setSelectedAccount({ type: 'competition', id: acc.code })}>
+                    {acc.name} ({acc.code})
+                  </button>
+                ))}
+                {teamCompetitionAccounts.map(acc => (
+                  <button
+                    key={acc.team_id + acc.code}
+                    onClick={() => setSelectedAccount({ type: 'team', team_id: acc.team_id, competition_code: acc.code })}
+                  >
+                    {acc.name} (Team - {acc.code})
+                  </button>
+                ))}
+              </div>
+              <button className="logout-button" onClick={handleLogout}>Logout</button>
+              {renderAccountDetails()}
+              {renderPortfolioBox()}
+              {renderTradeBox()}
+              {selectedAccount.type === 'competition' && (
+                <div className="leaderboard-box">
+                  <Leaderboard competitionCode={selectedAccount.id} variant="competition" />
+                </div>
+              )}
+              {selectedAccount.type === 'team' && (
+                <div className="leaderboard-box">
+                  <Leaderboard competitionCode={selectedAccount.competition_code} variant="team" />
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Community view: join/create teams and competitions */}
+              <div className="teams-section">
+                <h2>Teams</h2>
+                <div className="team-form">
+                  <h3>Create Team</h3>
+                  <input
+                    type="text"
+                    placeholder="Enter Team Name"
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                  />
+                  <button className="team-button" onClick={createTeam}>Create Team</button>
+                </div>
+                <div className="team-form">
+                  <h3>Join Team</h3>
+                  <input
+                    type="text"
+                    placeholder="Enter Team Code"
+                    value={joinTeamCode}
+                    onChange={(e) => setJoinTeamCode(e.target.value)}
+                  />
+                  <button className="team-button" onClick={joinTeam}>Join Team</button>
+                </div>
+                {teamMessage && <p>{teamMessage}</p>}
+              </div>
+              <div className="group-competitions-section">
+                <h2>Group Competitions</h2>
+                <div className="competition-form">
+                  <h3>Create Competition</h3>
+                  <input
+                    type="text"
+                    placeholder="Enter Competition Name"
+                    value={competitionName}
+                    onChange={(e) => setCompetitionName(e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    placeholder="Start Date"
+                    value={compStartDate}
+                    onChange={(e) => setCompStartDate(e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    placeholder="End Date"
+                    value={compEndDate}
+                    onChange={(e) => setCompEndDate(e.target.value)}
+                  />
+                  <select value={maxPositionLimit} onChange={(e) => setMaxPositionLimit(e.target.value)}>
+                    <option value="5%">5%</option>
+                    <option value="10%">10%</option>
+                    <option value="25%">25%</option>
+                    <option value="50%">50%</option>
+                    <option value="100%">100%</option>
+                  </select>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={featureCompetition}
+                      onChange={(e) => setFeatureCompetition(e.target.checked)}
+                    />
+                    Feature This Competition
+                  </label>
+                  <button className="competition-button" onClick={createCompetition}>
+                    Create Competition
+                  </button>
+                </div>
+                <div className="competition-form">
+                  <h3>Join Competition</h3>
+                  <input
+                    type="text"
+                    placeholder="Enter Competition Code"
+                    value={joinCompetitionCode}
+                    onChange={(e) => setJoinCompetitionCode(e.target.value)}
+                  />
+                  <button className="competition-button" onClick={joinCompetition}>Join Competition</button>
+                </div>
+                {competitionMessage && <p>{competitionMessage}</p>}
+              </div>
+              <div className="team-competitions-section">
+                <h2>Team Competitions</h2>
+                <div className="team-competition-form">
+                  <h3>Join Competition as Team</h3>
+                  <input
+                    type="text"
+                    placeholder="Enter Team Code"
+                    value={joinTeamCompetitionTeamCode}
+                    onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Enter Competition Code"
+                    value={joinTeamCompetitionCode}
+                    onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
+                  />
+                  <button className="competition-button" onClick={joinCompetitionAsTeam}>Join Competition as Team</button>
+                </div>
+                {teamCompetitionMessage && <p>{teamCompetitionMessage}</p>}
+              </div>
+              <button className="logout-button" onClick={handleLogout}>Logout</button>
+            </>
           )}
         </div>
       ) : (
@@ -883,6 +1016,33 @@ const Dashboard = () => {
                 value={competitionName}
                 onChange={(e) => setCompetitionName(e.target.value)}
               />
+              <input
+                type="date"
+                placeholder="Start Date"
+                value={compStartDate}
+                onChange={(e) => setCompStartDate(e.target.value)}
+              />
+              <input
+                type="date"
+                placeholder="End Date"
+                value={compEndDate}
+                onChange={(e) => setCompEndDate(e.target.value)}
+              />
+              <select value={maxPositionLimit} onChange={(e) => setMaxPositionLimit(e.target.value)}>
+                <option value="5%">5%</option>
+                <option value="10%">10%</option>
+                <option value="25%">25%</option>
+                <option value="50%">50%</option>
+                <option value="100%">100%</option>
+              </select>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={featureCompetition}
+                  onChange={(e) => setFeatureCompetition(e.target.checked)}
+                />
+                Feature This Competition
+              </label>
               <button className="competition-button" onClick={createCompetition}>Create Competition</button>
             </div>
             <div className="competition-form">
@@ -905,14 +1065,12 @@ const Dashboard = () => {
               <input
                 type="text"
                 placeholder="Enter Team Code"
-                name="team_code"
                 value={joinTeamCompetitionTeamCode}
                 onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
               />
               <input
                 type="text"
                 placeholder="Enter Competition Code"
-                name="competition_code"
                 value={joinTeamCompetitionCode}
                 onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
               />
@@ -920,6 +1078,7 @@ const Dashboard = () => {
             </div>
             {teamCompetitionMessage && <p>{teamCompetitionMessage}</p>}
           </div>
+          <button className="logout-button" onClick={handleLogout}>Logout</button>
         </div>
       )}
       {/* Modal for joining a featured competition */}
