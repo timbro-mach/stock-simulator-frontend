@@ -659,32 +659,7 @@ const Dashboard = () => {
           <div className="competition-section">
             <Competition />
           </div>
-
-          {/* Teams Section */}
-          <div className="teams-section">
-            <h2>Teams</h2>
-            <div className="team-form">
-              <h3>Create Team</h3>
-              <input
-                type="text"
-                placeholder="Enter Team Name"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-              />
-              <button className="team-button" onClick={createTeam}>Create Team</button>
-            </div>
-            <div className="team-form">
-              <h3>Join Team</h3>
-              <input
-                type="text"
-                placeholder="Enter Team Code"
-                value={joinTeamCode}
-                onChange={(e) => setJoinTeamCode(e.target.value)}
-              />
-              <button className="team-button" onClick={joinTeam}>Join Team</button>
-            </div>
-            {teamMessage && <p>{teamMessage}</p>}
-          </div>
+          {/* Teams section removed from the logged-in view */}
         </div>
       ) : (
         <div className="login-box">
@@ -735,6 +710,31 @@ const Dashboard = () => {
               </p>
             </form>
           )}
+          {/* Teams Section moved to the login page */}
+          <div className="teams-section">
+            <h2>Teams</h2>
+            <div className="team-form">
+              <h3>Create Team</h3>
+              <input
+                type="text"
+                placeholder="Enter Team Name"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+              />
+              <button className="team-button" onClick={createTeam}>Create Team</button>
+            </div>
+            <div className="team-form">
+              <h3>Join Team</h3>
+              <input
+                type="text"
+                placeholder="Enter Team Code"
+                value={joinTeamCode}
+                onChange={(e) => setJoinTeamCode(e.target.value)}
+              />
+              <button className="team-button" onClick={joinTeam}>Join Team</button>
+            </div>
+            {teamMessage && <p>{teamMessage}</p>}
+          </div>
         </div>
       )}
     </div>
