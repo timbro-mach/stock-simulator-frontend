@@ -712,38 +712,41 @@ const Dashboard = () => {
       </header>
       {isLoggedIn ? (
         <div>
-          {/* Featured Competitions Box */}
-          <div 
-            className="featured-competitions-box" 
-            style={{ backgroundColor: "#e3f2fd", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}
-          >
-            <h2>Featured Competitions</h2>
-            {featuredCompetitions.length > 0 ? (
-              <>
-                {featuredCompetitions.map((comp) => (
-                  <div key={comp.code} className="competition-card" style={{ marginBottom: "10px" }}>
-                    <h3>{comp.name}</h3>
-                    <p>Starts: {new Date(comp.start_date).toLocaleDateString()}</p>
-                    <p>Ends: {new Date(comp.end_date).toLocaleDateString()}</p>
-                    <button onClick={() => openJoinModal(comp)}>Join Competition</button>
+                    {/* Featured Competitions Box - only show when not trading */}
+                    {!showTrading && (
+            <div 
+              className="featured-competitions-box" 
+              style={{ border: '1px solid #ccc', backgroundColor: "#e3f2fd", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}
+            >
+              <h2>Featured Competitions</h2>
+              {featuredCompetitions.length > 0 ? (
+                <>
+                  {featuredCompetitions.map((comp) => (
+                    <div key={comp.code} className="competition-card" style={{ marginBottom: "10px" }}>
+                      <h3>{comp.name}</h3>
+                      <p>Starts: {new Date(comp.start_date).toLocaleDateString()}</p>
+                      <p>Ends: {new Date(comp.end_date).toLocaleDateString()}</p>
+                      <button onClick={() => openJoinModal(comp)}>Join Competition</button>
+                    </div>
+                  ))}
+                  <div className="join-featured" style={{ marginTop: "10px" }}>
+                    <input 
+                      type="text" 
+                      placeholder="Enter Competition Code" 
+                      value={joinCompetitionCode}
+                      onChange={(e) => setJoinCompetitionCode(e.target.value)}
+                    />
+                    <button className="competition-button" onClick={joinCompetition}>
+                      Join Competition
+                    </button>
                   </div>
-                ))}
-                <div className="join-featured" style={{ marginTop: "10px" }}>
-                  <input 
-                    type="text" 
-                    placeholder="Enter Competition Code" 
-                    value={joinCompetitionCode}
-                    onChange={(e) => setJoinCompetitionCode(e.target.value)}
-                  />
-                  <button className="competition-button" onClick={joinCompetition}>
-                    Join Competition
-                  </button>
-                </div>
-              </>
-            ) : (
-              <p>No featured competitions available.</p>
-            )}
-          </div>
+                </>
+              ) : (
+                <p>No featured competitions available.</p>
+              )}
+            </div>
+          )}
+
 
           {/* Toggle between Trading and Dashboard modes */}
           <div style={{ marginBottom: '20px' }}>
