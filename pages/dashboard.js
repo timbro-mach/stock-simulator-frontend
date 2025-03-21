@@ -60,6 +60,13 @@ const Dashboard = () => {
   const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
   const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
+  // New state for Featured Competitions (upcoming competitions)
+  const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
+
+  // Modal state for joining a featured competition
+  const [showModal, setShowModal] = useState(false);
+  const [modalCompetition, setModalCompetition] = useState(null);
+
   // Base URL for API calls
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
@@ -82,6 +89,16 @@ const Dashboard = () => {
     }
   };
 
+  // Fetch featured competitions for upcoming events (admin creates these with dates)
+  const fetchFeaturedCompetitions = async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}/featured_competitions`);
+      setFeaturedCompetitions(response.data);
+    } catch (error) {
+      console.error("Error fetching featured competitions:", error);
+    }
+  };
+
   // On mount, load username from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -93,10 +110,11 @@ const Dashboard = () => {
     }
   }, []);
 
-  // Fetch user data after login
+  // Fetch user data and featured competitions after login
   useEffect(() => {
     if (isLoggedIn && username) {
       fetchUserData();
+      fetchFeaturedCompetitions();
     }
   }, [isLoggedIn, username]);
 
@@ -109,6 +127,7 @@ const Dashboard = () => {
         localStorage.setItem('username', username);
         setIsLoggedIn(true);
         fetchUserData();
+        fetchFeaturedCompetitions();
       }
     } catch (error) {
       const errMsg = error.response?.data?.message || 'Login failed';
@@ -375,7 +394,7 @@ const Dashboard = () => {
     }
   };
 
-  // Team Competitions: Join an existing competition as a team
+  // Team Competitions: Join an existing competition as a team via modal
   const joinCompetitionAsTeam = async () => {
     if (!joinTeamCompetitionTeamCode || !joinTeamCompetitionCode) {
       setTeamCompetitionMessage('Please enter both team code and competition code.');
@@ -394,6 +413,32 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error joining competition as team:', error);
       setTeamCompetitionMessage('Error joining competition as team.');
+    }
+  };
+
+  // Modal functions for joining a featured competition
+  const openJoinModal = (competition) => {
+    setModalCompetition(competition);
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setModalCompetition(null);
+  };
+
+  const joinFeaturedCompetition = async () => {
+    if (modalCompetition) {
+      try {
+        const response = await axios.post(`${BASE_URL}/competition/join`, { username, competition_code: modalCompetition.code });
+        alert(response.data.message);
+        closeModal();
+        fetchUserData();
+        fetchFeaturedCompetitions();
+      } catch (error) {
+        console.error('Error joining competition:', error);
+        alert('Error joining competition.');
+      }
     }
   };
 
@@ -684,6 +729,23 @@ const Dashboard = () => {
     <div className="dashboard-container">
       {isLoggedIn ? (
         <div>
+          {/* Featured Competitions Section for Upcoming Competitions */}
+          <div className="featured-competitions-section">
+            <h2>Upcoming Competitions</h2>
+            {featuredCompetitions.length > 0 ? (
+              featuredCompetitions.map((comp) => (
+                <div key={comp.code} className="competition-card">
+                  <h3>{comp.name}</h3>
+                  <p>Starts: {new Date(comp.start_date).toLocaleDateString()}</p>
+                  <p>Ends: {new Date(comp.end_date).toLocaleDateString()}</p>
+                  <button onClick={() => openJoinModal(comp)}>Join</button>
+                </div>
+              ))
+            ) : (
+              <p>No upcoming competitions.</p>
+            )}
+          </div>
+
           {/* Account Switcher */}
           <div className="account-switcher">
             <button onClick={() => setSelectedAccount({ type: 'global', id: null })}>Global Account</button>
@@ -719,11 +781,13 @@ const Dashboard = () => {
               <Leaderboard competitionCode={selectedAccount.competition_code} variant="team" />
             </div>
           )}
-
-          {/* Competition Section removed from logged-in view */}
         </div>
       ) : (
         <div className="login-box">
+          {/* Banner at the top */}
+          <div className="banner">
+            <img src="/StockMarketSimulationBanner.webp" alt="Stock Market Simulation Banner" />
+          </div>
           {isRegistering ? (
             <form onSubmit={handleRegister}>
               <h2>Create Account</h2>
@@ -771,7 +835,7 @@ const Dashboard = () => {
               </p>
             </form>
           )}
-          {/* Teams Section moved to the landing page */}
+          {/* Teams Section */}
           <div className="teams-section">
             <h2>Teams</h2>
             <div className="team-form">
@@ -796,7 +860,7 @@ const Dashboard = () => {
             </div>
             {teamMessage && <p>{teamMessage}</p>}
           </div>
-          {/* Group Competitions Section moved to the landing page */}
+          {/* Group Competitions Section */}
           <div className="group-competitions-section">
             <h2>Group Competitions</h2>
             <div className="competition-form">
@@ -821,7 +885,7 @@ const Dashboard = () => {
             </div>
             {competitionMessage && <p>{competitionMessage}</p>}
           </div>
-          {/* Team Competitions Section for joining a competition as a team */}
+          {/* Team Competitions Section */}
           <div className="team-competitions-section">
             <h2>Team Competitions</h2>
             <div className="team-competition-form">
@@ -841,6 +905,19 @@ const Dashboard = () => {
               <button className="competition-button" onClick={joinCompetitionAsTeam}>Join Competition as Team</button>
             </div>
             {teamCompetitionMessage && <p>{teamCompetitionMessage}</p>}
+          </div>
+        </div>
+      )}
+      {/* Modal for joining a featured competition */}
+      {showModal && modalCompetition && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>Join Competition</h2>
+            <p>Do you want to join <strong>{modalCompetition.name}</strong>?</p>
+            <p>Starts: {new Date(modalCompetition.start_date).toLocaleDateString()}</p>
+            <p>Ends: {new Date(modalCompetition.end_date).toLocaleDateString()}</p>
+            <button onClick={joinFeaturedCompetition}>Join</button>
+            <button onClick={closeModal}>Cancel</button>
           </div>
         </div>
       )}

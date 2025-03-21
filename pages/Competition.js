@@ -5,15 +5,19 @@ const Competition = () => {
   const [competitionName, setCompetitionName] = useState('');
   const [competitionCode, setCompetitionCode] = useState('');
   const [joinCode, setJoinCode] = useState('');
-  const [teamJoinCode, setTeamJoinCode] = useState('');
+  const [teamJoinCode, setTeamJoinCode] = useState({});
   const [message, setMessage] = useState('');
   const [username, setUsername] = useState('');
+
+  // New state variables for competition dates and featured flag (admin use)
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [isFeatured, setIsFeatured] = useState(false);
 
   // Set the backend base URL
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
   useEffect(() => {
-    // Ensure this only runs on the client side (to avoid SSR issues)
     if (typeof window !== 'undefined') {
       const storedUsername = localStorage.getItem('username') || '';
       setUsername(storedUsername);
@@ -24,7 +28,10 @@ const Competition = () => {
     try {
       const response = await axios.post(`${BASE_URL}/competition/create`, {
         username,
-        name: competitionName,
+        competition_name: competitionName,
+        start_date: startDate,     // New field
+        end_date: endDate,         // New field
+        featured: isFeatured,      // New field
       });
       setCompetitionCode(response.data.competition_code);
       setMessage(response.data.message);
@@ -71,13 +78,39 @@ const Competition = () => {
     <div className="competition-container">
       <h2>Group Competitions</h2>
       <div>
-        <h3>Create Competition</h3>
+        <h3>Create Competition (Admin)</h3>
         <input
           type="text"
           placeholder="Competition Name (optional)"
           value={competitionName}
           onChange={(e) => setCompetitionName(e.target.value)}
         />
+        <div>
+          <label>
+            Start Date:
+            <input 
+              type="date" 
+              value={startDate} 
+              onChange={(e) => setStartDate(e.target.value)} 
+            />
+          </label>
+          <label>
+            End Date:
+            <input 
+              type="date" 
+              value={endDate} 
+              onChange={(e) => setEndDate(e.target.value)} 
+            />
+          </label>
+          <label>
+            Feature Competition:
+            <input 
+              type="checkbox" 
+              checked={isFeatured} 
+              onChange={(e) => setIsFeatured(e.target.checked)} 
+            />
+          </label>
+        </div>
         <button onClick={createCompetition}>Create Competition</button>
         {competitionCode && <p>Your Competition Code: {competitionCode}</p>}
       </div>
