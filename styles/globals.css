@@ -187,3 +187,13 @@ li {
 .team-button:hover {
   background-color: #1558b1;
 }
+
+/* New Styles for Group Competitions and Team Competitions Sections */
+.group-competitions-section,
+.team-competitions-section {
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  padding: 20px;
+  background-color: #f9f9f9;
+  margin-bottom: 20px;
+}
