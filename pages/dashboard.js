@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import Leaderboard from '../components/Leaderboard'; // Combined Leaderboard component
 import Competition from './Competition';
@@ -71,15 +71,14 @@ const Dashboard = () => {
   // Base URL for API calls
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
-  // Fetch user data
-  const fetchUserData = async () => {
+  // Wrap fetchUserData in useCallback so it can be safely added as a dependency
+  const fetchUserData = useCallback(async () => {
     try {
       const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
       setGlobalAccount(response.data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
       setCompetitionAccounts(response.data.competition_accounts || []);
       setTeamCompetitionAccounts(response.data.team_competitions || []);
       setTeams(response.data.teams || []);
-      // Also set the admin flag if provided from login
       if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
     } catch (error) {
       if (error.response && error.response.status === 404) {
@@ -90,19 +89,17 @@ const Dashboard = () => {
         console.error('Failed to load user data:', error);
       }
     }
-  };
+  }, [username]);
 
-  // Fetch featured competitions (upcoming, featured by admin)
   const fetchFeaturedCompetitions = async () => {
     try {
       const response = await axios.get(`${BASE_URL}/featured_competitions`);
       setFeaturedCompetitions(response.data);
     } catch (error) {
-      console.error("Error fetching featured competitions:", error);
+      console.error('Error fetching featured competitions:', error);
     }
   };
 
-  // On mount, load username from localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUsername = localStorage.getItem('username');
@@ -113,13 +110,12 @@ const Dashboard = () => {
     }
   }, []);
 
-  // After login, fetch user data and featured competitions
   useEffect(() => {
     if (isLoggedIn && username) {
       fetchUserData();
       fetchFeaturedCompetitions();
     }
-  }, [isLoggedIn, username]);
+  }, [isLoggedIn, username, fetchUserData]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -129,7 +125,6 @@ const Dashboard = () => {
       if (response.data.username) {
         localStorage.setItem('username', username);
         setIsLoggedIn(true);
-        // Set admin flag from response
         if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
         fetchUserData();
         fetchFeaturedCompetitions();
@@ -375,7 +370,7 @@ const Dashboard = () => {
       const response = await axios.post(`${BASE_URL}/competition/create`, { 
         username, 
         competition_name: competitionName,
-        // You could add start_date, end_date, and featured here if desired for admin users.
+        // For admin users you could extend this to include start_date, end_date, and featured.
       });
       setCompetitionMessage(`Competition created successfully! Code: ${response.data.competition_code}`);
       setCompetitionName('');
@@ -498,7 +493,7 @@ const Dashboard = () => {
                   <th>Quantity</th>
                   <th>Current Price</th>
                   <th>Total Value</th>
-                  <th>P&L</th>
+                  <th>P&amp;L</th>
                 </tr>
               </thead>
               <tbody>
@@ -538,7 +533,7 @@ const Dashboard = () => {
                   <th>Quantity</th>
                   <th>Current Price</th>
                   <th>Total Value</th>
-                  <th>P&L</th>
+                  <th>P&amp;L</th>
                 </tr>
               </thead>
               <tbody>
@@ -578,7 +573,7 @@ const Dashboard = () => {
                   <th>Quantity</th>
                   <th>Current Price</th>
                   <th>Total Value</th>
-                  <th>P&L</th>
+                  <th>P&amp;L</th>
                 </tr>
               </thead>
               <tbody>
@@ -875,14 +870,14 @@ const Dashboard = () => {
               <input
                 type="text"
                 placeholder="Enter Team Code"
-                name="competition_code"
+                name="team_code"
                 value={joinTeamCompetitionTeamCode}
                 onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
               />
               <input
                 type="text"
                 placeholder="Enter Competition Code"
-                name="team_code"
+                name="competition_code"
                 value={joinTeamCompetitionCode}
                 onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
               />
