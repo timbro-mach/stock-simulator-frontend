@@ -22,6 +22,7 @@ const Dashboard = () => {
   const [password, setPassword] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Global account info
   const [globalAccount, setGlobalAccount] = useState({ cash_balance: 0, portfolio: [], total_value: 0 });
@@ -60,7 +61,7 @@ const Dashboard = () => {
   const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
   const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
-  // New state for Featured Competitions (upcoming competitions)
+  // Featured Competitions state (upcoming competitions)
   const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
 
   // Modal state for joining a featured competition
@@ -78,6 +79,8 @@ const Dashboard = () => {
       setCompetitionAccounts(response.data.competition_accounts || []);
       setTeamCompetitionAccounts(response.data.team_competitions || []);
       setTeams(response.data.teams || []);
+      // Also set the admin flag if provided from login
+      if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
     } catch (error) {
       if (error.response && error.response.status === 404) {
         console.error('User not found. Please register.');
@@ -89,7 +92,7 @@ const Dashboard = () => {
     }
   };
 
-  // Fetch featured competitions for upcoming events (admin creates these with dates)
+  // Fetch featured competitions (upcoming, featured by admin)
   const fetchFeaturedCompetitions = async () => {
     try {
       const response = await axios.get(`${BASE_URL}/featured_competitions`);
@@ -110,7 +113,7 @@ const Dashboard = () => {
     }
   }, []);
 
-  // Fetch user data and featured competitions after login
+  // After login, fetch user data and featured competitions
   useEffect(() => {
     if (isLoggedIn && username) {
       fetchUserData();
@@ -126,6 +129,8 @@ const Dashboard = () => {
       if (response.data.username) {
         localStorage.setItem('username', username);
         setIsLoggedIn(true);
+        // Set admin flag from response
+        if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
         fetchUserData();
         fetchFeaturedCompetitions();
       }
@@ -285,7 +290,6 @@ const Dashboard = () => {
       return;
     }
     try {
-      // Use selectedAccount.team_id and selectedAccount.competition_code
       const buyData = { 
         username, 
         team_id: selectedAccount.team_id, 
@@ -368,7 +372,11 @@ const Dashboard = () => {
       return;
     }
     try {
-      const response = await axios.post(`${BASE_URL}/competition/create`, { username, competition_name: competitionName });
+      const response = await axios.post(`${BASE_URL}/competition/create`, { 
+        username, 
+        competition_name: competitionName,
+        // You could add start_date, end_date, and featured here if desired for admin users.
+      });
       setCompetitionMessage(`Competition created successfully! Code: ${response.data.competition_code}`);
       setCompetitionName('');
       fetchUserData();
@@ -727,9 +735,13 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container">
+      {/* Global header visible for all users */}
+      <header>
+        <h1>Stock Market Simulator</h1>
+      </header>
       {isLoggedIn ? (
         <div>
-          {/* Featured Competitions Section for Upcoming Competitions */}
+          {/* Featured Competitions Section (for upcoming competitions) */}
           <div className="featured-competitions-section">
             <h2>Upcoming Competitions</h2>
             {featuredCompetitions.length > 0 ? (
@@ -745,7 +757,6 @@ const Dashboard = () => {
               <p>No upcoming competitions.</p>
             )}
           </div>
-
           {/* Account Switcher */}
           <div className="account-switcher">
             <button onClick={() => setSelectedAccount({ type: 'global', id: null })}>Global Account</button>
@@ -784,57 +795,28 @@ const Dashboard = () => {
         </div>
       ) : (
         <div className="login-box">
-          {/* Banner at the top */}
-          <div className="banner">
-            <img src="/StockMarketSimulationBanner.webp" alt="Stock Market Simulation Banner" />
-          </div>
-          {isRegistering ? (
-            <form onSubmit={handleRegister}>
-              <h2>Create Account</h2>
-              <input
-                type="text"
-                placeholder="Enter username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-              <input
-                type="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button type="submit">Create Account</button>
-              <p>
-                Already have an account?{' '}
-                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(false); }}>
-                  Login
-                </a>
-              </p>
-            </form>
-          ) : (
-            <form onSubmit={handleLogin}>
-              <h2>Login</h2>
-              <input
-                type="text"
-                placeholder="Enter username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-              <input
-                type="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button type="submit">Login</button>
-              <p>
-                Don&apos;t have an account?{' '}
-                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); }}>
-                  Create Account
-                </a>
-              </p>
-            </form>
-          )}
+          <form onSubmit={handleLogin}>
+            <h2>Login</h2>
+            <input
+              type="text"
+              placeholder="Enter username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <input
+              type="password"
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button type="submit">Login</button>
+            <p>
+              Don&apos;t have an account?{' '}
+              <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); }}>
+                Create Account
+              </a>
+            </p>
+          </form>
           {/* Teams Section */}
           <div className="teams-section">
             <h2>Teams</h2>
@@ -893,12 +875,14 @@ const Dashboard = () => {
               <input
                 type="text"
                 placeholder="Enter Team Code"
+                name="competition_code"
                 value={joinTeamCompetitionTeamCode}
                 onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
               />
               <input
                 type="text"
                 placeholder="Enter Competition Code"
+                name="team_code"
                 value={joinTeamCompetitionCode}
                 onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
               />
