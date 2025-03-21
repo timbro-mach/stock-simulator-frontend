@@ -771,11 +771,9 @@ const Dashboard = () => {
           </div>
           {/* Logout Button */}
           <button className="logout-button" onClick={handleLogout}>Logout</button>
-
           {renderAccountDetails()}
           {renderPortfolioBox()}
           {renderTradeBox()}
-
           {/* Leaderboards */}
           {selectedAccount.type === 'competition' && (
             <div className="leaderboard-box">
@@ -790,28 +788,65 @@ const Dashboard = () => {
         </div>
       ) : (
         <div className="login-box">
-          <form onSubmit={handleLogin}>
-            <h2>Login</h2>
-            <input
-              type="text"
-              placeholder="Enter username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-            <input
-              type="password"
-              placeholder="Enter password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <button type="submit">Login</button>
-            <p>
-              Don&apos;t have an account?{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); }}>
-                Create Account
-              </a>
-            </p>
-          </form>
+          {isRegistering ? (
+            <form onSubmit={handleRegister}>
+              <h2>Create Account</h2>
+              <input
+                type="text"
+                placeholder="Enter username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <input
+                type="password"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button type="submit">Create Account</button>
+              <p>
+                Already have an account?{' '}
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsRegistering(false);
+                  }}
+                >
+                  Login
+                </a>
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin}>
+              <h2>Login</h2>
+              <input
+                type="text"
+                placeholder="Enter username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <input
+                type="password"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button type="submit">Login</button>
+              <p>
+                Don&apos;t have an account?{' '}
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsRegistering(true);
+                  }}
+                >
+                  Create Account
+                </a>
+              </p>
+            </form>
+          )}
           {/* Teams Section */}
           <div className="teams-section">
             <h2>Teams</h2>
