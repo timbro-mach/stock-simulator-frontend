@@ -50,6 +50,11 @@ const Dashboard = () => {
   const [joinTeamCode, setJoinTeamCode] = useState('');
   const [teamMessage, setTeamMessage] = useState('');
 
+  // Group Competitions state (for creating/joining group competitions)
+  const [competitionName, setCompetitionName] = useState('');
+  const [joinCompetitionCode, setJoinCompetitionCode] = useState('');
+  const [competitionMessage, setCompetitionMessage] = useState('');
+
   // Base URL for API calls
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
@@ -329,6 +334,39 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error joining team:', error);
       setTeamMessage('Error joining team.');
+    }
+  };
+
+  // Group Competitions creation and joining functions (global competitions)
+  const createCompetition = async () => {
+    if (!competitionName) {
+      setCompetitionMessage('Please enter a competition name.');
+      return;
+    }
+    try {
+      const response = await axios.post(`${BASE_URL}/competition/create`, { username, competition_name: competitionName });
+      setCompetitionMessage(`Competition created successfully! Code: ${response.data.competition_code}`);
+      setCompetitionName('');
+      fetchUserData();
+    } catch (error) {
+      console.error('Error creating competition:', error);
+      setCompetitionMessage('Error creating competition.');
+    }
+  };
+
+  const joinCompetition = async () => {
+    if (!joinCompetitionCode) {
+      setCompetitionMessage('Please enter a competition code.');
+      return;
+    }
+    try {
+      const response = await axios.post(`${BASE_URL}/competition/join`, { username, competition_code: joinCompetitionCode });
+      setCompetitionMessage(response.data.message);
+      setJoinCompetitionCode('');
+      fetchUserData();
+    } catch (error) {
+      console.error('Error joining competition:', error);
+      setCompetitionMessage('Error joining competition.');
     }
   };
 
@@ -655,11 +693,7 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Competition Section */}
-          <div className="competition-section">
-            <Competition />
-          </div>
-          {/* Teams section removed from the logged-in view */}
+          {/* Competition Section removed from logged-in view */}
         </div>
       ) : (
         <div className="login-box">
@@ -710,7 +744,7 @@ const Dashboard = () => {
               </p>
             </form>
           )}
-          {/* Teams Section moved to the login page */}
+          {/* Teams Section moved to the landing page */}
           <div className="teams-section">
             <h2>Teams</h2>
             <div className="team-form">
@@ -734,6 +768,31 @@ const Dashboard = () => {
               <button className="team-button" onClick={joinTeam}>Join Team</button>
             </div>
             {teamMessage && <p>{teamMessage}</p>}
+          </div>
+          {/* Group Competitions Section moved to the landing page */}
+          <div className="group-competitions-section">
+            <h2>Group Competitions</h2>
+            <div className="competition-form">
+              <h3>Create Competition</h3>
+              <input
+                type="text"
+                placeholder="Enter Competition Name"
+                value={competitionName}
+                onChange={(e) => setCompetitionName(e.target.value)}
+              />
+              <button className="competition-button" onClick={createCompetition}>Create Competition</button>
+            </div>
+            <div className="competition-form">
+              <h3>Join Competition</h3>
+              <input
+                type="text"
+                placeholder="Enter Competition Code"
+                value={joinCompetitionCode}
+                onChange={(e) => setJoinCompetitionCode(e.target.value)}
+              />
+              <button className="competition-button" onClick={joinCompetition}>Join Competition</button>
+            </div>
+            {competitionMessage && <p>{competitionMessage}</p>}
           </div>
         </div>
       )}
