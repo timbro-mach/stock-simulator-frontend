@@ -24,7 +24,7 @@ const Dashboard = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Toggle between Trading mode and Community mode
+  // Toggle between Trading mode and Dashboard (Community) mode
   const [showTrading, setShowTrading] = useState(false);
 
   // Global account info
@@ -33,7 +33,7 @@ const Dashboard = () => {
   const [teamCompetitionAccounts, setTeamCompetitionAccounts] = useState([]);
   const [teams, setTeams] = useState([]);
 
-  // Selected account
+  // Selected account: global, competition, or team
   const [selectedAccount, setSelectedAccount] = useState({ type: 'global' });
 
   // Trading and chart state
@@ -43,12 +43,12 @@ const Dashboard = () => {
   const [tradeMessage, setTradeMessage] = useState('');
   const [chartData, setChartData] = useState(null);
 
-  // State for Teams
+  // Teams state
   const [teamName, setTeamName] = useState('');
   const [joinTeamCode, setJoinTeamCode] = useState('');
   const [teamMessage, setTeamMessage] = useState('');
 
-  // State for Group Competitions (for individual competitions)
+  // Group Competitions state (for individual competitions)
   const [competitionName, setCompetitionName] = useState('');
   const [compStartDate, setCompStartDate] = useState('');
   const [compEndDate, setCompEndDate] = useState('');
@@ -57,12 +57,12 @@ const Dashboard = () => {
   const [joinCompetitionCode, setJoinCompetitionCode] = useState('');
   const [competitionMessage, setCompetitionMessage] = useState('');
 
-  // State for Team Competitions
+  // Team Competitions state
   const [joinTeamCompetitionTeamCode, setJoinTeamCompetitionTeamCode] = useState('');
   const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
   const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
-  // Featured Competitions (for potential use in landing page)
+  // Featured Competitions state
   const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [modalCompetition, setModalCompetition] = useState(null);
@@ -70,7 +70,7 @@ const Dashboard = () => {
   // Base URL for API calls
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
-  // Helper: Check if current time (in PST) is within trading hours (6:30 AM to 1:00 PM PST)
+  // Helper: Check if current time (PST) is within trading hours (6:30 AM - 1:00 PM PST)
   const isTradingHours = () => {
     const pstDateString = new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
     const pstDate = new Date(pstDateString);
@@ -227,6 +227,7 @@ const Dashboard = () => {
     return true;
   };
 
+  // Trading functions (global, competition, team) remain unchanged...
   const buyStockGlobal = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
@@ -527,18 +528,14 @@ const Dashboard = () => {
               </thead>
               <tbody>
                 {globalAccount.portfolio.map((holding, index) => {
-                  const pnl = holding.buy_price
-                    ? (holding.current_price - holding.buy_price) * holding.quantity
-                    : 0;
+                  const pnl = holding.buy_price ? (holding.current_price - holding.buy_price) * holding.quantity : 0;
                   return (
                     <tr key={index}>
                       <td>{holding.symbol}</td>
                       <td>{holding.quantity}</td>
                       <td>${holding.current_price.toFixed(2)}</td>
                       <td>${holding.total_value.toFixed(2)}</td>
-                      <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>
-                        ${pnl.toFixed(2)}
-                      </td>
+                      <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>${pnl.toFixed(2)}</td>
                     </tr>
                   );
                 })}
@@ -567,18 +564,14 @@ const Dashboard = () => {
               </thead>
               <tbody>
                 {compAcc.portfolio.map((holding, index) => {
-                  const pnl = holding.buy_price
-                    ? (holding.current_price - holding.buy_price) * holding.quantity
-                    : 0;
+                  const pnl = holding.buy_price ? (holding.current_price - holding.buy_price) * holding.quantity : 0;
                   return (
                     <tr key={index}>
                       <td>{holding.symbol}</td>
                       <td>{holding.quantity}</td>
                       <td>${holding.current_price.toFixed(2)}</td>
                       <td>${holding.total_value.toFixed(2)}</td>
-                      <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>
-                        ${pnl.toFixed(2)}
-                      </td>
+                      <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>${pnl.toFixed(2)}</td>
                     </tr>
                   );
                 })}
@@ -607,18 +600,14 @@ const Dashboard = () => {
               </thead>
               <tbody>
                 {teamAcc.portfolio.map((holding, index) => {
-                  const pnl = holding.buy_price
-                    ? (holding.current_price - holding.buy_price) * holding.quantity
-                    : 0;
+                  const pnl = holding.buy_price ? (holding.current_price - holding.buy_price) * holding.quantity : 0;
                   return (
                     <tr key={index}>
                       <td>{holding.symbol}</td>
                       <td>{holding.quantity}</td>
                       <td>${holding.current_price.toFixed(2)}</td>
                       <td>${holding.total_value.toFixed(2)}</td>
-                      <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>
-                        ${pnl.toFixed(2)}
-                      </td>
+                      <td style={{ color: pnl >= 0 ? 'green' : 'red' }}>${pnl.toFixed(2)}</td>
                     </tr>
                   );
                 })}
@@ -723,7 +712,40 @@ const Dashboard = () => {
       </header>
       {isLoggedIn ? (
         <div>
-          {/* Toggle between Trading and Community (Dashboard) views */}
+          {/* Featured Competitions Box */}
+          <div 
+            className="featured-competitions-box" 
+            style={{ backgroundColor: "#e3f2fd", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}
+          >
+            <h2>Featured Competitions</h2>
+            {featuredCompetitions.length > 0 ? (
+              <>
+                {featuredCompetitions.map((comp) => (
+                  <div key={comp.code} className="competition-card" style={{ marginBottom: "10px" }}>
+                    <h3>{comp.name}</h3>
+                    <p>Starts: {new Date(comp.start_date).toLocaleDateString()}</p>
+                    <p>Ends: {new Date(comp.end_date).toLocaleDateString()}</p>
+                    <button onClick={() => openJoinModal(comp)}>Join Competition</button>
+                  </div>
+                ))}
+                <div className="join-featured" style={{ marginTop: "10px" }}>
+                  <input 
+                    type="text" 
+                    placeholder="Enter Competition Code" 
+                    value={joinCompetitionCode}
+                    onChange={(e) => setJoinCompetitionCode(e.target.value)}
+                  />
+                  <button className="competition-button" onClick={joinCompetition}>
+                    Join Competition
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p>No featured competitions available.</p>
+            )}
+          </div>
+
+          {/* Toggle between Trading and Dashboard modes */}
           <div style={{ marginBottom: '20px' }}>
             {showTrading ? (
               <button onClick={() => setShowTrading(false)}>Back to Dashboard</button>
@@ -731,6 +753,7 @@ const Dashboard = () => {
               <button onClick={() => setShowTrading(true)}>Start Trading</button>
             )}
           </div>
+
           {showTrading ? (
             <>
               {/* Trading view */}
@@ -767,7 +790,7 @@ const Dashboard = () => {
             </>
           ) : (
             <>
-              {/* Community view */}
+              {/* Dashboard Community view */}
               <div className="teams-section">
                 <h2>Teams</h2>
                 <div className="team-form">
