@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import Leaderboard from '../components/Leaderboard'; // Combined Leaderboard component
+import Leaderboard from '../components/Leaderboard';
 import Competition from './Competition';
 import { Line } from 'react-chartjs-2';
 import {
@@ -24,7 +24,7 @@ const Dashboard = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Toggle between Trading mode and Community mode (for logged-in users)
+  // Toggle between Trading mode and Community mode
   const [showTrading, setShowTrading] = useState(false);
 
   // Global account info
@@ -33,8 +33,7 @@ const Dashboard = () => {
   const [teamCompetitionAccounts, setTeamCompetitionAccounts] = useState([]);
   const [teams, setTeams] = useState([]);
 
-  // Selected account:
-  // { type: 'global' } or { type: 'competition', id: <competition code> } or { type: 'team', team_id: <team_id>, competition_code: <competition code> }
+  // Selected account
   const [selectedAccount, setSelectedAccount] = useState({ type: 'global' });
 
   // Trading and chart state
@@ -63,7 +62,7 @@ const Dashboard = () => {
   const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
   const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
-  // Featured Competitions (for potential use in landing page if desired)
+  // Featured Competitions (for potential use in landing page)
   const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [modalCompetition, setModalCompetition] = useState(null);
@@ -71,17 +70,17 @@ const Dashboard = () => {
   // Base URL for API calls
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
-  // Helper: Check if current time (in PST) is within trading hours (6:30 AM - 1:00 PM PST)
+  // Helper: Check if current time (in PST) is within trading hours (6:30 AM to 1:00 PM PST)
   const isTradingHours = () => {
     const pstDateString = new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
     const pstDate = new Date(pstDateString);
     const current = pstDate.getHours() * 60 + pstDate.getMinutes();
-    const start = 6 * 60 + 30; // 6:30 AM
-    const end = 13 * 60; // 1:00 PM
+    const start = 6 * 60 + 30;
+    const end = 13 * 60;
     return current >= start && current < end;
   };
 
-  // Wrap fetchUserData in useCallback so it can be safely added as dependency
+  // Fetch user data
   const fetchUserData = useCallback(async () => {
     try {
       const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
@@ -219,7 +218,6 @@ const Dashboard = () => {
     }
   };
 
-  // Helper to check trading hours
   const checkTradingHoursAndProceed = (action) => {
     if (!isTradingHours()) {
       setTradeMessage("Market is closed. Trading hours are 6:30 AM to 1:00 PM PST.");
@@ -643,22 +641,12 @@ const Dashboard = () => {
           <div className="trade-chart-container" style={{ display: 'flex', gap: '20px' }}>
             <div className="trade-inputs" style={{ flex: 1 }}>
               <div>
-                <input
-                  type="text"
-                  placeholder="Stock Symbol"
-                  value={stockSymbol}
-                  onChange={(e) => setStockSymbol(e.target.value)}
-                />
+                <input type="text" placeholder="Stock Symbol" value={stockSymbol} onChange={(e) => setStockSymbol(e.target.value)} />
                 <button onClick={getStockPrice}>Get Price</button>
                 {stockPrice !== null && <p>Price: ${Number(stockPrice).toFixed(2)}</p>}
               </div>
               <div>
-                <input
-                  type="number"
-                  placeholder="Quantity"
-                  value={tradeQuantity}
-                  onChange={(e) => setTradeQuantity(Number(e.target.value))}
-                />
+                <input type="number" placeholder="Quantity" value={tradeQuantity} onChange={(e) => setTradeQuantity(Number(e.target.value))} />
               </div>
               <div>
                 <button onClick={buyStockGlobal}>Buy</button>
@@ -667,11 +655,7 @@ const Dashboard = () => {
               {tradeMessage && <p>{tradeMessage}</p>}
             </div>
             <div className="trade-chart" style={{ flex: 1, minHeight: '300px' }}>
-              {chartData ? (
-                <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} />
-              ) : (
-                <p>No chart data available</p>
-              )}
+              {chartData ? <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} /> : <p>No chart data available</p>}
             </div>
           </div>
         </div>
@@ -683,22 +667,12 @@ const Dashboard = () => {
           <div className="trade-chart-container" style={{ display: 'flex', gap: '20px' }}>
             <div className="trade-inputs" style={{ flex: 1 }}>
               <div>
-                <input
-                  type="text"
-                  placeholder="Stock Symbol"
-                  value={stockSymbol}
-                  onChange={(e) => setStockSymbol(e.target.value)}
-                />
+                <input type="text" placeholder="Stock Symbol" value={stockSymbol} onChange={(e) => setStockSymbol(e.target.value)} />
                 <button onClick={getStockPrice}>Get Price</button>
                 {stockPrice !== null && <p>Price: ${Number(stockPrice).toFixed(2)}</p>}
               </div>
               <div>
-                <input
-                  type="number"
-                  placeholder="Quantity"
-                  value={tradeQuantity}
-                  onChange={(e) => setTradeQuantity(Number(e.target.value))}
-                />
+                <input type="number" placeholder="Quantity" value={tradeQuantity} onChange={(e) => setTradeQuantity(Number(e.target.value))} />
               </div>
               <div>
                 <button onClick={buyStockCompetition}>Buy</button>
@@ -707,11 +681,7 @@ const Dashboard = () => {
               {tradeMessage && <p>{tradeMessage}</p>}
             </div>
             <div className="trade-chart" style={{ flex: 1, minHeight: '300px' }}>
-              {chartData ? (
-                <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} />
-              ) : (
-                <p>No chart data available</p>
-              )}
+              {chartData ? <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} /> : <p>No chart data available</p>}
             </div>
           </div>
         </div>
@@ -723,22 +693,12 @@ const Dashboard = () => {
           <div className="trade-chart-container" style={{ display: 'flex', gap: '20px' }}>
             <div className="trade-inputs" style={{ flex: 1 }}>
               <div>
-                <input
-                  type="text"
-                  placeholder="Stock Symbol"
-                  value={stockSymbol}
-                  onChange={(e) => setStockSymbol(e.target.value)}
-                />
+                <input type="text" placeholder="Stock Symbol" value={stockSymbol} onChange={(e) => setStockSymbol(e.target.value)} />
                 <button onClick={getStockPrice}>Get Price</button>
                 {stockPrice !== null && <p>Price: ${Number(stockPrice).toFixed(2)}</p>}
               </div>
               <div>
-                <input
-                  type="number"
-                  placeholder="Quantity"
-                  value={tradeQuantity}
-                  onChange={(e) => setTradeQuantity(Number(e.target.value))}
-                />
+                <input type="number" placeholder="Quantity" value={tradeQuantity} onChange={(e) => setTradeQuantity(Number(e.target.value))} />
               </div>
               <div>
                 <button onClick={buyStockTeam}>Buy</button>
@@ -747,11 +707,7 @@ const Dashboard = () => {
               {tradeMessage && <p>{tradeMessage}</p>}
             </div>
             <div className="trade-chart" style={{ flex: 1, minHeight: '300px' }}>
-              {chartData ? (
-                <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} />
-              ) : (
-                <p>No chart data available</p>
-              )}
+              {chartData ? <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} /> : <p>No chart data available</p>}
             </div>
           </div>
         </div>
@@ -761,16 +717,16 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container">
-      {/* Global header visible for all users */}
+      {/* Global header */}
       <header>
         <h1>Stock Market Simulator</h1>
       </header>
       {isLoggedIn ? (
         <div>
-          {/* Toggle between Community view and Trading view */}
+          {/* Toggle between Trading and Community (Dashboard) views */}
           <div style={{ marginBottom: '20px' }}>
             {showTrading ? (
-              <button onClick={() => setShowTrading(false)}>Back to Community</button>
+              <button onClick={() => setShowTrading(false)}>Back to Dashboard</button>
             ) : (
               <button onClick={() => setShowTrading(true)}>Start Trading</button>
             )}
@@ -811,27 +767,17 @@ const Dashboard = () => {
             </>
           ) : (
             <>
-              {/* Community view: Teams, Group Competitions, Team Competitions */}
+              {/* Community view */}
               <div className="teams-section">
                 <h2>Teams</h2>
                 <div className="team-form">
                   <h3>Create Team</h3>
-                  <input
-                    type="text"
-                    placeholder="Enter Team Name"
-                    value={teamName}
-                    onChange={(e) => setTeamName(e.target.value)}
-                  />
+                  <input type="text" placeholder="Enter Team Name" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
                   <button className="team-button" onClick={createTeam}>Create Team</button>
                 </div>
                 <div className="team-form">
                   <h3>Join Team</h3>
-                  <input
-                    type="text"
-                    placeholder="Enter Team Code"
-                    value={joinTeamCode}
-                    onChange={(e) => setJoinTeamCode(e.target.value)}
-                  />
+                  <input type="text" placeholder="Enter Team Code" value={joinTeamCode} onChange={(e) => setJoinTeamCode(e.target.value)} />
                   <button className="team-button" onClick={joinTeam}>Join Team</button>
                 </div>
                 {teamMessage && <p>{teamMessage}</p>}
@@ -840,33 +786,20 @@ const Dashboard = () => {
                 <h2>Group Competitions</h2>
                 <div className="competition-form">
                   <h3>Create Competition</h3>
-                  <label>
-                    Competition Name:
-                    <input
-                      type="text"
-                      placeholder="Enter Competition Name"
-                      value={competitionName}
-                      onChange={(e) => setCompetitionName(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Start Date (mm/dd/yyyy):
-                    <input
-                      type="date"
-                      value={compStartDate}
-                      onChange={(e) => setCompStartDate(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    End Date (mm/dd/yyyy):
-                    <input
-                      type="date"
-                      value={compEndDate}
-                      onChange={(e) => setCompEndDate(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Max Position Limit:
+                  <div>
+                    <label>Competition Name:</label>
+                    <input type="text" placeholder="Enter Competition Name" value={competitionName} onChange={(e) => setCompetitionName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label>Start Date (mm/dd/yyyy):</label>
+                    <input type="date" value={compStartDate} onChange={(e) => setCompStartDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <label>End Date (mm/dd/yyyy):</label>
+                    <input type="date" value={compEndDate} onChange={(e) => setCompEndDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <label>Max Position Limit:</label>
                     <select value={maxPositionLimit} onChange={(e) => setMaxPositionLimit(e.target.value)}>
                       <option value="5%">5%</option>
                       <option value="10%">10%</option>
@@ -874,30 +807,19 @@ const Dashboard = () => {
                       <option value="50%">50%</option>
                       <option value="100%">100%</option>
                     </select>
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={featureCompetition}
-                      onChange={(e) => setFeatureCompetition(e.target.checked)}
-                    />
-                    Feature This Competition
-                  </label>
-                  <button className="competition-button" onClick={createCompetition}>
-                    Create Competition
-                  </button>
+                  </div>
+                  <div>
+                    <label>
+                      <input type="checkbox" checked={featureCompetition} onChange={(e) => setFeatureCompetition(e.target.checked)} />
+                      Feature This Competition
+                    </label>
+                  </div>
+                  <button className="competition-button" onClick={createCompetition}>Create Competition</button>
                 </div>
                 <div className="competition-form">
                   <h3>Join Competition</h3>
-                  <input
-                    type="text"
-                    placeholder="Enter Competition Code"
-                    value={joinCompetitionCode}
-                    onChange={(e) => setJoinCompetitionCode(e.target.value)}
-                  />
-                  <button className="competition-button" onClick={joinCompetition}>
-                    Join Competition
-                  </button>
+                  <input type="text" placeholder="Enter Competition Code" value={joinCompetitionCode} onChange={(e) => setJoinCompetitionCode(e.target.value)} />
+                  <button className="competition-button" onClick={joinCompetition}>Join Competition</button>
                 </div>
                 {competitionMessage && <p>{competitionMessage}</p>}
               </div>
@@ -905,21 +827,9 @@ const Dashboard = () => {
                 <h2>Team Competitions</h2>
                 <div className="team-competition-form">
                   <h3>Join Competition as Team</h3>
-                  <input
-                    type="text"
-                    placeholder="Enter Team Code"
-                    value={joinTeamCompetitionTeamCode}
-                    onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Enter Competition Code"
-                    value={joinTeamCompetitionCode}
-                    onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
-                  />
-                  <button className="competition-button" onClick={joinCompetitionAsTeam}>
-                    Join Competition as Team
-                  </button>
+                  <input type="text" placeholder="Enter Team Code" value={joinTeamCompetitionTeamCode} onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)} />
+                  <input type="text" placeholder="Enter Competition Code" value={joinTeamCompetitionCode} onChange={(e) => setJoinTeamCompetitionCode(e.target.value)} />
+                  <button className="competition-button" onClick={joinCompetitionAsTeam}>Join Competition as Team</button>
                 </div>
                 {teamCompetitionMessage && <p>{teamCompetitionMessage}</p>}
               </div>
@@ -928,33 +838,17 @@ const Dashboard = () => {
           )}
         </div>
       ) : (
-        // Logged-out view: only show login (or registration) form
+        // Logged-out view: Only display the Login (or Registration) form.
         <div className="login-box">
           {isRegistering ? (
             <form onSubmit={handleRegister}>
               <h2>Create Account</h2>
-              <input
-                type="text"
-                placeholder="Enter username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-              <input
-                type="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <input type="text" placeholder="Enter username" value={username} onChange={(e) => setUsername(e.target.value)} />
+              <input type="password" placeholder="Enter password" value={password} onChange={(e) => setPassword(e.target.value)} />
               <button type="submit">Create Account</button>
               <p>
                 Already have an account?{' '}
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setIsRegistering(false);
-                  }}
-                >
+                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(false); }}>
                   Login
                 </a>
               </p>
@@ -962,28 +856,12 @@ const Dashboard = () => {
           ) : (
             <form onSubmit={handleLogin}>
               <h2>Login</h2>
-              <input
-                type="text"
-                placeholder="Enter username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-              <input
-                type="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <input type="text" placeholder="Enter username" value={username} onChange={(e) => setUsername(e.target.value)} />
+              <input type="password" placeholder="Enter password" value={password} onChange={(e) => setPassword(e.target.value)} />
               <button type="submit">Login</button>
               <p>
                 Don&apos;t have an account?{' '}
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setIsRegistering(true);
-                  }}
-                >
+                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); }}>
                   Create Account
                 </a>
               </p>
