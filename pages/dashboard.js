@@ -50,10 +50,15 @@ const Dashboard = () => {
   const [joinTeamCode, setJoinTeamCode] = useState('');
   const [teamMessage, setTeamMessage] = useState('');
 
-  // Group Competitions state (for creating/joining group competitions)
+  // Group Competitions state (for creating/joining individual competitions)
   const [competitionName, setCompetitionName] = useState('');
   const [joinCompetitionCode, setJoinCompetitionCode] = useState('');
   const [competitionMessage, setCompetitionMessage] = useState('');
+
+  // Team Competitions state (for teams joining competitions)
+  const [joinTeamCompetitionTeamCode, setJoinTeamCompetitionTeamCode] = useState('');
+  const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
+  const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
   // Base URL for API calls
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
@@ -337,7 +342,7 @@ const Dashboard = () => {
     }
   };
 
-  // Group Competitions creation and joining functions (global competitions)
+  // Group Competitions creation and joining functions (for individual competitions)
   const createCompetition = async () => {
     if (!competitionName) {
       setCompetitionMessage('Please enter a competition name.');
@@ -367,6 +372,28 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error joining competition:', error);
       setCompetitionMessage('Error joining competition.');
+    }
+  };
+
+  // Team Competitions: Join an existing competition as a team
+  const joinCompetitionAsTeam = async () => {
+    if (!joinTeamCompetitionTeamCode || !joinTeamCompetitionCode) {
+      setTeamCompetitionMessage('Please enter both team code and competition code.');
+      return;
+    }
+    try {
+      const response = await axios.post(`${BASE_URL}/competition/team/join`, {
+        username,
+        team_code: joinTeamCompetitionTeamCode,
+        competition_code: joinTeamCompetitionCode,
+      });
+      setTeamCompetitionMessage(response.data.message);
+      setJoinTeamCompetitionTeamCode('');
+      setJoinTeamCompetitionCode('');
+      fetchUserData();
+    } catch (error) {
+      console.error('Error joining competition as team:', error);
+      setTeamCompetitionMessage('Error joining competition as team.');
     }
   };
 
@@ -793,6 +820,27 @@ const Dashboard = () => {
               <button className="competition-button" onClick={joinCompetition}>Join Competition</button>
             </div>
             {competitionMessage && <p>{competitionMessage}</p>}
+          </div>
+          {/* Team Competitions Section for joining a competition as a team */}
+          <div className="team-competitions-section">
+            <h2>Team Competitions</h2>
+            <div className="team-competition-form">
+              <h3>Join Competition as Team</h3>
+              <input
+                type="text"
+                placeholder="Enter Team Code"
+                value={joinTeamCompetitionTeamCode}
+                onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Enter Competition Code"
+                value={joinTeamCompetitionCode}
+                onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
+              />
+              <button className="competition-button" onClick={joinCompetitionAsTeam}>Join Competition as Team</button>
+            </div>
+            {teamCompetitionMessage && <p>{teamCompetitionMessage}</p>}
           </div>
         </div>
       )}
