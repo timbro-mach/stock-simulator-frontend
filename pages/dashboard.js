@@ -31,7 +31,7 @@ const Dashboard = () => {
   const [globalAccount, setGlobalAccount] = useState({ cash_balance: 0, portfolio: [], total_value: 0 });
   const [competitionAccounts, setCompetitionAccounts] = useState([]);
   const [teamCompetitionAccounts, setTeamCompetitionAccounts] = useState([]);
-  const [teams, setTeams] = useState([]);
+  const [teams, setTeams] = useState([]); // teams from login (if any)
 
   // Selected account: global, competition, or team
   const [selectedAccount, setSelectedAccount] = useState({ type: 'global' });
@@ -43,12 +43,11 @@ const Dashboard = () => {
   const [tradeMessage, setTradeMessage] = useState('');
   const [chartData, setChartData] = useState(null);
 
-  // Teams state
+  // Teams and competitions state
   const [teamName, setTeamName] = useState('');
   const [joinTeamCode, setJoinTeamCode] = useState('');
   const [teamMessage, setTeamMessage] = useState('');
 
-  // Group Competitions state (for individual competitions)
   const [competitionName, setCompetitionName] = useState('');
   const [compStartDate, setCompStartDate] = useState('');
   const [compEndDate, setCompEndDate] = useState('');
@@ -57,12 +56,10 @@ const Dashboard = () => {
   const [joinCompetitionCode, setJoinCompetitionCode] = useState('');
   const [competitionMessage, setCompetitionMessage] = useState('');
 
-  // Team Competitions state
   const [joinTeamCompetitionTeamCode, setJoinTeamCompetitionTeamCode] = useState('');
   const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
   const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
-  // Featured Competitions state
   const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [modalCompetition, setModalCompetition] = useState(null);
@@ -80,14 +77,15 @@ const Dashboard = () => {
     return current >= start && current < end;
   };
 
-  // Fetch user data
+  // Fetch user data from the /user endpoint
   const fetchUserData = useCallback(async () => {
     try {
       const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
+      // Updated data shape from the backend
       setGlobalAccount(response.data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
       setCompetitionAccounts(response.data.competition_accounts || []);
       setTeamCompetitionAccounts(response.data.team_competitions || []);
-      setTeams(response.data.teams || []);
+      // The /user endpoint no longer returns teams, so teams are set from the login response
       if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
     } catch (error) {
       if (error.response && error.response.status === 404) {
@@ -126,6 +124,7 @@ const Dashboard = () => {
     }
   }, [isLoggedIn, username, fetchUserData]);
 
+  // Updated login handler to set teams from the response if provided
   const handleLogin = async (event) => {
     event.preventDefault();
     const loginData = { username, password };
@@ -135,6 +134,10 @@ const Dashboard = () => {
         localStorage.setItem('username', username);
         setIsLoggedIn(true);
         if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
+        // Set teams from login response if available
+        if (response.data.teams) {
+          setTeams(response.data.teams);
+        }
         fetchUserData();
         fetchFeaturedCompetitions();
       }
@@ -158,22 +161,17 @@ const Dashboard = () => {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await axios.post(`${BASE_URL}/logout`);
-    } catch (error) {
-      console.error('Logout endpoint not available, proceeding with client-side logout.');
-    } finally {
-      localStorage.removeItem('username');
-      setUsername('');
-      setIsLoggedIn(false);
-      setGlobalAccount({ cash_balance: 0, portfolio: [], total_value: 0 });
-      setCompetitionAccounts([]);
-      setTeamCompetitionAccounts([]);
-      setTeams([]);
-      setSelectedAccount({ type: 'global' });
-      setShowTrading(false);
-    }
+  // Updated logout: since there’s no /logout endpoint, we simply clear local state
+  const handleLogout = () => {
+    localStorage.removeItem('username');
+    setUsername('');
+    setIsLoggedIn(false);
+    setGlobalAccount({ cash_balance: 0, portfolio: [], total_value: 0 });
+    setCompetitionAccounts([]);
+    setTeamCompetitionAccounts([]);
+    setTeams([]);
+    setSelectedAccount({ type: 'global' });
+    setShowTrading(false);
   };
 
   const getStockPrice = async () => {
@@ -227,7 +225,7 @@ const Dashboard = () => {
     return true;
   };
 
-  // Trading functions (global, competition, team) remain unchanged...
+  // Trading functions remain mostly unchanged; they now work with the new endpoints.
   const buyStockGlobal = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
@@ -354,6 +352,7 @@ const Dashboard = () => {
     }
   };
 
+  // Team and Competition functions remain the same, using updated endpoints (e.g. /team/create, /team/join, /competition/create, etc.)
   const createTeam = async () => {
     if (!teamName) {
       setTeamMessage('Please enter a team name.');
@@ -475,7 +474,7 @@ const Dashboard = () => {
     }
   };
 
-  // Render account details
+  // Render functions remain largely unchanged.
   const renderAccountDetails = () => {
     if (selectedAccount.type === 'global') {
       return (
@@ -509,7 +508,6 @@ const Dashboard = () => {
     }
   };
 
-  // Render portfolio details
   const renderPortfolioBox = () => {
     if (selectedAccount.type === 'global') {
       return (
@@ -621,7 +619,6 @@ const Dashboard = () => {
     }
   };
 
-  // Render trade box based on selected account type
   const renderTradeBox = () => {
     if (selectedAccount.type === 'global') {
       return (
@@ -706,14 +703,12 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container">
-      {/* Global header */}
       <header>
         <h1>Stock Market Simulator</h1>
       </header>
       {isLoggedIn ? (
         <div>
-                    {/* Featured Competitions Box - only show when not trading */}
-                    {!showTrading && (
+          {!showTrading && (
             <div 
               className="featured-competitions-box" 
               style={{ border: '1px solid #ccc', backgroundColor: "#e3f2fd", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}
@@ -739,7 +734,6 @@ const Dashboard = () => {
                     <button className="competition-button" onClick={joinCompetition}>
                       Join Competition
                     </button>
-                    
                   </div>
                 </>
               ) : (
@@ -748,8 +742,6 @@ const Dashboard = () => {
             </div>
           )}
 
-
-          {/* Toggle between Trading and Dashboard modes */}
           <div style={{ marginBottom: '20px' }}>
             {showTrading ? (
               <button onClick={() => setShowTrading(false)}>Back to Dashboard</button>
@@ -760,7 +752,6 @@ const Dashboard = () => {
 
           {showTrading ? (
             <>
-              {/* Trading view */}
               <div className="account-switcher">
                 <button onClick={() => setSelectedAccount({ type: 'global', id: null })}>Global Account</button>
                 {competitionAccounts.map(acc => (
@@ -794,7 +785,6 @@ const Dashboard = () => {
             </>
           ) : (
             <>
-              {/* Dashboard Community view */}
               <div className="teams-section">
                 <h2>Teams</h2>
                 <div className="team-form">
@@ -865,7 +855,6 @@ const Dashboard = () => {
           )}
         </div>
       ) : (
-        // Logged-out view: Only display the Login (or Registration) form.
         <div className="login-box">
           {isRegistering ? (
             <form onSubmit={handleRegister}>
@@ -896,7 +885,6 @@ const Dashboard = () => {
           )}
         </div>
       )}
-      {/* Modal for joining a featured competition */}
       {showModal && modalCompetition && (
         <div className="modal-overlay">
           <div className="modal">
