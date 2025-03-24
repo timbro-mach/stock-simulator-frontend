@@ -739,6 +739,7 @@ const Dashboard = () => {
                     <button className="competition-button" onClick={joinCompetition}>
                       Join Competition
                     </button>
+                    
                   </div>
                 </>
               ) : (
@@ -912,4 +913,173 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+
+const AdminDashboard = () => {
+  const [stats, setStats] = useState({});
+  const [competitions, setCompetitions] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [adminUsername, setAdminUsername] = useState('');
+
+  const BASE_URL = 'https://stock-simulator-backend.onrender.com';
+
+  useEffect(() => {
+    const storedUsername = localStorage.getItem('username');
+    setAdminUsername(storedUsername);
+    if (storedUsername) {
+      fetchStats();
+      fetchCompetitions();
+      fetchUsers();
+    }
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}/admin/stats`);
+      setStats(response.data);
+    } catch (error) {
+      console.error('Error fetching admin stats:', error);
+    }
+  };
+
+  const fetchCompetitions = async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}/competitions`);
+      setCompetitions(response.data);
+    } catch (error) {
+      console.error('Error fetching competitions:', error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      // Pass admin_username as a query parameter for authorization
+      const response = await axios.get(`${BASE_URL}/users`, {
+        params: { admin_username: adminUsername }
+      });
+      setUsers(response.data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  // Admin Actions
+  const handleDeleteCompetition = async (code) => {
+    try {
+      await axios.post(`${BASE_URL}/admin/delete_competition`, {
+        username: adminUsername,
+        competition_code: code
+      });
+      fetchStats();
+      fetchCompetitions();
+    } catch (error) {
+      console.error('Error deleting competition:', error);
+    }
+  };
+
+  const handleUnfeatureCompetition = async (code) => {
+    try {
+      await axios.post(`${BASE_URL}/admin/unfeature_competition`, {
+        competition_code: code
+      });
+      fetchCompetitions();
+    } catch (error) {
+      console.error('Error unfeaturing competition:', error);
+    }
+  };
+
+  const handleDeleteUser = async (targetUsername) => {
+    try {
+      await axios.post(`${BASE_URL}/admin/delete_user`, {
+        username: adminUsername,
+        target_username: targetUsername
+      });
+      fetchStats();
+      fetchUsers();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+    }
+  };
+
+  const handleRemoveUserFromCompetition = async (targetUsername, compCode) => {
+    try {
+      await axios.post(`${BASE_URL}/admin/remove_user_from_competition`, {
+        admin_username: adminUsername,
+        target_username: targetUsername,
+        competition_code: compCode
+      });
+      fetchCompetitions();
+      fetchUsers();
+    } catch (error) {
+      console.error('Error removing user from competition:', error);
+    }
+  };
+
+  const handleRemoveUserFromTeam = async (targetUsername, teamId) => {
+    try {
+      await axios.post(`${BASE_URL}/admin/remove_user_from_team`, {
+        admin_username: adminUsername,
+        target_username: targetUsername,
+        team_id: teamId
+      });
+      fetchUsers();
+    } catch (error) {
+      console.error('Error removing user from team:', error);
+    }
+  };
+
+  // Render featured competitions as one line per competition
+  const renderFeaturedCompetitions = () => {
+    const featured = competitions.filter(comp => comp.featured);
+    if (featured.length === 0) return <p>No featured competitions available.</p>;
+    return featured.map(comp => (
+      <div key={comp.code} style={{ borderBottom: '1px solid #ccc', padding: '5px' }}>
+        <span>
+          {comp.name} — {comp.join || (comp.is_open ? 'Join directly' : 'Use code to join')}
+        </span>
+        <button onClick={() => handleDeleteCompetition(comp.code)}>Delete</button>
+        {comp.featured && <button onClick={() => handleUnfeatureCompetition(comp.code)}>Unfeature</button>}
+      </div>
+    ));
+  };
+
+  // Render list of users with admin actions
+  const renderUsers = () => {
+    if (users.length === 0) return <p>No users found.</p>;
+    return users.map(user => (
+      <div key={user.id} style={{ border: '1px solid #ccc', marginBottom: '10px', padding: '10px' }}>
+        <p>
+          {user.username} (Admin: {user.is_admin ? 'Yes' : 'No'}) — Cash: ${user.cash_balance.toFixed(2)}
+        </p>
+        <button onClick={() => handleDeleteUser(user.username)}>Delete User</button>
+        {/* For demonstration purposes we show example removal buttons */}
+        <button onClick={() => handleRemoveUserFromCompetition(user.username, "COMP1234")}>
+          Remove from Competition
+        </button>
+        <button onClick={() => handleRemoveUserFromTeam(user.username, 1)}>
+          Remove from Team
+        </button>
+      </div>
+    ));
+  };
+
+  return (
+    <div className="admin-dashboard">
+      <h1>Admin Dashboard</h1>
+      <section className="stats">
+        <p>Total Users: {stats.total_users}</p>
+        <p>Total Competitions: {stats.total_competitions}</p>
+      </section>
+      <section className="featured-competitions">
+        <h2>Featured Competitions</h2>
+        {renderFeaturedCompetitions()}
+      </section>
+      <section className="users">
+        <h2>Users</h2>
+        {renderUsers()}
+      </section>
+    </div>
+  );
+};
+
+export default AdminDashboard;
+
