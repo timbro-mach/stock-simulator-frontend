@@ -60,9 +60,20 @@ const Dashboard = () => {
   const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
   const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
+  // Featured competitions & Quick Pics
   const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
+  const [quickPics, setQuickPics] = useState([]);
+
+  // Modal for joining a featured competition
   const [showModal, setShowModal] = useState(false);
   const [modalCompetition, setModalCompetition] = useState(null);
+
+  // Admin-only removal forms
+  const [removeCompUserUsername, setRemoveCompUserUsername] = useState('');
+  const [removeCompCode, setRemoveCompCode] = useState('');
+  const [removeTeamUserUsername, setRemoveTeamUserUsername] = useState('');
+  const [removeTeamId, setRemoveTeamId] = useState('');
+  const [adminMessage, setAdminMessage] = useState('');
 
   // Base URL for API calls
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
@@ -81,7 +92,7 @@ const Dashboard = () => {
   const fetchUserData = useCallback(async () => {
     try {
       const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
-      // Updated data shape from the backend
+      // Update data shape from the backend
       setGlobalAccount(response.data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
       setCompetitionAccounts(response.data.competition_accounts || []);
       setTeamCompetitionAccounts(response.data.team_competitions || []);
@@ -98,12 +109,23 @@ const Dashboard = () => {
     }
   }, [username]);
 
+  // Fetch featured competitions
   const fetchFeaturedCompetitions = async () => {
     try {
       const response = await axios.get(`${BASE_URL}/featured_competitions`);
       setFeaturedCompetitions(response.data);
     } catch (error) {
       console.error('Error fetching featured competitions:', error);
+    }
+  };
+
+  // Fetch Quick Pics
+  const fetchQuickPics = async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}/quick_pics`);
+      setQuickPics(response.data);
+    } catch (error) {
+      console.error('Error fetching Quick Pics:', error);
     }
   };
 
@@ -121,6 +143,7 @@ const Dashboard = () => {
     if (isLoggedIn && username) {
       fetchUserData();
       fetchFeaturedCompetitions();
+      fetchQuickPics();
     }
   }, [isLoggedIn, username, fetchUserData]);
 
@@ -140,6 +163,7 @@ const Dashboard = () => {
         }
         fetchUserData();
         fetchFeaturedCompetitions();
+        fetchQuickPics();
       }
     } catch (error) {
       const errMsg = error.response?.data?.message || 'Login failed';
@@ -174,6 +198,46 @@ const Dashboard = () => {
     setShowTrading(false);
   };
 
+  // ----------------------------------
+  // Admin Removal Actions
+  // ----------------------------------
+  const handleRemoveUserFromCompetition = async () => {
+    try {
+      const payload = {
+        admin_username: username, // You are the admin
+        target_username: removeCompUserUsername,
+        competition_code: removeCompCode
+      };
+      const response = await axios.post(`${BASE_URL}/admin/remove_user_from_competition`, payload);
+      setAdminMessage(response.data.message);
+      // Optionally refresh data
+      fetchUserData();
+    } catch (error) {
+      console.error('Error removing user from competition:', error);
+      setAdminMessage('Failed to remove user from competition.');
+    }
+  };
+
+  const handleRemoveUserFromTeam = async () => {
+    try {
+      const payload = {
+        admin_username: username, // You are the admin
+        target_username: removeTeamUserUsername,
+        team_id: removeTeamId
+      };
+      const response = await axios.post(`${BASE_URL}/admin/remove_user_from_team`, payload);
+      setAdminMessage(response.data.message);
+      // Optionally refresh data
+      fetchUserData();
+    } catch (error) {
+      console.error('Error removing user from team:', error);
+      setAdminMessage('Failed to remove user from team.');
+    }
+  };
+
+  // ----------------------------------
+  // Stock and Trading
+  // ----------------------------------
   const getStockPrice = async () => {
     if (!isTradingHours()) {
       setTradeMessage("Market is closed. Trading hours are 6:30 AM to 1:00 PM PST.");
@@ -225,7 +289,6 @@ const Dashboard = () => {
     return true;
   };
 
-  // Trading functions remain mostly unchanged; they now work with the new endpoints.
   const buyStockGlobal = async () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
@@ -352,7 +415,9 @@ const Dashboard = () => {
     }
   };
 
-  // Team and Competition functions remain the same, using updated endpoints (e.g. /team/create, /team/join, /competition/create, etc.)
+  // ----------------------------------
+  // Team & Competition creation/join
+  // ----------------------------------
   const createTeam = async () => {
     if (!teamName) {
       setTeamMessage('Please enter a team name.');
@@ -450,6 +515,9 @@ const Dashboard = () => {
     }
   };
 
+  // ----------------------------------
+  // Featured Competitions + Quick Pics
+  // ----------------------------------
   const openJoinModal = (competition) => {
     setModalCompetition(competition);
     setShowModal(true);
@@ -474,7 +542,24 @@ const Dashboard = () => {
     }
   };
 
-  // Render functions remain largely unchanged.
+  // Utility function to join a Quick Pics competition
+  const joinThisCompetition = async (competitionCode) => {
+    try {
+      const response = await axios.post(`${BASE_URL}/competition/join`, {
+        username,
+        competition_code: competitionCode
+      });
+      alert(response.data.message);
+      fetchUserData();
+    } catch (err) {
+      console.error('Error joining competition:', err);
+      alert('Could not join competition');
+    }
+  };
+
+  // ----------------------------------
+  // Render Helpers
+  // ----------------------------------
   const renderAccountDetails = () => {
     if (selectedAccount.type === 'global') {
       return (
@@ -526,7 +611,9 @@ const Dashboard = () => {
               </thead>
               <tbody>
                 {globalAccount.portfolio.map((holding, index) => {
-                  const pnl = holding.buy_price ? (holding.current_price - holding.buy_price) * holding.quantity : 0;
+                  const pnl = holding.buy_price
+                    ? (holding.current_price - holding.buy_price) * holding.quantity
+                    : 0;
                   return (
                     <tr key={index}>
                       <td>{holding.symbol}</td>
@@ -562,7 +649,9 @@ const Dashboard = () => {
               </thead>
               <tbody>
                 {compAcc.portfolio.map((holding, index) => {
-                  const pnl = holding.buy_price ? (holding.current_price - holding.buy_price) * holding.quantity : 0;
+                  const pnl = holding.buy_price
+                    ? (holding.current_price - holding.buy_price) * holding.quantity
+                    : 0;
                   return (
                     <tr key={index}>
                       <td>{holding.symbol}</td>
@@ -598,7 +687,9 @@ const Dashboard = () => {
               </thead>
               <tbody>
                 {teamAcc.portfolio.map((holding, index) => {
-                  const pnl = holding.buy_price ? (holding.current_price - holding.buy_price) * holding.quantity : 0;
+                  const pnl = holding.buy_price
+                    ? (holding.current_price - holding.buy_price) * holding.quantity
+                    : 0;
                   return (
                     <tr key={index}>
                       <td>{holding.symbol}</td>
@@ -627,12 +718,24 @@ const Dashboard = () => {
           <div className="trade-chart-container" style={{ display: 'flex', gap: '20px' }}>
             <div className="trade-inputs" style={{ flex: 1 }}>
               <div>
-                <input type="text" placeholder="Stock Symbol" value={stockSymbol} onChange={(e) => setStockSymbol(e.target.value)} />
+                <input
+                  type="text"
+                  placeholder="Stock Symbol"
+                  value={stockSymbol}
+                  onChange={(e) => setStockSymbol(e.target.value)}
+                />
                 <button onClick={getStockPrice}>Get Price</button>
-                {stockPrice !== null && <p>Price: ${Number(stockPrice).toFixed(2)}</p>}
+                {stockPrice !== null && (
+                  <p>Price: ${Number(stockPrice).toFixed(2)}</p>
+                )}
               </div>
               <div>
-                <input type="number" placeholder="Quantity" value={tradeQuantity} onChange={(e) => setTradeQuantity(Number(e.target.value))} />
+                <input
+                  type="number"
+                  placeholder="Quantity"
+                  value={tradeQuantity}
+                  onChange={(e) => setTradeQuantity(Number(e.target.value))}
+                />
               </div>
               <div>
                 <button onClick={buyStockGlobal}>Buy</button>
@@ -641,7 +744,14 @@ const Dashboard = () => {
               {tradeMessage && <p>{tradeMessage}</p>}
             </div>
             <div className="trade-chart" style={{ flex: 1, minHeight: '300px' }}>
-              {chartData ? <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} /> : <p>No chart data available</p>}
+              {chartData ? (
+                <Line
+                  data={chartData}
+                  options={{ responsive: true, maintainAspectRatio: false }}
+                />
+              ) : (
+                <p>No chart data available</p>
+              )}
             </div>
           </div>
         </div>
@@ -653,12 +763,24 @@ const Dashboard = () => {
           <div className="trade-chart-container" style={{ display: 'flex', gap: '20px' }}>
             <div className="trade-inputs" style={{ flex: 1 }}>
               <div>
-                <input type="text" placeholder="Stock Symbol" value={stockSymbol} onChange={(e) => setStockSymbol(e.target.value)} />
+                <input
+                  type="text"
+                  placeholder="Stock Symbol"
+                  value={stockSymbol}
+                  onChange={(e) => setStockSymbol(e.target.value)}
+                />
                 <button onClick={getStockPrice}>Get Price</button>
-                {stockPrice !== null && <p>Price: ${Number(stockPrice).toFixed(2)}</p>}
+                {stockPrice !== null && (
+                  <p>Price: ${Number(stockPrice).toFixed(2)}</p>
+                )}
               </div>
               <div>
-                <input type="number" placeholder="Quantity" value={tradeQuantity} onChange={(e) => setTradeQuantity(Number(e.target.value))} />
+                <input
+                  type="number"
+                  placeholder="Quantity"
+                  value={tradeQuantity}
+                  onChange={(e) => setTradeQuantity(Number(e.target.value))}
+                />
               </div>
               <div>
                 <button onClick={buyStockCompetition}>Buy</button>
@@ -667,7 +789,14 @@ const Dashboard = () => {
               {tradeMessage && <p>{tradeMessage}</p>}
             </div>
             <div className="trade-chart" style={{ flex: 1, minHeight: '300px' }}>
-              {chartData ? <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} /> : <p>No chart data available</p>}
+              {chartData ? (
+                <Line
+                  data={chartData}
+                  options={{ responsive: true, maintainAspectRatio: false }}
+                />
+              ) : (
+                <p>No chart data available</p>
+              )}
             </div>
           </div>
         </div>
@@ -679,12 +808,24 @@ const Dashboard = () => {
           <div className="trade-chart-container" style={{ display: 'flex', gap: '20px' }}>
             <div className="trade-inputs" style={{ flex: 1 }}>
               <div>
-                <input type="text" placeholder="Stock Symbol" value={stockSymbol} onChange={(e) => setStockSymbol(e.target.value)} />
+                <input
+                  type="text"
+                  placeholder="Stock Symbol"
+                  value={stockSymbol}
+                  onChange={(e) => setStockSymbol(e.target.value)}
+                />
                 <button onClick={getStockPrice}>Get Price</button>
-                {stockPrice !== null && <p>Price: ${Number(stockPrice).toFixed(2)}</p>}
+                {stockPrice !== null && (
+                  <p>Price: ${Number(stockPrice).toFixed(2)}</p>
+                )}
               </div>
               <div>
-                <input type="number" placeholder="Quantity" value={tradeQuantity} onChange={(e) => setTradeQuantity(Number(e.target.value))} />
+                <input
+                  type="number"
+                  placeholder="Quantity"
+                  value={tradeQuantity}
+                  onChange={(e) => setTradeQuantity(Number(e.target.value))}
+                />
               </div>
               <div>
                 <button onClick={buyStockTeam}>Buy</button>
@@ -693,7 +834,14 @@ const Dashboard = () => {
               {tradeMessage && <p>{tradeMessage}</p>}
             </div>
             <div className="trade-chart" style={{ flex: 1, minHeight: '300px' }}>
-              {chartData ? <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} /> : <p>No chart data available</p>}
+              {chartData ? (
+                <Line
+                  data={chartData}
+                  options={{ responsive: true, maintainAspectRatio: false }}
+                />
+              ) : (
+                <p>No chart data available</p>
+              )}
             </div>
           </div>
         </div>
@@ -701,43 +849,114 @@ const Dashboard = () => {
     }
   };
 
+  // ----------------------------------
+  // JSX Return
+  // ----------------------------------
   return (
     <div className="dashboard-container">
       <header>
         <h1>Stock Market Simulator</h1>
       </header>
+
       {isLoggedIn ? (
         <div>
+          {/* Admin Panel (Only visible if isAdmin === true) */}
+          {isAdmin && (
+            <div className="admin-panel" style={{ border: '1px solid #666', padding: 10, margin: '10px 0' }}>
+              <h2>Admin Panel</h2>
+              <h4>Remove User from Competition</h4>
+              <input
+                type="text"
+                placeholder="Target Username"
+                value={removeCompUserUsername}
+                onChange={(e) => setRemoveCompUserUsername(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Competition Code"
+                value={removeCompCode}
+                onChange={(e) => setRemoveCompCode(e.target.value)}
+              />
+              <button onClick={handleRemoveUserFromCompetition}>Remove</button>
+
+              <h4>Remove User from Team</h4>
+              <input
+                type="text"
+                placeholder="Target Username"
+                value={removeTeamUserUsername}
+                onChange={(e) => setRemoveTeamUserUsername(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Team ID"
+                value={removeTeamId}
+                onChange={(e) => setRemoveTeamId(e.target.value)}
+              />
+              <button onClick={handleRemoveUserFromTeam}>Remove</button>
+
+              {adminMessage && <p>{adminMessage}</p>}
+            </div>
+          )}
+
           {!showTrading && (
-            <div 
-              className="featured-competitions-box" 
-              style={{ border: '1px solid #ccc', backgroundColor: "#e3f2fd", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}
-            >
+            <div style={{ marginBottom: "20px" }}>
               <h2>Featured Competitions</h2>
               {featuredCompetitions.length > 0 ? (
-                <>
-                  {featuredCompetitions.map((comp) => (
-                    <div key={comp.code} className="competition-card" style={{ marginBottom: "10px" }}>
-                      <h3>{comp.name}</h3>
-                      <p>Starts: {new Date(comp.start_date).toLocaleDateString()}</p>
-                      <p>Ends: {new Date(comp.end_date).toLocaleDateString()}</p>
-                      <button onClick={() => openJoinModal(comp)}>Join Competition</button>
+                featuredCompetitions.map((comp) => {
+                  // Decide if open or restricted
+                  const status = comp.join === "Join directly" ? "Open" : "Restricted";
+                  return (
+                    <div
+                      key={comp.code}
+                      className="featured-competition-item"
+                      style={{ margin: "5px 0", display: "flex", alignItems: "center" }}
+                    >
+                      {/* Single-line display: name, date, status, join link */}
+                      <span style={{ marginRight: "10px" }}>
+                        <strong>{comp.name}</strong> | {status} | 
+                        Start: {new Date(comp.start_date).toLocaleDateString()} | 
+                        End: {new Date(comp.end_date).toLocaleDateString()}
+                      </span>
+                      <button onClick={() => openJoinModal(comp)}>
+                        Join
+                      </button>
                     </div>
-                  ))}
-                  <div className="join-featured" style={{ marginTop: "10px" }}>
-                    <input 
-                      type="text" 
-                      placeholder="Enter Competition Code" 
-                      value={joinCompetitionCode}
-                      onChange={(e) => setJoinCompetitionCode(e.target.value)}
-                    />
-                    <button className="competition-button" onClick={joinCompetition}>
-                      Join Competition
-                    </button>
-                  </div>
-                </>
+                  );
+                })
               ) : (
                 <p>No featured competitions available.</p>
+              )}
+              <div style={{ marginTop: "10px" }}>
+                <input
+                  type="text"
+                  placeholder="Enter Competition Code"
+                  value={joinCompetitionCode}
+                  onChange={(e) => setJoinCompetitionCode(e.target.value)}
+                  style={{ marginRight: "5px" }}
+                />
+                <button className="competition-button" onClick={joinCompetition}>
+                  Join Competition
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!showTrading && (
+            <div style={{ marginBottom: "20px" }}>
+              <h2>Quick Pics (Next 2 Hourly Comps)</h2>
+              {quickPics.length > 0 ? (
+                quickPics.map((comp) => (
+                  <div key={comp.code} style={{ margin: "5px 0", display: "flex", alignItems: "center" }}>
+                    <span style={{ marginRight: "10px" }}>
+                      <strong>{comp.name}</strong> | 
+                      Starts: {new Date(comp.start_date).toLocaleString()} | 
+                      Ends: {new Date(comp.end_date).toLocaleString()}
+                    </span>
+                    <button onClick={() => joinThisCompetition(comp.code)}>Join</button>
+                  </div>
+                ))
+              ) : (
+                <p>No upcoming Quick Pics competitions.</p>
               )}
             </div>
           )}
@@ -752,34 +971,53 @@ const Dashboard = () => {
 
           {showTrading ? (
             <>
-              <div className="account-switcher">
-                <button onClick={() => setSelectedAccount({ type: 'global', id: null })}>Global Account</button>
-                {competitionAccounts.map(acc => (
-                  <button key={acc.code} onClick={() => setSelectedAccount({ type: 'competition', id: acc.code })}>
+              <div className="account-switcher" style={{ marginBottom: "10px" }}>
+                <button onClick={() => setSelectedAccount({ type: 'global', id: null })}>
+                  Global Account
+                </button>
+                {competitionAccounts.map((acc) => (
+                  <button
+                    key={acc.code}
+                    onClick={() => setSelectedAccount({ type: 'competition', id: acc.code })}
+                  >
                     {acc.name} ({acc.code})
                   </button>
                 ))}
-                {teamCompetitionAccounts.map(acc => (
+                {teamCompetitionAccounts.map((acc) => (
                   <button
                     key={acc.team_id + acc.code}
-                    onClick={() => setSelectedAccount({ type: 'team', team_id: acc.team_id, competition_code: acc.code })}
+                    onClick={() =>
+                      setSelectedAccount({
+                        type: 'team',
+                        team_id: acc.team_id,
+                        competition_code: acc.code,
+                      })
+                    }
                   >
                     {acc.name} (Team - {acc.code})
                   </button>
                 ))}
               </div>
-              <button className="logout-button" onClick={handleLogout}>Logout</button>
+              <button className="logout-button" onClick={handleLogout}>
+                Logout
+              </button>
               {renderAccountDetails()}
               {renderPortfolioBox()}
               {renderTradeBox()}
               {selectedAccount.type === 'competition' && (
                 <div className="leaderboard-box">
-                  <Leaderboard competitionCode={selectedAccount.id} variant="competition" />
+                  <Leaderboard
+                    competitionCode={selectedAccount.id}
+                    variant="competition"
+                  />
                 </div>
               )}
               {selectedAccount.type === 'team' && (
                 <div className="leaderboard-box">
-                  <Leaderboard competitionCode={selectedAccount.competition_code} variant="team" />
+                  <Leaderboard
+                    competitionCode={selectedAccount.competition_code}
+                    variant="team"
+                  />
                 </div>
               )}
             </>
@@ -789,35 +1027,66 @@ const Dashboard = () => {
                 <h2>Teams</h2>
                 <div className="team-form">
                   <h3>Create Team</h3>
-                  <input type="text" placeholder="Enter Team Name" value={teamName} onChange={(e) => setTeamName(e.target.value)} />
-                  <button className="team-button" onClick={createTeam}>Create Team</button>
+                  <input
+                    type="text"
+                    placeholder="Enter Team Name"
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                  />
+                  <button className="team-button" onClick={createTeam}>
+                    Create Team
+                  </button>
                 </div>
                 <div className="team-form">
                   <h3>Join Team</h3>
-                  <input type="text" placeholder="Enter Team Code" value={joinTeamCode} onChange={(e) => setJoinTeamCode(e.target.value)} />
-                  <button className="team-button" onClick={joinTeam}>Join Team</button>
+                  <input
+                    type="text"
+                    placeholder="Enter Team Code"
+                    value={joinTeamCode}
+                    onChange={(e) => setJoinTeamCode(e.target.value)}
+                  />
+                  <button className="team-button" onClick={joinTeam}>
+                    Join Team
+                  </button>
                 </div>
                 {teamMessage && <p>{teamMessage}</p>}
               </div>
+
               <div className="group-competitions-section">
                 <h2>Group Competitions</h2>
                 <div className="competition-form">
                   <h3>Create Competition</h3>
                   <div>
                     <label>Competition Name:</label>
-                    <input type="text" placeholder="Enter Competition Name" value={competitionName} onChange={(e) => setCompetitionName(e.target.value)} />
+                    <input
+                      type="text"
+                      placeholder="Enter Competition Name"
+                      value={competitionName}
+                      onChange={(e) => setCompetitionName(e.target.value)}
+                    />
                   </div>
                   <div>
                     <label>Start Date (mm/dd/yyyy):</label>
-                    <input type="date" value={compStartDate} onChange={(e) => setCompStartDate(e.target.value)} />
+                    <input
+                      type="date"
+                      value={compStartDate}
+                      onChange={(e) => setCompStartDate(e.target.value)}
+                    />
                   </div>
                   <div>
                     <label>End Date (mm/dd/yyyy):</label>
-                    <input type="date" value={compEndDate} onChange={(e) => setCompEndDate(e.target.value)} />
+                    <input
+                      type="date"
+                      value={compEndDate}
+                      onChange={(e) => setCompEndDate(e.target.value)}
+                    />
                   </div>
                   <div>
                     <label>Max Position Limit:</label>
-                    <select value={maxPositionLimit} onChange={(e) => setMaxPositionLimit(e.target.value)}>
+                    <select
+                      value={maxPositionLimit}
+                      onChange={(e) => setMaxPositionLimit(e.target.value)}
+                    >
                       <option value="5%">5%</option>
                       <option value="10%">10%</option>
                       <option value="25%">25%</option>
@@ -827,44 +1096,100 @@ const Dashboard = () => {
                   </div>
                   <div>
                     <label>
-                      <input type="checkbox" checked={featureCompetition} onChange={(e) => setFeatureCompetition(e.target.checked)} />
+                      <input
+                        type="checkbox"
+                        checked={featureCompetition}
+                        onChange={(e) => setFeatureCompetition(e.target.checked)}
+                      />
                       Feature This Competition
                     </label>
                   </div>
-                  <button className="competition-button" onClick={createCompetition}>Create Competition</button>
+                  <button className="competition-button" onClick={createCompetition}>
+                    Create Competition
+                  </button>
                 </div>
                 <div className="competition-form">
                   <h3>Join Competition</h3>
-                  <input type="text" placeholder="Enter Competition Code" value={joinCompetitionCode} onChange={(e) => setJoinCompetitionCode(e.target.value)} />
-                  <button className="competition-button" onClick={joinCompetition}>Join Competition</button>
+                  <input
+                    type="text"
+                    placeholder="Enter Competition Code"
+                    value={joinCompetitionCode}
+                    onChange={(e) => setJoinCompetitionCode(e.target.value)}
+                  />
+                  <button
+                    className="competition-button"
+                    onClick={joinCompetition}
+                  >
+                    Join Competition
+                  </button>
                 </div>
                 {competitionMessage && <p>{competitionMessage}</p>}
               </div>
+
               <div className="team-competitions-section">
                 <h2>Team Competitions</h2>
                 <div className="team-competition-form">
                   <h3>Join Competition as Team</h3>
-                  <input type="text" placeholder="Enter Team Code" value={joinTeamCompetitionTeamCode} onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)} />
-                  <input type="text" placeholder="Enter Competition Code" value={joinTeamCompetitionCode} onChange={(e) => setJoinTeamCompetitionCode(e.target.value)} />
-                  <button className="competition-button" onClick={joinCompetitionAsTeam}>Join Competition as Team</button>
+                  <input
+                    type="text"
+                    placeholder="Enter Team Code"
+                    value={joinTeamCompetitionTeamCode}
+                    onChange={(e) =>
+                      setJoinTeamCompetitionTeamCode(e.target.value)
+                    }
+                  />
+                  <input
+                    type="text"
+                    placeholder="Enter Competition Code"
+                    value={joinTeamCompetitionCode}
+                    onChange={(e) =>
+                      setJoinTeamCompetitionCode(e.target.value)
+                    }
+                  />
+                  <button
+                    className="competition-button"
+                    onClick={joinCompetitionAsTeam}
+                  >
+                    Join Competition as Team
+                  </button>
                 </div>
                 {teamCompetitionMessage && <p>{teamCompetitionMessage}</p>}
               </div>
-              <button className="logout-button" onClick={handleLogout}>Logout</button>
+
+              <button className="logout-button" onClick={handleLogout}>
+                Logout
+              </button>
             </>
           )}
         </div>
       ) : (
+        // Logged-out view: Only display the Login (or Registration) form.
         <div className="login-box">
           {isRegistering ? (
             <form onSubmit={handleRegister}>
               <h2>Create Account</h2>
-              <input type="text" placeholder="Enter username" value={username} onChange={(e) => setUsername(e.target.value)} />
-              <input type="password" placeholder="Enter password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input
+                type="text"
+                placeholder="Enter username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <input
+                type="password"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
               <button type="submit">Create Account</button>
               <p>
                 Already have an account?{' '}
-                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(false); }}>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsRegistering(false);
+                  }}
+                >
                   Login
                 </a>
               </p>
@@ -872,12 +1197,28 @@ const Dashboard = () => {
           ) : (
             <form onSubmit={handleLogin}>
               <h2>Login</h2>
-              <input type="text" placeholder="Enter username" value={username} onChange={(e) => setUsername(e.target.value)} />
-              <input type="password" placeholder="Enter password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input
+                type="text"
+                placeholder="Enter username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <input
+                type="password"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
               <button type="submit">Login</button>
               <p>
                 Don&apos;t have an account?{' '}
-                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegistering(true); }}>
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsRegistering(true);
+                  }}
+                >
                   Create Account
                 </a>
               </p>
@@ -885,13 +1226,21 @@ const Dashboard = () => {
           )}
         </div>
       )}
+
       {showModal && modalCompetition && (
         <div className="modal-overlay">
           <div className="modal">
             <h2>Join Competition</h2>
-            <p>Do you want to join <strong>{modalCompetition.name}</strong>?</p>
-            <p>Starts: {new Date(modalCompetition.start_date).toLocaleDateString()}</p>
-            <p>Ends: {new Date(modalCompetition.end_date).toLocaleDateString()}</p>
+            <p>
+              Do you want to join <strong>{modalCompetition.name}</strong>?
+            </p>
+            <p>
+              Starts:{' '}
+              {new Date(modalCompetition.start_date).toLocaleDateString()}
+            </p>
+            <p>
+              Ends: {new Date(modalCompetition.end_date).toLocaleDateString()}
+            </p>
             <button onClick={joinFeaturedCompetition}>Join</button>
             <button onClick={closeModal}>Cancel</button>
           </div>
