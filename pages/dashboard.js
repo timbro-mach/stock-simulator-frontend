@@ -60,8 +60,10 @@ const Dashboard = () => {
   const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
   const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
-  // Featured competitions & Quick Pics
+  // Featured Competitions
   const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
+
+  // Quick Pics (shown to all users)
   const [quickPics, setQuickPics] = useState([]);
 
   // Modal for joining a featured competition
@@ -96,7 +98,6 @@ const Dashboard = () => {
       setGlobalAccount(response.data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
       setCompetitionAccounts(response.data.competition_accounts || []);
       setTeamCompetitionAccounts(response.data.team_competitions || []);
-      // The /user endpoint no longer returns teams, so teams are set from the login response
       if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
     } catch (error) {
       if (error.response && error.response.status === 404) {
@@ -119,7 +120,7 @@ const Dashboard = () => {
     }
   };
 
-  // Fetch Quick Pics
+  // Fetch Quick Pics (no admin check; show to all users)
   const fetchQuickPics = async () => {
     try {
       const response = await axios.get(`${BASE_URL}/quick_pics`);
@@ -147,7 +148,7 @@ const Dashboard = () => {
     }
   }, [isLoggedIn, username, fetchUserData]);
 
-  // Updated login handler to set teams from the response if provided
+  // Login handler
   const handleLogin = async (event) => {
     event.preventDefault();
     const loginData = { username, password };
@@ -157,7 +158,6 @@ const Dashboard = () => {
         localStorage.setItem('username', username);
         setIsLoggedIn(true);
         if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
-        // Set teams from login response if available
         if (response.data.teams) {
           setTeams(response.data.teams);
         }
@@ -185,7 +185,7 @@ const Dashboard = () => {
     }
   };
 
-  // Updated logout: since there’s no /logout endpoint, we simply clear local state
+  // Logout
   const handleLogout = () => {
     localStorage.removeItem('username');
     setUsername('');
@@ -236,7 +236,7 @@ const Dashboard = () => {
   };
 
   // ----------------------------------
-  // Stock and Trading
+  // Trading
   // ----------------------------------
   const getStockPrice = async () => {
     if (!isTradingHours()) {
@@ -372,12 +372,12 @@ const Dashboard = () => {
     }
     if (!checkTradingHoursAndProceed(() => {})) return;
     try {
-      const buyData = { 
-        username, 
-        team_id: selectedAccount.team_id, 
-        competition_code: selectedAccount.competition_code, 
-        symbol: stockSymbol, 
-        quantity: tradeQuantity 
+      const buyData = {
+        username,
+        team_id: selectedAccount.team_id,
+        competition_code: selectedAccount.competition_code,
+        symbol: stockSymbol,
+        quantity: tradeQuantity
       };
       const response = await axios.post(`${BASE_URL}/competition/team/buy`, buyData);
       if (response.data.message) {
@@ -397,12 +397,12 @@ const Dashboard = () => {
     }
     if (!checkTradingHoursAndProceed(() => {})) return;
     try {
-      const sellData = { 
-        username, 
-        team_id: selectedAccount.team_id, 
-        competition_code: selectedAccount.competition_code, 
-        symbol: stockSymbol, 
-        quantity: tradeQuantity 
+      const sellData = {
+        username,
+        team_id: selectedAccount.team_id,
+        competition_code: selectedAccount.competition_code,
+        symbol: stockSymbol,
+        quantity: tradeQuantity
       };
       const response = await axios.post(`${BASE_URL}/competition/team/sell`, sellData);
       if (response.data.message) {
@@ -479,6 +479,7 @@ const Dashboard = () => {
   };
 
   const joinCompetition = async () => {
+    // If you still want a manual join for a code, keep it. Otherwise you can remove it entirely.
     if (!joinCompetitionCode) {
       setCompetitionMessage('Please enter a competition code.');
       return;
@@ -516,7 +517,7 @@ const Dashboard = () => {
   };
 
   // ----------------------------------
-  // Featured Competitions + Quick Pics
+  // Featured Competitions & Quick Pics
   // ----------------------------------
   const openJoinModal = (competition) => {
     setModalCompetition(competition);
@@ -531,7 +532,10 @@ const Dashboard = () => {
   const joinFeaturedCompetition = async () => {
     if (modalCompetition) {
       try {
-        const response = await axios.post(`${BASE_URL}/competition/join`, { username, competition_code: modalCompetition.code });
+        const response = await axios.post(`${BASE_URL}/competition/join`, {
+          username,
+          competition_code: modalCompetition.code
+        });
         alert(response.data.message);
         closeModal();
         fetchUserData();
@@ -879,7 +883,7 @@ const Dashboard = () => {
               />
               <button onClick={handleRemoveUserFromCompetition}>Remove</button>
 
-              <h4>Remove User from Team</h4>
+              <h4 style={{ marginTop: '10px' }}>Remove User from Team</h4>
               <input
                 type="text"
                 placeholder="Target Username"
@@ -903,7 +907,6 @@ const Dashboard = () => {
               <h2>Featured Competitions</h2>
               {featuredCompetitions.length > 0 ? (
                 featuredCompetitions.map((comp) => {
-                  // Decide if open or restricted
                   const status = comp.join === "Join directly" ? "Open" : "Restricted";
                   return (
                     <div
@@ -911,10 +914,9 @@ const Dashboard = () => {
                       className="featured-competition-item"
                       style={{ margin: "5px 0", display: "flex", alignItems: "center" }}
                     >
-                      {/* Single-line display: name, date, status, join link */}
                       <span style={{ marginRight: "10px" }}>
-                        <strong>{comp.name}</strong> | {status} | 
-                        Start: {new Date(comp.start_date).toLocaleDateString()} | 
+                        <strong>{comp.name}</strong> | {status} |
+                        Start: {new Date(comp.start_date).toLocaleDateString()} |
                         End: {new Date(comp.end_date).toLocaleDateString()}
                       </span>
                       <button onClick={() => openJoinModal(comp)}>
@@ -926,18 +928,6 @@ const Dashboard = () => {
               ) : (
                 <p>No featured competitions available.</p>
               )}
-              <div style={{ marginTop: "10px" }}>
-                <input
-                  type="text"
-                  placeholder="Enter Competition Code"
-                  value={joinCompetitionCode}
-                  onChange={(e) => setJoinCompetitionCode(e.target.value)}
-                  style={{ marginRight: "5px" }}
-                />
-                <button className="competition-button" onClick={joinCompetition}>
-                  Join Competition
-                </button>
-              </div>
             </div>
           )}
 
@@ -946,13 +936,18 @@ const Dashboard = () => {
               <h2>Quick Pics (Next 2 Hourly Comps)</h2>
               {quickPics.length > 0 ? (
                 quickPics.map((comp) => (
-                  <div key={comp.code} style={{ margin: "5px 0", display: "flex", alignItems: "center" }}>
+                  <div
+                    key={comp.code}
+                    style={{ margin: "5px 0", display: "flex", alignItems: "center" }}
+                  >
                     <span style={{ marginRight: "10px" }}>
-                      <strong>{comp.name}</strong> | 
-                      Starts: {new Date(comp.start_date).toLocaleString()} | 
+                      <strong>{comp.name}</strong> |
+                      Starts: {new Date(comp.start_date).toLocaleString()} |
                       Ends: {new Date(comp.end_date).toLocaleString()}
                     </span>
-                    <button onClick={() => joinThisCompetition(comp.code)}>Join</button>
+                    <button onClick={() => joinThisCompetition(comp.code)}>
+                      Join
+                    </button>
                   </div>
                 ))
               ) : (
