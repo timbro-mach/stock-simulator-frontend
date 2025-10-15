@@ -294,7 +294,7 @@ const Dashboard = () => {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
-    if (!checkTradingHoursAndProceed(() => {})) return;
+    if (!checkTradingHoursAndProceed(() => { })) return;
     try {
       const buyData = { username, symbol: stockSymbol, quantity: tradeQuantity };
       const response = await axios.post(`${BASE_URL}/buy`, buyData);
@@ -313,7 +313,7 @@ const Dashboard = () => {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
-    if (!checkTradingHoursAndProceed(() => {})) return;
+    if (!checkTradingHoursAndProceed(() => { })) return;
     try {
       const sellData = { username, symbol: stockSymbol, quantity: tradeQuantity };
       const response = await axios.post(`${BASE_URL}/sell`, sellData);
@@ -332,7 +332,7 @@ const Dashboard = () => {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
-    if (!checkTradingHoursAndProceed(() => {})) return;
+    if (!checkTradingHoursAndProceed(() => { })) return;
     try {
       const buyData = { username, competition_code: selectedAccount.id, symbol: stockSymbol, quantity: tradeQuantity };
       const response = await axios.post(`${BASE_URL}/competition/buy`, buyData);
@@ -351,7 +351,7 @@ const Dashboard = () => {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
-    if (!checkTradingHoursAndProceed(() => {})) return;
+    if (!checkTradingHoursAndProceed(() => { })) return;
     try {
       const sellData = { username, competition_code: selectedAccount.id, symbol: stockSymbol, quantity: tradeQuantity };
       const response = await axios.post(`${BASE_URL}/competition/sell`, sellData);
@@ -370,7 +370,7 @@ const Dashboard = () => {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
-    if (!checkTradingHoursAndProceed(() => {})) return;
+    if (!checkTradingHoursAndProceed(() => { })) return;
     try {
       const buyData = {
         username,
@@ -395,7 +395,7 @@ const Dashboard = () => {
       setTradeMessage('Please enter a valid stock symbol and quantity.');
       return;
     }
-    if (!checkTradingHoursAndProceed(() => {})) return;
+    if (!checkTradingHoursAndProceed(() => { })) return;
     try {
       const sellData = {
         username,
@@ -569,8 +569,8 @@ const Dashboard = () => {
       return (
         <div className="account-box">
           <h2>Global Account for {username}</h2>
-          <p>Cash Balance: ${ (globalAccount.cash_balance ?? 0).toFixed(2) }</p>
-          <p>Total Account Value: ${ (globalAccount.total_value ?? 0).toFixed(2) }</p>
+          <p>Cash Balance: ${(globalAccount.cash_balance ?? 0).toFixed(2)}</p>
+          <p>Total Account Value: ${(globalAccount.total_value ?? 0).toFixed(2)}</p>
         </div>
       );
     } else if (selectedAccount.type === 'competition') {
@@ -580,8 +580,8 @@ const Dashboard = () => {
         <div className="account-box">
           <h2>Competition Account (Individual) for {username}</h2>
           <p>Competition: {compAcc.name} (Code: {compAcc.code})</p>
-          <p>Cash Balance: ${ (compAcc.competition_cash ?? 0).toFixed(2) }</p>
-          <p>Total Account Value: ${ (compAcc.total_value ?? 0).toFixed(2) }</p>
+          <p>Cash Balance: ${(compAcc.competition_cash ?? 0).toFixed(2)}</p>
+          <p>Total Account Value: ${(compAcc.total_value ?? 0).toFixed(2)}</p>
         </div>
       );
     } else if (selectedAccount.type === 'team') {
@@ -590,8 +590,8 @@ const Dashboard = () => {
       return (
         <div className="account-box">
           <h2>Competition Account (Team) - {teamAcc.name}</h2>
-          <p>Cash Balance: ${ (teamAcc.competition_cash ?? 0).toFixed(2) }</p>
-          <p>Total Account Value: ${ (teamAcc.total_value ?? 0).toFixed(2) }</p>
+          <p>Cash Balance: ${(teamAcc.competition_cash ?? 0).toFixed(2)}</p>
+          <p>Total Account Value: ${(teamAcc.total_value ?? 0).toFixed(2)}</p>
         </div>
       );
     }
