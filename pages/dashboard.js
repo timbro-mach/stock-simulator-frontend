@@ -63,9 +63,6 @@ const Dashboard = () => {
   // Featured Competitions
   const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
 
-  // Quick Pics (shown to all users)
-  const [quickPics, setQuickPics] = useState([]);
-
   // Modal for joining a featured competition
   const [showModal, setShowModal] = useState(false);
   const [modalCompetition, setModalCompetition] = useState(null);
@@ -120,16 +117,6 @@ const Dashboard = () => {
     }
   };
 
-  // Fetch Quick Pics (no admin check; show to all users)
-  const fetchQuickPics = async () => {
-    try {
-      const response = await axios.get(`${BASE_URL}/quick_pics`);
-      setQuickPics(response.data);
-    } catch (error) {
-      console.error('Error fetching Quick Pics:', error);
-    }
-  };
-
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUsername = localStorage.getItem('username');
@@ -144,7 +131,6 @@ const Dashboard = () => {
     if (isLoggedIn && username) {
       fetchUserData();
       fetchFeaturedCompetitions();
-      fetchQuickPics();
     }
   }, [isLoggedIn, username, fetchUserData]);
 
@@ -163,7 +149,6 @@ const Dashboard = () => {
         }
         fetchUserData();
         fetchFeaturedCompetitions();
-        fetchQuickPics();
       }
     } catch (error) {
       const errMsg = error.response?.data?.message || 'Login failed';
@@ -546,21 +531,6 @@ const Dashboard = () => {
     }
   };
 
-  // Utility function to join a Quick Pics competition
-  const joinThisCompetition = async (competitionCode) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/competition/join`, {
-        username,
-        competition_code: competitionCode
-      });
-      alert(response.data.message);
-      fetchUserData();
-    } catch (err) {
-      console.error('Error joining competition:', err);
-      alert('Could not join competition');
-    }
-  };
-
   // ----------------------------------
   // Render Helpers
   // ----------------------------------
@@ -927,31 +897,6 @@ const Dashboard = () => {
                 })
               ) : (
                 <p>No featured competitions available.</p>
-              )}
-            </div>
-          )}
-
-          {!showTrading && (
-            <div style={{ marginBottom: "20px" }}>
-              <h2>Quick Pics (Next 2 Hourly Comps)</h2>
-              {quickPics.length > 0 ? (
-                quickPics.map((comp) => (
-                  <div
-                    key={comp.code}
-                    style={{ margin: "5px 0", display: "flex", alignItems: "center" }}
-                  >
-                    <span style={{ marginRight: "10px" }}>
-                      <strong>{comp.name}</strong> |
-                      Starts: {new Date(comp.start_date).toLocaleString()} |
-                      Ends: {new Date(comp.end_date).toLocaleString()}
-                    </span>
-                    <button onClick={() => joinThisCompetition(comp.code)}>
-                      Join
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p>No upcoming Quick Pics competitions.</p>
               )}
             </div>
           )}
