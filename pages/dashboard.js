@@ -338,13 +338,11 @@ const Dashboard = () => {
     const handleRemoveUserFromCompetition = async () => {
         try {
             const payload = {
-                username,
-                competition_name: competitionName,
-                start_date: compStartDate,
-                end_date: compEndDate,
-                max_position_limit: maxPositionLimit,
-                feature_competition: featureCompetition, // ← rename key
+                admin_username: username,
+                target_username: removeCompUserUsername,
+                competition_code: removeCompCode,
             };
+
             const res = await axios.post(`${BASE_URL}/admin/remove_user_from_competition`, payload);
             setAdminMessage(res.data.message);
             fetchUserData();
@@ -354,6 +352,7 @@ const Dashboard = () => {
             setAdminMessage('Failed to remove user from competition.');
         }
     };
+
 
     // Toggle competition open/closed
     const toggleCompetitionOpen = async (competitionCode, currentStatus) => {
@@ -371,6 +370,24 @@ const Dashboard = () => {
             alert('Failed to update competition open/closed status.');
         }
     };
+
+    // Toggle competition featured/unfeatured
+    const toggleCompetitionFeatured = async (competitionCode, newStatus) => {
+        try {
+            const payload = {
+                admin_username: username,
+                competition_code: competitionCode,
+                feature_competition: newStatus,
+            };
+            const res = await axios.post(`${BASE_URL}/admin/update_featured_status`, payload);
+            alert(res.data.message);
+            fetchFeaturedCompetitions();
+        } catch (error) {
+            console.error('Error toggling featured status:', error);
+            alert('Failed to update featured status.');
+        }
+    };
+
 
     // Remove user from team (admin)
     const handleRemoveUserFromTeam = async () => {
@@ -622,7 +639,8 @@ const Dashboard = () => {
                 start_date: compStartDate,
                 end_date: compEndDate,
                 max_position_limit: maxPositionLimit,
-                featured: featureCompetition,
+                feature_competition: featureCompetition, // ✅ FIXED
+
             };
             const res = await axios.post(`${BASE_URL}/competition/create`, payload);
             setCompetitionMessage(`Competition created successfully! Code: ${res.data.competition_code}`);
@@ -1030,354 +1048,355 @@ const Dashboard = () => {
                                         <div key={comp.code} style={{ marginBottom: '10px' }}>
                                             <p>
                                                 <strong>{comp.name}</strong> (Code: {comp.code})<br />
-                                                Open: {comp.is_open ? '✅' : '❌'}
+                                                Open: {comp.is_open ? '✅' : '❌'} | Featured: {comp.featured ? '🌟' : '—'}
                                             </p>
-                                            <button onClick={() => toggleCompetitionOpen(comp.code, comp.is_open)}>
-                                                {comp.is_open ? 'Close Competition' : 'Open Competition'}
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                <button onClick={() => toggleCompetitionOpen(comp.code, comp.is_open)}>
+                                                    {comp.is_open ? 'Close Competition' : 'Open Competition'}
+                                                </button>
+                                                <button onClick={() => toggleCompetitionFeatured(comp.code, !comp.featured)}>
+                                                    {comp.featured ? 'Unfeature' : 'Feature'}
+                                                </button>
+                                            </div>
                                         </div>
                                     ))
                                 ) : (
                                     <p className="note">No competitions found.</p>
                                 )}
-                            </div>
-
-                            {adminMessage && <p className="note">{adminMessage}</p>}
-                        </div>
-                    )}
 
 
-                    {/* Featured Competitions (Dashboard mode only) */}
-                    {!showTrading && (
-                        <div className="card section">
-                            <h2>🏅 Featured Competitions</h2>
-                            {featuredCompetitions.length > 0 ? (
-                                featuredCompetitions.map((comp) => {
-                                    const status = comp.join === 'Join directly' ? 'Open' : 'Restricted';
-                                    return (
-                                        <div key={comp.code} className="section" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                                            <span>
-                                                <strong>{comp.name}</strong> • {status} • {new Date(comp.start_date).toLocaleDateString()} → {new Date(comp.end_date).toLocaleDateString()}
-                                            </span>
-                                            <button onClick={() => openJoinModal(comp)}>Join</button>
+
+                                {/* Featured Competitions (Dashboard mode only) */}
+                                {!showTrading && (
+                                    <div className="card section">
+                                        <h2>🏅 Featured Competitions</h2>
+                                        {featuredCompetitions.length > 0 ? (
+                                            featuredCompetitions.map((comp) => {
+                                                const status = comp.join === 'Join directly' ? 'Open' : 'Restricted';
+                                                return (
+                                                    <div key={comp.code} className="section" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                                        <span>
+                                                            <strong>{comp.name}</strong> • {status} • {new Date(comp.start_date).toLocaleDateString()} → {new Date(comp.end_date).toLocaleDateString()}
+                                                        </span>
+                                                        <button onClick={() => openJoinModal(comp)}>Join</button>
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            <p className="note">No featured competitions available.</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Mode Toggle */}
+                                <div className="section">
+                                    {showTrading ? (
+                                        <button onClick={() => setShowTrading(false)}>⬅ Back to Dashboard</button>
+                                    ) : (
+                                        <button onClick={() => setShowTrading(true)}>🚀 Start Trading</button>
+                                    )}
+                                </div>
+
+                                {/* Trading Workspace */}
+                                {showTrading ? (
+                                    <>
+                                        {/* Account Switcher */}
+                                        <div className="card section">
+                                            <h2>Accounts</h2>
+                                            <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                <button onClick={() => setSelectedAccount({ type: 'global', id: null })}>Global Account</button>
+                                                {competitionAccounts.map((acc) => (
+                                                    <button
+                                                        key={acc.code}
+                                                        onClick={() => setSelectedAccount({ type: 'competition', id: acc.code })}
+                                                    >
+                                                        {acc.name} ({acc.code})
+                                                    </button>
+                                                ))}
+                                                {teamCompetitionAccounts.map((acc) => (
+                                                    <button
+                                                        key={`${acc.team_id}-${acc.code}`}
+                                                        onClick={() =>
+                                                            setSelectedAccount({
+                                                                type: 'team',
+                                                                team_id: acc.team_id,
+                                                                competition_code: acc.code,
+                                                            })
+                                                        }
+                                                    >
+                                                        {acc.name} (Team • {acc.code})
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <button className="logout-button" onClick={handleLogout}>
+                                                Logout
+                                            </button>
                                         </div>
-                                    );
-                                })
+
+                                        {renderAccountDetails()}
+                                        {renderPortfolioBox()}
+                                        {renderTradeBox()}
+
+                                        {/* Leaderboards (contextual) */}
+                                        {selectedAccount.type === 'competition' && (
+                                            <div className="card section">
+                                                <h3>Leaderboard — {selectedAccount.id}</h3>
+                                                <Leaderboard competitionCode={selectedAccount.id} variant="competition" />
+                                            </div>
+                                        )}
+                                        {selectedAccount.type === 'team' && (
+                                            <div className="card section">
+                                                <h3>Leaderboard — {selectedAccount.competition_code} (Team)</h3>
+                                                <Leaderboard competitionCode={selectedAccount.competition_code} variant="team" />
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Teams */}
+                                        <div className="card section">
+                                            <h2>👥 Teams</h2>
+                                            <div className="section">
+                                                <h3>Create Team</h3>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Enter Team Name"
+                                                    value={teamName}
+                                                    onChange={(e) => setTeamName(e.target.value)}
+                                                />
+                                                <button className="team-button" onClick={createTeam}>
+                                                    Create Team
+                                                </button>
+                                            </div>
+
+                                            <div className="section">
+                                                <h3>Join Team</h3>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Enter Team Code"
+                                                    value={joinTeamCode}
+                                                    onChange={(e) => setJoinTeamCode(e.target.value)}
+                                                />
+                                                <button className="team-button" onClick={joinTeam}>
+                                                    Join Team
+                                                </button>
+                                            </div>
+
+                                            {teamMessage && <p className="note">{teamMessage}</p>}
+                                        </div>
+
+                                        {/* Group Competitions */}
+                                        <div className="card section">
+                                            <h2>🏁 Group Competitions</h2>
+                                            <div className="section">
+                                                <h3>Create Competition</h3>
+                                                <div className="section" style={{ display: 'grid', gap: 10, maxWidth: 520 }}>
+                                                    <label className="em">Competition Name</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Enter Competition Name"
+                                                        value={competitionName}
+                                                        onChange={(e) => setCompetitionName(e.target.value)}
+                                                    />
+                                                    <label className="em">Start Date</label>
+                                                    <input
+                                                        type="date"
+                                                        value={compStartDate}
+                                                        onChange={(e) => setCompStartDate(e.target.value)}
+                                                    />
+                                                    <label className="em">End Date</label>
+                                                    <input
+                                                        type="date"
+                                                        value={compEndDate}
+                                                        onChange={(e) => setCompEndDate(e.target.value)}
+                                                    />
+                                                    <label className="em">Max Position Limit</label>
+                                                    <select
+                                                        value={maxPositionLimit}
+                                                        onChange={(e) => setMaxPositionLimit(e.target.value)}
+                                                    >
+                                                        <option value="5%">5%</option>
+                                                        <option value="10%">10%</option>
+                                                        <option value="25%">25%</option>
+                                                        <option value="50%">50%</option>
+                                                        <option value="100%">100%</option>
+                                                    </select>
+                                                    <label className="em" style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: '200px' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={featureCompetition}
+                                                            onChange={(e) => setFeatureCompetition(e.target.checked)}
+                                                        />
+                                                        Feature This Competition
+                                                    </label>
+                                                    <button className="competition-button" onClick={createCompetition}>
+                                                        Create Competition
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="section">
+                                                <h3>Join Competition</h3>
+                                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Enter Competition Code"
+                                                        value={joinCompetitionCode}
+                                                        onChange={(e) => setJoinCompetitionCode(e.target.value)}
+                                                    />
+                                                    <button className="competition-button" onClick={joinCompetition}>
+                                                        Join Competition
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {competitionMessage && <p className="note">{competitionMessage}</p>}
+                                        </div>
+
+                                        {/* Team Competitions */}
+                                        <div className="card section">
+                                            <h2>🤝 Team Competitions</h2>
+                                            <div className="section" style={{ display: 'grid', gap: 8, maxWidth: 520 }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Enter Team Code"
+                                                    value={joinTeamCompetitionTeamCode}
+                                                    onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Enter Competition Code"
+                                                    value={joinTeamCompetitionCode}
+                                                    onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
+                                                />
+                                                <button className="competition-button" onClick={joinCompetitionAsTeam}>
+                                                    Join Competition as Team
+                                                </button>
+                                            </div>
+                                            {teamCompetitionMessage && <p className="note">{teamCompetitionMessage}</p>}
+                                        </div>
+
+                                        <button className="logout-button" onClick={handleLogout}>
+                                            Logout
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                             ) : (
-                                <p className="note">No featured competitions available.</p>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Mode Toggle */}
-                    <div className="section">
-                        {showTrading ? (
-                            <button onClick={() => setShowTrading(false)}>⬅ Back to Dashboard</button>
-                        ) : (
-                            <button onClick={() => setShowTrading(true)}>🚀 Start Trading</button>
-                        )}
-                    </div>
-
-                    {/* Trading Workspace */}
-                    {showTrading ? (
-                        <>
-                            {/* Account Switcher */}
-                            <div className="card section">
-                                <h2>Accounts</h2>
-                                <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                    <button onClick={() => setSelectedAccount({ type: 'global', id: null })}>Global Account</button>
-                                    {competitionAccounts.map((acc) => (
-                                        <button
-                                            key={acc.code}
-                                            onClick={() => setSelectedAccount({ type: 'competition', id: acc.code })}
-                                        >
-                                            {acc.name} ({acc.code})
-                                        </button>
-                                    ))}
-                                    {teamCompetitionAccounts.map((acc) => (
-                                        <button
-                                            key={`${acc.team_id}-${acc.code}`}
-                                            onClick={() =>
-                                                setSelectedAccount({
-                                                    type: 'team',
-                                                    team_id: acc.team_id,
-                                                    competition_code: acc.code,
-                                                })
-                                            }
-                                        >
-                                            {acc.name} (Team • {acc.code})
-                                        </button>
-                                    ))}
-                                </div>
-                                <button className="logout-button" onClick={handleLogout}>
-                                    Logout
-                                </button>
-                            </div>
-
-                            {renderAccountDetails()}
-                            {renderPortfolioBox()}
-                            {renderTradeBox()}
-
-                            {/* Leaderboards (contextual) */}
-                            {selectedAccount.type === 'competition' && (
-                                <div className="card section">
-                                    <h3>Leaderboard — {selectedAccount.id}</h3>
-                                    <Leaderboard competitionCode={selectedAccount.id} variant="competition" />
-                                </div>
-                            )}
-                            {selectedAccount.type === 'team' && (
-                                <div className="card section">
-                                    <h3>Leaderboard — {selectedAccount.competition_code} (Team)</h3>
-                                    <Leaderboard competitionCode={selectedAccount.competition_code} variant="team" />
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <>
-                            {/* Teams */}
-                            <div className="card section">
-                                <h2>👥 Teams</h2>
-                                <div className="section">
-                                    <h3>Create Team</h3>
-                                    <input
-                                        type="text"
-                                        placeholder="Enter Team Name"
-                                        value={teamName}
-                                        onChange={(e) => setTeamName(e.target.value)}
-                                    />
-                                    <button className="team-button" onClick={createTeam}>
-                                        Create Team
-                                    </button>
-                                </div>
-
-                                <div className="section">
-                                    <h3>Join Team</h3>
-                                    <input
-                                        type="text"
-                                        placeholder="Enter Team Code"
-                                        value={joinTeamCode}
-                                        onChange={(e) => setJoinTeamCode(e.target.value)}
-                                    />
-                                    <button className="team-button" onClick={joinTeam}>
-                                        Join Team
-                                    </button>
-                                </div>
-
-                                {teamMessage && <p className="note">{teamMessage}</p>}
-                            </div>
-
-                            {/* Group Competitions */}
-                            <div className="card section">
-                                <h2>🏁 Group Competitions</h2>
-                                <div className="section">
-                                    <h3>Create Competition</h3>
-                                    <div className="section" style={{ display: 'grid', gap: 10, maxWidth: 520 }}>
-                                        <label className="em">Competition Name</label>
+                            // Logged-out view
+                            <div className="card" style={{ maxWidth: 420, margin: '0 auto' }}>
+                                {isRegistering ? (
+                                    <form onSubmit={handleRegister}>
+                                        <h2>Create Account</h2>
                                         <input
                                             type="text"
-                                            placeholder="Enter Competition Name"
-                                            value={competitionName}
-                                            onChange={(e) => setCompetitionName(e.target.value)}
+                                            placeholder="Enter username"
+                                            value={username}
+                                            onChange={(e) => setUsername(e.target.value)}
+                                            autoComplete="off"
                                         />
-                                        <label className="em">Start Date</label>
                                         <input
-                                            type="date"
-                                            value={compStartDate}
-                                            onChange={(e) => setCompStartDate(e.target.value)}
+                                            type="email" // NEW: Email input
+                                            placeholder="Enter email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            autoComplete="off"
                                         />
-                                        <label className="em">End Date</label>
                                         <input
-                                            type="date"
-                                            value={compEndDate}
-                                            onChange={(e) => setCompEndDate(e.target.value)}
+                                            type="password"
+                                            placeholder="Enter password"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            autoComplete="off"
                                         />
-                                        <label className="em">Max Position Limit</label>
-                                        <select
-                                            value={maxPositionLimit}
-                                            onChange={(e) => setMaxPositionLimit(e.target.value)}
-                                        >
-                                            <option value="5%">5%</option>
-                                            <option value="10%">10%</option>
-                                            <option value="25%">25%</option>
-                                            <option value="50%">50%</option>
-                                            <option value="100%">100%</option>
-                                        </select>
-                                        <label className="em" style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: '200px' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={featureCompetition}
-                                                onChange={(e) => setFeatureCompetition(e.target.checked)}
-                                            />
-                                            Feature This Competition
-                                        </label>
-                                        <button className="competition-button" onClick={createCompetition}>
-                                            Create Competition
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="section">
-                                    <h3>Join Competition</h3>
-                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                        <button type="submit">Create Account</button>
+                                        <p className="note">
+                                            Already have an account?{' '}
+                                            <a
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setIsRegistering(false);
+                                                    setEmail(''); // Clear email when switching to login
+                                                }}
+                                            >
+                                                Login
+                                            </a>
+                                        </p>
+                                    </form>
+                                ) : (
+                                    <form onSubmit={handleLogin}>
+                                        <h2>Login</h2>
                                         <input
                                             type="text"
-                                            placeholder="Enter Competition Code"
-                                            value={joinCompetitionCode}
-                                            onChange={(e) => setJoinCompetitionCode(e.target.value)}
+                                            placeholder="Enter username"
+                                            value={username}
+                                            onChange={(e) => setUsername(e.target.value)}
+                                            autoComplete="off"
                                         />
-                                        <button className="competition-button" onClick={joinCompetition}>
-                                            Join Competition
-                                        </button>
+                                        <input
+                                            type="password"
+                                            placeholder="Enter password"
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            autoComplete="off"
+                                        />
+                                        <button type="submit">Login</button>
+                                        <p className="note">
+                                            Don&apos;t have an account?{' '}
+                                            <a
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setIsRegistering(true);
+                                                }}
+                                            >
+                                                Create Account
+                                            </a>
+                                        </p>
+                                    </form>
+                                )}
+                            </div>
+            )}
+
+                            {/* Join Modal */}
+                            {showModal && modalCompetition && (
+                                <div
+                                    className="modal-overlay"
+                                    style={{
+                                        position: 'fixed',
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        background: 'rgba(0,0,0,0.5)',
+                                        display: 'flex',
+                                        alignItems: 'flex-start', // Changed to top-align
+                                        justifyContent: 'center',
+                                        zIndex: 1000,
+                                        paddingTop: '20px', // Add padding to ensure visibility
+                                    }}
+                                >
+                                    <div className="card" style={{ maxWidth: 540, margin: 0 }}>
+                                        <h2>Join Competition</h2>
+                                        <p>
+                                            Do you want to join <strong>{modalCompetition.name}</strong>?
+                                        </p>
+                                        <p className="note">
+                                            {new Date(modalCompetition.start_date).toLocaleDateString()}
+                                            {modalCompetition.end_date
+                                                ? ` → ${new Date(modalCompetition.end_date).toLocaleDateString()}`
+                                                : ''}
+                                        </p>
+                                        <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                            <button onClick={joinFeaturedCompetition}>Join</button>
+                                            <button className="logout-button" onClick={closeModal}>Cancel</button>
+                                        </div>
                                     </div>
                                 </div>
-
-                                {competitionMessage && <p className="note">{competitionMessage}</p>}
-                            </div>
-
-                            {/* Team Competitions */}
-                            <div className="card section">
-                                <h2>🤝 Team Competitions</h2>
-                                <div className="section" style={{ display: 'grid', gap: 8, maxWidth: 520 }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Enter Team Code"
-                                        value={joinTeamCompetitionTeamCode}
-                                        onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="Enter Competition Code"
-                                        value={joinTeamCompetitionCode}
-                                        onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
-                                    />
-                                    <button className="competition-button" onClick={joinCompetitionAsTeam}>
-                                        Join Competition as Team
-                                    </button>
-                                </div>
-                                {teamCompetitionMessage && <p className="note">{teamCompetitionMessage}</p>}
-                            </div>
-
-                            <button className="logout-button" onClick={handleLogout}>
-                                Logout
-                            </button>
-                        </>
-                    )}
-                </div>
-            ) : (
-                // Logged-out view
-                <div className="card" style={{ maxWidth: 420, margin: '0 auto' }}>
-                    {isRegistering ? (
-                        <form onSubmit={handleRegister}>
-                            <h2>Create Account</h2>
-                            <input
-                                type="text"
-                                placeholder="Enter username"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                autoComplete="off"
-                            />
-                            <input
-                                type="email" // NEW: Email input
-                                placeholder="Enter email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                autoComplete="off"
-                            />
-                            <input
-                                type="password"
-                                placeholder="Enter password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                autoComplete="off"
-                            />
-                            <button type="submit">Create Account</button>
-                            <p className="note">
-                                Already have an account?{' '}
-                                <a
-                                    href="#"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setIsRegistering(false);
-                                        setEmail(''); // Clear email when switching to login
-                                    }}
-                                >
-                                    Login
-                                </a>
-                            </p>
-                        </form>
-                    ) : (
-                        <form onSubmit={handleLogin}>
-                            <h2>Login</h2>
-                            <input
-                                type="text"
-                                placeholder="Enter username"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                autoComplete="off"
-                            />
-                            <input
-                                type="password"
-                                placeholder="Enter password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                autoComplete="off"
-                            />
-                            <button type="submit">Login</button>
-                            <p className="note">
-                                Don&apos;t have an account?{' '}
-                                <a
-                                    href="#"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        setIsRegistering(true);
-                                    }}
-                                >
-                                    Create Account
-                                </a>
-                            </p>
-                        </form>
-                    )}
-                </div>
-            )}
-
-            {/* Join Modal */}
-            {showModal && modalCompetition && (
-                <div
-                    className="modal-overlay"
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0,0,0,0.5)',
-                        display: 'flex',
-                        alignItems: 'flex-start', // Changed to top-align
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                        paddingTop: '20px', // Add padding to ensure visibility
-                    }}
-                >
-                    <div className="card" style={{ maxWidth: 540, margin: 0 }}>
-                        <h2>Join Competition</h2>
-                        <p>
-                            Do you want to join <strong>{modalCompetition.name}</strong>?
-                        </p>
-                        <p className="note">
-                            {new Date(modalCompetition.start_date).toLocaleDateString()}
-                            {modalCompetition.end_date
-                                ? ` → ${new Date(modalCompetition.end_date).toLocaleDateString()}`
-                                : ''}
-                        </p>
-                        <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button onClick={joinFeaturedCompetition}>Join</button>
-                            <button className="logout-button" onClick={closeModal}>Cancel</button>
+                            )}
                         </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+                    );
 };
 
-export default Dashboard;
+                    export default Dashboard;
