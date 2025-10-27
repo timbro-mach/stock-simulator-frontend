@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import axios from 'axios';
 import Leaderboard from '../components/Leaderboard';
 import { Line } from 'react-chartjs-2';
@@ -14,6 +14,68 @@ import {
 } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+
+// Memoized ChartPanel component
+const ChartPanel = memo(({ chartData, chartRange, onRangeChange }) => (
+  <div style={{ flex: 1, minHeight: 320 }}>
+    <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+      {['1D', '1W', '1M', '6M', '1Y'].map((r) => (
+        <button
+          key={r}
+          onClick={() => onRangeChange(r)}
+          style={{
+            padding: '4px 10px',
+            borderRadius: 6,
+            background: chartRange === r ? '#2563eb' : '#f3f4f6',
+            color: chartRange === r ? '#fff' : '#111827',
+            border: 'none',
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          {r}
+        </button>
+      ))}
+    </div>
+
+    {chartData ? (
+      <div style={{ height: '300px', width: '100%' }}>
+        <Line
+          data={chartData}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { color: '#6b7280', maxTicksLimit: 6 },
+              },
+              y: {
+                grid: { color: 'rgba(0,0,0,0.05)' },
+                ticks: { color: '#6b7280', callback: (v) => `$${v}` },
+              },
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                  label: (context) => `$${context.formattedValue}`,
+                },
+              },
+            },
+            interaction: { intersect: false, mode: 'nearest' },
+          }}
+        />
+      </div>
+    ) : (
+      <p className="note">No chart data available</p>
+    )}
+  </div>
+));
+
+ChartPanel.displayName = 'ChartPanel';
 
 const Dashboard = () => {
   // =========================================
@@ -32,24 +94,23 @@ const Dashboard = () => {
   // Accounts & Selections
   // =========================================
   const [globalAccount, setGlobalAccount] = useState({ cash_balance: 0, portfolio: [], total_value: 0 });
-  const [competitionAccounts, setCompetitionAccounts] = useState([]);      // [{ code, name, competition_cash, total_value, portfolio }]
-  const [teamCompetitionAccounts, setTeamCompetitionAccounts] = useState([]); // [{ team_id, code, name, competition_cash, total_value, portfolio }]
+  const [competitionAccounts, setCompetitionAccounts] = useState([]);
+  const [teamCompetitionAccounts, setTeamCompetitionAccounts] = useState([]);
   const [teams, setTeams] = useState([]);
 
   // Selected account context for trading/actions
-  // type: 'global' | 'competition' | 'team'
   const [selectedAccount, setSelectedAccount] = useState({ type: 'global' });
 
   // =========================================
   // Trading state
   // =========================================
-  const [stockSymbol, setStockSymbol] = useState('');
-  const [chartSymbol, setChartSymbol] = useState(''); // ✅ separates typing vs. displayed chart symbol
-
+  const [stockSymbol, setStockSymbol] = useState('');      // Raw input for typing
+  const [chartSymbol, setChartSymbol] = useState('');      // Confirmed symbol for chart/price
   const [stockPrice, setStockPrice] = useState(null);
   const [tradeQuantity, setTradeQuantity] = useState(0);
   const [tradeMessage, setTradeMessage] = useState('');
   const [chartData, setChartData] = useState(null);
+  const [chartRange, setChartRange] = useState('1M');
 
   // =========================================
   // Teams & Competitions state
@@ -95,7 +156,6 @@ const Dashboard = () => {
   // Helpers
   // =========================================
   const isTradingHours = () => {
-    // 6:30 AM – 1:00 PM America/Los_Angeles
     const pstDateString = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
     const pstDate = new Date(pstDateString);
     const current = pstDate.getHours() * 60 + pstDate.getMinutes();
@@ -153,6 +213,17 @@ const Dashboard = () => {
     }
   }, [isLoggedIn, username, fetchUserData]);
 
+  // Clear stale data when typing doesn't match confirmed symbol
+  useEffect(() => {
+    const cleanTyped = stockSymbol.trim().toUpperCase();
+    const cleanChart = chartSymbol.trim().toUpperCase();
+    if (cleanTyped && cleanTyped !== cleanChart) {
+      setStockPrice(null);
+      setTradeMessage('');
+      setChartData(null);
+    }
+  }, [stockSymbol, chartSymbol]);
+
   // =========================================
   // Auth handlers
   // =========================================
@@ -197,6 +268,13 @@ const Dashboard = () => {
     setGlobalAccount({ cash_balance: 0, portfolio: [], total_value: 0 });
     setCompetitionAccounts([]);
     setTeamCompetitionAccounts([]);
+    // Clear trading state
+    setStockSymbol('');
+    setChartSymbol('');
+    setStockPrice(null);
+    setTradeQuantity(0);
+    setTradeMessage('');
+    setChartData(null);
   };
 
   // =========================================
@@ -235,29 +313,33 @@ const Dashboard = () => {
   };
 
   // =========================================
-  // Improved getStockPrice with range
+  // Trading handlers
   // =========================================
-  const [chartRange, setChartRange] = useState('1M');
+  const handleRangeChange = useCallback((range) => {
+    setChartRange(range);
+    if (chartSymbol) {
+      getStockPrice(range);
+    }
+  }, [chartSymbol]);
 
   const getStockPrice = async (range = chartRange) => {
-    if (!chartSymbol) return; // no confirmed chart yet
+    if (!chartSymbol) return;
 
-    const symbolToUse = chartSymbol?.trim().toUpperCase();
-
+    const symbolToUse = chartSymbol.trim().toUpperCase();
     if (!symbolToUse) {
       setTradeMessage('Please enter a stock symbol.');
       return;
     }
 
     try {
+      console.log('Fetching data for:', symbolToUse); // Debug log
       const response = await axios.get(`${BASE_URL}/stock/${symbolToUse}`);
 
       if (response.data?.price) {
         setStockPrice(response.data.price);
-        setTradeMessage(`Current price for ${stockSymbol.toUpperCase()}: $${response.data.price.toFixed(2)}`);
+        setTradeMessage(`Current price for ${symbolToUse}: $${response.data.price.toFixed(2)}`);
       }
 
-      // Try multi-day chart
       const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`);
       if (chartResponse.data && chartResponse.data.length > 0) {
         const labels = chartResponse.data.map(p => p.date);
@@ -274,7 +356,7 @@ const Dashboard = () => {
           labels,
           datasets: [
             {
-              label: `${stockSymbol.toUpperCase()} (${range})`,
+              label: `${symbolToUse} (${range})`,
               data: dataPoints,
               fill: true,
               borderWidth: 2.5,
@@ -287,92 +369,32 @@ const Dashboard = () => {
         });
       } else {
         setChartData(null);
+        setTradeMessage(`No chart data available for ${symbolToUse}`);
       }
     } catch (error) {
       console.error('Error fetching stock data:', error);
       setTradeMessage('Error fetching stock data.');
+      setChartData(null);
     }
   };
 
-  // Confirmed search to avoid reloading on every keystroke
   const handleSearch = (e) => {
     e.preventDefault();
     const cleanSymbol = stockSymbol.trim().toUpperCase();
-    if (!cleanSymbol) return;
+    if (!cleanSymbol) {
+      setTradeMessage('Please enter a stock symbol.');
+      return;
+    }
 
-    // ✅ Update displayed chart symbol first
     setChartSymbol(cleanSymbol);
-
-    // ✅ Then load data explicitly
     getStockPrice(chartRange);
   };
 
-  // =========================================
-  // Chart Panel JSX (replace your existing ChartPanel)
-  // =========================================
-  const ChartPanel = () => (
-    <div style={{ flex: 1, minHeight: 320 }}>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-        {['1D', '1W', '1M', '6M', '1Y'].map((r) => (
-          <button
-            key={r}
-            onClick={() => {
-              setChartRange(r);
-              getStockPrice(r);
-            }}
-            style={{
-              padding: '4px 10px',
-              borderRadius: 6,
-              background: chartRange === r ? '#2563eb' : '#f3f4f6',
-              color: chartRange === r ? '#fff' : '#111827',
-              border: 'none',
-              fontSize: 13,
-              cursor: 'pointer',
-            }}
-          >
-            {r}
-          </button>
-        ))}
-      </div>
-
-      {chartData ? (
-        <div style={{ height: '300px', width: '100%' }}>
-          <Line
-            data={chartData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                x: {
-                  grid: { display: false },
-                  ticks: { color: '#6b7280', maxTicksLimit: 6 },
-                },
-                y: {
-                  grid: { color: 'rgba(0,0,0,0.05)' },
-                  ticks: { color: '#6b7280', callback: (v) => `$${v}` },
-                },
-              },
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  mode: 'index',
-                  intersect: false,
-                  callbacks: {
-                    label: (context) => `$${context.formattedValue}`,
-                  },
-                },
-              },
-              interaction: { intersect: false, mode: 'nearest' },
-            }}
-          />
-        </div>
-      ) : (
-        <p className="note">No chart data available</p>
-      )}
-
-    </div>
-  );
-
+  const checkSymbolMatch = () => {
+    const cleanTyped = stockSymbol.trim().toUpperCase();
+    const cleanChart = chartSymbol.trim().toUpperCase();
+    return cleanTyped === cleanChart;
+  };
 
   const checkTradingHoursAndProceed = (action) => {
     if (!isTradingHours()) {
@@ -398,20 +420,35 @@ const Dashboard = () => {
 
   // Global account trades
   const buyStockGlobal = () => {
-    if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
+    if (!stockSymbol || tradeQuantity <= 0) {
+      return setTradeMessage('Enter valid symbol and quantity.');
+    }
+    if (!checkSymbolMatch()) {
+      return setTradeMessage('Search for the symbol first to confirm price and chart.');
+    }
     if (!checkTradingHoursAndProceed(() => { })) return;
     executeTrade('/buy', { username, symbol: stockSymbol, quantity: tradeQuantity });
   };
 
   const sellStockGlobal = () => {
-    if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
+    if (!stockSymbol || tradeQuantity <= 0) {
+      return setTradeMessage('Enter valid symbol and quantity.');
+    }
+    if (!checkSymbolMatch()) {
+      return setTradeMessage('Search for the symbol first to confirm price and chart.');
+    }
     if (!checkTradingHoursAndProceed(() => { })) return;
     executeTrade('/sell', { username, symbol: stockSymbol, quantity: tradeQuantity });
   };
 
   // Competition trades (individual)
   const buyStockCompetition = () => {
-    if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
+    if (!stockSymbol || tradeQuantity <= 0) {
+      return setTradeMessage('Enter valid symbol and quantity.');
+    }
+    if (!checkSymbolMatch()) {
+      return setTradeMessage('Search for the symbol first to confirm price and chart.');
+    }
     if (!checkTradingHoursAndProceed(() => { })) return;
     executeTrade('/competition/buy', {
       username,
@@ -422,7 +459,12 @@ const Dashboard = () => {
   };
 
   const sellStockCompetition = () => {
-    if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
+    if (!stockSymbol || tradeQuantity <= 0) {
+      return setTradeMessage('Enter valid symbol and quantity.');
+    }
+    if (!checkSymbolMatch()) {
+      return setTradeMessage('Search for the symbol first to confirm price and chart.');
+    }
     if (!checkTradingHoursAndProceed(() => { })) return;
     executeTrade('/competition/sell', {
       username,
@@ -434,7 +476,12 @@ const Dashboard = () => {
 
   // Team trades
   const buyStockTeam = () => {
-    if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
+    if (!stockSymbol || tradeQuantity <= 0) {
+      return setTradeMessage('Enter valid symbol and quantity.');
+    }
+    if (!checkSymbolMatch()) {
+      return setTradeMessage('Search for the symbol first to confirm price and chart.');
+    }
     if (!checkTradingHoursAndProceed(() => { })) return;
     executeTrade('/competition/team/buy', {
       username,
@@ -446,7 +493,12 @@ const Dashboard = () => {
   };
 
   const sellStockTeam = () => {
-    if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
+    if (!stockSymbol || tradeQuantity <= 0) {
+      return setTradeMessage('Enter valid symbol and quantity.');
+    }
+    if (!checkSymbolMatch()) {
+      return setTradeMessage('Search for the symbol first to confirm price and chart.');
+    }
     if (!checkTradingHoursAndProceed(() => { })) return;
     executeTrade('/competition/team/sell', {
       username,
@@ -761,9 +813,9 @@ const Dashboard = () => {
             />
             <button type="submit">🔍 Search</button>
           </form>
-          {stockPrice !== null && <p className="note">Price: ${Number(stockPrice).toFixed(2)}</p>}
-
-          {stockPrice !== null && <p className="note">Price: ${Number(stockPrice).toFixed(2)}</p>}
+          {stockPrice !== null && chartSymbol && (
+            <p className="note">Price for {chartSymbol}: ${Number(stockPrice).toFixed(2)}</p>
+          )}
         </div>
 
         <div className="section" style={{ display: 'flex', gap: 8 }}>
@@ -771,7 +823,7 @@ const Dashboard = () => {
             type="number"
             placeholder="Quantity"
             value={tradeQuantity}
-            onChange={(e) => setTradeQuantity(Number(e.target.value))}
+            onChange={(e) => setTradeQuantity(Number(e.target.value) || 0)}
           />
           <button onClick={onBuy}>Buy</button>
           <button onClick={onSell}>Sell</button>
@@ -781,7 +833,6 @@ const Dashboard = () => {
       </>
     );
 
-
     if (selectedAccount.type === 'global') {
       return (
         <div className="card section">
@@ -790,7 +841,11 @@ const Dashboard = () => {
             <div style={{ flex: 1, minWidth: 280 }}>
               <SharedInputs onBuy={buyStockGlobal} onSell={sellStockGlobal} />
             </div>
-            <ChartPanel />
+            <ChartPanel
+              chartData={chartData}
+              chartRange={chartRange}
+              onRangeChange={handleRangeChange}
+            />
           </div>
         </div>
       );
@@ -804,7 +859,11 @@ const Dashboard = () => {
             <div style={{ flex: 1, minWidth: 280 }}>
               <SharedInputs onBuy={buyStockCompetition} onSell={sellStockCompetition} />
             </div>
-            <ChartPanel />
+            <ChartPanel
+              chartData={chartData}
+              chartRange={chartRange}
+              onRangeChange={handleRangeChange}
+            />
           </div>
         </div>
       );
@@ -818,7 +877,11 @@ const Dashboard = () => {
             <div style={{ flex: 1, minWidth: 280 }}>
               <SharedInputs onBuy={buyStockTeam} onSell={sellStockTeam} />
             </div>
-            <ChartPanel />
+            <ChartPanel
+              chartData={chartData}
+              chartRange={chartRange}
+              onRangeChange={handleRangeChange}
+            />
           </div>
         </div>
       );
@@ -845,7 +908,6 @@ const Dashboard = () => {
           {isAdmin && (
             <div className="card section">
               <h2>🛠️ Admin Panel</h2>
-
               <div className="section">
                 <h3>Remove User from Competition</h3>
                 <input
@@ -946,7 +1008,6 @@ const Dashboard = () => {
                     </button>
                   ))}
                 </div>
-
                 <button className="logout-button" onClick={handleLogout}>
                   Logout
                 </button>
@@ -975,7 +1036,6 @@ const Dashboard = () => {
               {/* Teams */}
               <div className="card section">
                 <h2>👥 Teams</h2>
-
                 <div className="section">
                   <h3>Create Team</h3>
                   <input
@@ -1008,7 +1068,6 @@ const Dashboard = () => {
               {/* Group Competitions */}
               <div className="card section">
                 <h2>🏁 Group Competitions</h2>
-
                 <div className="section">
                   <h3>Create Competition</h3>
                   <div className="section" style={{ display: 'grid', gap: 10, maxWidth: 520 }}>
