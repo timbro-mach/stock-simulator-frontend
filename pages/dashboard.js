@@ -237,11 +237,11 @@ const Dashboard = () => {
   // =========================================
   // Improved getStockPrice with range
   // =========================================
-  if (!chartSymbol) return; // no confirmed chart yet
-
   const [chartRange, setChartRange] = useState('1M');
 
   const getStockPrice = async (range = chartRange) => {
+    if (!chartSymbol) return; // no confirmed chart yet
+
     const symbolToUse = chartSymbol?.trim().toUpperCase();
 
     if (!symbolToUse) {
