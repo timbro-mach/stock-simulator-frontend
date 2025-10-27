@@ -9,12 +9,10 @@ const Competition = () => {
   const [message, setMessage] = useState('');
   const [username, setUsername] = useState('');
 
-  // New state variables for competition dates and featured flag (admin use)
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
 
-  // Set the backend base URL
   const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
   useEffect(() => {
@@ -74,96 +72,96 @@ const Competition = () => {
   };
 
   return (
-    <div className="wrap">
+    <div className="dashboard-container">
       <h1>🏁 Group Competitions</h1>
-      <p className="sub">
+      <p className="note" style={{ maxWidth: 700 }}>
         Create or join competitions to test your trading strategies against others.
       </p>
 
       {/* --- Admin Create Competition --- */}
-      <div className="card">
+      <div className="card section">
         <h2>🧭 Create Competition (Admin)</h2>
         <p className="note">Admins can create and optionally feature competitions.</p>
 
-        <input
-          type="text"
-          placeholder="Competition Name (optional)"
-          value={competitionName}
-          onChange={(e) => setCompetitionName(e.target.value)}
-        />
+        <div className="section" style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: 500 }}>
+          <input
+            type="text"
+            placeholder="Competition Name"
+            value={competitionName}
+            onChange={(e) => setCompetitionName(e.target.value)}
+          />
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '10px' }}>
-          <div>
-            <label>Start Date:</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <label>End Date:</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label>Feature Competition:</label>
-            <input
-              type="checkbox"
-              checked={isFeatured}
-              onChange={(e) => setIsFeatured(e.target.checked)}
-            />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+            <div>
+              <label className="em">Start Date:</label><br />
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="em">End Date:</label><br />
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <label className="em">Feature:</label>
+              <input
+                type="checkbox"
+                checked={isFeatured}
+                onChange={(e) => setIsFeatured(e.target.checked)}
+              />
+            </div>
           </div>
         </div>
 
         <button onClick={createCompetition}>Create Competition</button>
 
         {competitionCode && (
-          <p className="note">
+          <p className="note" style={{ marginTop: '10px' }}>
             ✅ Your Competition Code: <strong>{competitionCode}</strong>
           </p>
         )}
       </div>
 
       {/* --- Join Competition (Individual) --- */}
-      <div className="card">
+      <div className="card section">
         <h2>👤 Join Competition (Individual)</h2>
         <p className="note">Enter the competition code shared by an admin.</p>
-        <input
-          type="text"
-          placeholder="Enter Competition Code"
-          value={joinCode}
-          onChange={(e) => setJoinCode(e.target.value)}
-        />
-        <button onClick={joinCompetition}>Join Competition</button>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: 400 }}>
+          <input
+            type="text"
+            placeholder="Enter Competition Code"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value)}
+          />
+          <button onClick={joinCompetition}>Join Competition</button>
+        </div>
       </div>
 
       {/* --- Join Competition (Team) --- */}
-      <div className="card">
-        <h2>👥 Join Competition (As Team)</h2>
+      <div className="card section">
+        <h2>👥 Join Competition (Team)</h2>
         <p className="note">Join as a team using your unique team code.</p>
-        <input
-          type="text"
-          placeholder="Enter Competition Code"
-          name="competition_code"
-          value={teamJoinCode.competition_code || ''}
-          onChange={handleTeamJoinInputChange}
-        />
-        <input
-          type="text"
-          placeholder="Enter Your Team Code"
-          name="team_code"
-          value={teamJoinCode.team_code || ''}
-          onChange={handleTeamJoinInputChange}
-        />
-        <button onClick={joinCompetitionAsTeam}>Join Competition as Team</button>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: 400 }}>
+          <input
+            type="text"
+            placeholder="Enter Competition Code"
+            name="competition_code"
+            value={teamJoinCode.competition_code || ''}
+            onChange={handleTeamJoinInputChange}
+          />
+          <input
+            type="text"
+            placeholder="Enter Your Team Code"
+            name="team_code"
+            value={teamJoinCode.team_code || ''}
+            onChange={handleTeamJoinInputChange}
+          />
+          <button onClick={joinCompetitionAsTeam}>Join Competition as Team</button>
+        </div>
       </div>
 
       {message && (
-        <div className="card" style={{ background: '#f9fafb' }}>
+        <div className="card" style={{ background: '#f8fafc' }}>
           <p className="note">{message}</p>
         </div>
       )}
