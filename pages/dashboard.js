@@ -77,12 +77,61 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange }) => (
 
 ChartPanel.displayName = 'ChartPanel';
 
+// Memoized SharedInputs component
+const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQuantity, setTradeQuantity, handleSearch, stockPrice, chartSymbol, tradeMessage }) => {
+  console.log('SharedInputs rendered'); // Debug to track re-renders
+
+  return (
+    <>
+      <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSearch(e);
+          }}
+          style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
+        >
+          <input
+            type="text"
+            placeholder="Stock Symbol"
+            value={stockSymbol}
+            onChange={(e) => setStockSymbol(e.target.value)}
+            autoComplete="off"
+          />
+          <button type="submit">🔍 Search</button>
+        </form>
+        {stockPrice !== null && chartSymbol && (
+          <p className="note">Price for {chartSymbol.toUpperCase()}: ${Number(stockPrice).toFixed(2)}</p>
+        )}
+      </div>
+
+      <div className="section" style={{ display: 'flex', gap: 8 }}>
+        <input
+          type="number"
+          placeholder="Quantity"
+          value={tradeQuantity || ''}
+          onChange={(e) => setTradeQuantity(e.target.value === '' ? 0 : Number(e.target.value))}
+          min="0"
+          autoComplete="off"
+        />
+        <button onClick={onBuy}>Buy</button>
+        <button onClick={onSell}>Sell</button>
+      </div>
+
+      {tradeMessage && <p className="note">{tradeMessage}</p>}
+    </>
+  );
+});
+
+SharedInputs.displayName = 'SharedInputs';
+
 const Dashboard = () => {
   // =========================================
   // Auth & Global UI State
   // =========================================
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(''); // NEW: Email state for registration
   const [isRegistering, setIsRegistering] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -104,8 +153,8 @@ const Dashboard = () => {
   // =========================================
   // Trading state
   // =========================================
-  const [stockSymbol, setStockSymbol] = useState('');      // Raw input for typing
-  const [chartSymbol, setChartSymbol] = useState('');      // Confirmed symbol for chart/price
+  const [stockSymbol, setStockSymbol] = useState('');
+  const [chartSymbol, setChartSymbol] = useState('');
   const [stockPrice, setStockPrice] = useState(null);
   const [tradeQuantity, setTradeQuantity] = useState(0);
   const [tradeMessage, setTradeMessage] = useState('');
@@ -187,7 +236,12 @@ const Dashboard = () => {
   const fetchFeaturedCompetitions = async () => {
     try {
       const response = await axios.get(`${BASE_URL}/featured_competitions`);
-      setFeaturedCompetitions(response.data || []);
+      const currentDate = new Date();
+      // Filter competitions: show only those not ended and limit to 10
+      const validComps = response.data
+        .filter(comp => new Date(comp.end_date) >= currentDate)
+        .slice(0, 10); // Limit to 10 competitions
+      setFeaturedCompetitions(validComps || []);
     } catch (error) {
       console.error('Error fetching featured competitions:', error);
     }
@@ -213,7 +267,6 @@ const Dashboard = () => {
     }
   }, [isLoggedIn, username, fetchUserData]);
 
-  // Clear stale data when typing doesn't match confirmed symbol
   useEffect(() => {
     const cleanTyped = stockSymbol.trim().toUpperCase();
     const cleanChart = chartSymbol.trim().toUpperCase();
@@ -248,11 +301,12 @@ const Dashboard = () => {
   const handleRegister = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post(`${BASE_URL}/register`, { username, password });
+      const res = await axios.post(`${BASE_URL}/register`, { username, password, email }); // NEW: Include email
       alert(res.data.message);
       setIsRegistering(false);
+      setEmail(''); // Clear email after registration
     } catch (error) {
-      alert('Failed to register.');
+      alert(error.response?.data?.message || 'Failed to register.');
       console.error('Register error:', error);
     }
   };
@@ -260,6 +314,8 @@ const Dashboard = () => {
   const handleLogout = () => {
     localStorage.removeItem('username');
     setUsername('');
+    setPassword('');
+    setEmail('');
     setIsLoggedIn(false);
     setIsAdmin(false);
     setTeams([]);
@@ -268,7 +324,6 @@ const Dashboard = () => {
     setGlobalAccount({ cash_balance: 0, portfolio: [], total_value: 0 });
     setCompetitionAccounts([]);
     setTeamCompetitionAccounts([]);
-    // Clear trading state
     setStockSymbol('');
     setChartSymbol('');
     setStockPrice(null);
@@ -290,6 +345,7 @@ const Dashboard = () => {
       const res = await axios.post(`${BASE_URL}/admin/remove_user_from_competition`, payload);
       setAdminMessage(res.data.message);
       fetchUserData();
+      fetchFeaturedCompetitions(); // Refresh featured competitions
     } catch (error) {
       console.error('Error removing user from competition:', error);
       setAdminMessage('Failed to remove user from competition.');
@@ -332,7 +388,7 @@ const Dashboard = () => {
     }
 
     try {
-      console.log('Fetching data for:', symbolToUse); // Debug log
+      console.log('Fetching data for:', symbolToUse);
       const response = await axios.get(`${BASE_URL}/stock/${symbolToUse}`);
 
       if (response.data?.price) {
@@ -418,7 +474,6 @@ const Dashboard = () => {
     }
   };
 
-  // Global account trades
   const buyStockGlobal = () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       return setTradeMessage('Enter valid symbol and quantity.');
@@ -441,7 +496,6 @@ const Dashboard = () => {
     executeTrade('/sell', { username, symbol: stockSymbol, quantity: tradeQuantity });
   };
 
-  // Competition trades (individual)
   const buyStockCompetition = () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       return setTradeMessage('Enter valid symbol and quantity.');
@@ -474,7 +528,6 @@ const Dashboard = () => {
     });
   };
 
-  // Team trades
   const buyStockTeam = () => {
     if (!stockSymbol || tradeQuantity <= 0) {
       return setTradeMessage('Enter valid symbol and quantity.');
@@ -557,6 +610,7 @@ const Dashboard = () => {
       setMaxPositionLimit('100%');
       setFeatureCompetition(false);
       fetchUserData();
+      fetchFeaturedCompetitions(); // Refresh featured competitions
     } catch (error) {
       console.error('Error creating competition:', error);
       setCompetitionMessage('Error creating competition.');
@@ -801,45 +855,24 @@ const Dashboard = () => {
   };
 
   const renderTradeBox = () => {
-    const SharedInputs = ({ onBuy, onSell }) => (
-      <>
-        <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <form onSubmit={handleSearch} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              placeholder="Stock Symbol"
-              value={stockSymbol}
-              onChange={(e) => setStockSymbol(e.target.value)}
-            />
-            <button type="submit">🔍 Search</button>
-          </form>
-          {stockPrice !== null && chartSymbol && (
-            <p className="note">Price for {chartSymbol}: ${Number(stockPrice).toFixed(2)}</p>
-          )}
-        </div>
-
-        <div className="section" style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="number"
-            placeholder="Quantity"
-            value={tradeQuantity}
-            onChange={(e) => setTradeQuantity(Number(e.target.value) || 0)}
-          />
-          <button onClick={onBuy}>Buy</button>
-          <button onClick={onSell}>Sell</button>
-        </div>
-
-        {tradeMessage && <p className="note">{tradeMessage}</p>}
-      </>
-    );
-
     if (selectedAccount.type === 'global') {
       return (
         <div className="card section">
           <h3>Trade Stocks (Global)</h3>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 280 }}>
-              <SharedInputs onBuy={buyStockGlobal} onSell={sellStockGlobal} />
+              <SharedInputs
+                onBuy={buyStockGlobal}
+                onSell={sellStockGlobal}
+                stockSymbol={stockSymbol}
+                setStockSymbol={setStockSymbol}
+                tradeQuantity={tradeQuantity}
+                setTradeQuantity={setTradeQuantity}
+                handleSearch={handleSearch}
+                stockPrice={stockPrice}
+                chartSymbol={chartSymbol}
+                tradeMessage={tradeMessage}
+              />
             </div>
             <ChartPanel
               chartData={chartData}
@@ -857,7 +890,18 @@ const Dashboard = () => {
           <h3>Trade Stocks (Competition — Individual)</h3>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 280 }}>
-              <SharedInputs onBuy={buyStockCompetition} onSell={sellStockCompetition} />
+              <SharedInputs
+                onBuy={buyStockCompetition}
+                onSell={sellStockCompetition}
+                stockSymbol={stockSymbol}
+                setStockSymbol={setStockSymbol}
+                tradeQuantity={tradeQuantity}
+                setTradeQuantity={setTradeQuantity}
+                handleSearch={handleSearch}
+                stockPrice={stockPrice}
+                chartSymbol={chartSymbol}
+                tradeMessage={tradeMessage}
+              />
             </div>
             <ChartPanel
               chartData={chartData}
@@ -875,7 +919,18 @@ const Dashboard = () => {
           <h3>Trade Stocks (Competition — Team)</h3>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 280 }}>
-              <SharedInputs onBuy={buyStockTeam} onSell={sellStockTeam} />
+              <SharedInputs
+                onBuy={buyStockTeam}
+                onSell={sellStockTeam}
+                stockSymbol={stockSymbol}
+                setStockSymbol={setStockSymbol}
+                tradeQuantity={tradeQuantity}
+                setTradeQuantity={setTradeQuantity}
+                handleSearch={handleSearch}
+                stockPrice={stockPrice}
+                chartSymbol={chartSymbol}
+                tradeMessage={tradeMessage}
+              />
             </div>
             <ChartPanel
               chartData={chartData}
@@ -1101,8 +1156,7 @@ const Dashboard = () => {
                       <option value="50%">50%</option>
                       <option value="100%">100%</option>
                     </select>
-
-                    <label className="em" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label className="em" style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: '200px' }}>
                       <input
                         type="checkbox"
                         checked={featureCompetition}
@@ -1110,7 +1164,6 @@ const Dashboard = () => {
                       />
                       Feature This Competition
                     </label>
-
                     <button className="competition-button" onClick={createCompetition}>
                       Create Competition
                     </button>
@@ -1175,12 +1228,21 @@ const Dashboard = () => {
                 placeholder="Enter username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                autoComplete="off"
+              />
+              <input
+                type="email" // NEW: Email input
+                placeholder="Enter email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="off"
               />
               <input
                 type="password"
                 placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="off"
               />
               <button type="submit">Create Account</button>
               <p className="note">
@@ -1190,6 +1252,7 @@ const Dashboard = () => {
                   onClick={(e) => {
                     e.preventDefault();
                     setIsRegistering(false);
+                    setEmail(''); // Clear email when switching to login
                   }}
                 >
                   Login
@@ -1204,12 +1267,14 @@ const Dashboard = () => {
                 placeholder="Enter username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                autoComplete="off"
               />
               <input
                 type="password"
                 placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="off"
               />
               <button type="submit">Login</button>
               <p className="note">
@@ -1231,8 +1296,23 @@ const Dashboard = () => {
 
       {/* Join Modal */}
       {showModal && modalCompetition && (
-        <div className="modal-overlay">
-          <div className="card" style={{ maxWidth: 540, margin: '0 auto' }}>
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'flex-start', // Changed to top-align
+            justifyContent: 'center',
+            zIndex: 1000,
+            paddingTop: '20px', // Add padding to ensure visibility
+          }}
+        >
+          <div className="card" style={{ maxWidth: 540, margin: 0 }}>
             <h2>Join Competition</h2>
             <p>
               Do you want to join <strong>{modalCompetition.name}</strong>?
