@@ -233,9 +233,11 @@ const Dashboard = () => {
   };
 
   // =========================================
-  // Trading + Chart
+  // Improved getStockPrice with range
   // =========================================
-  const getStockPrice = async () => {
+  const [chartRange, setChartRange] = useState('1M');
+
+  const getStockPrice = async (range = chartRange) => {
     if (!isTradingHours()) {
       setTradeMessage('Market is closed. Trading hours are 6:30 AM – 1:00 PM PST.');
       return;
@@ -244,28 +246,39 @@ const Dashboard = () => {
       setTradeMessage('Please enter a stock symbol.');
       return;
     }
+
     try {
       const response = await axios.get(`${BASE_URL}/stock/${stockSymbol}`);
       if (response.data?.price) {
         setStockPrice(response.data.price);
         setTradeMessage(`Current price for ${stockSymbol.toUpperCase()}: $${response.data.price.toFixed(2)}`);
-      } else {
-        setTradeMessage('Price not found.');
       }
 
-      const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${stockSymbol}`);
-      if (Array.isArray(chartResponse.data) && chartResponse.data.length > 0) {
-        const labels = chartResponse.data.map((p) => p.date);
-        const dataPoints = chartResponse.data.map((p) => p.close);
+      // Try multi-day chart
+      const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${stockSymbol}?range=${range}`);
+      if (chartResponse.data && chartResponse.data.length > 0) {
+        const labels = chartResponse.data.map(p => p.date);
+        const dataPoints = chartResponse.data.map(p => p.close);
+
+        const gradientStroke = (ctx) => {
+          const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+          gradient.addColorStop(0, 'rgba(37,99,235,0.4)');
+          gradient.addColorStop(1, 'rgba(37,99,235,0.0)');
+          return gradient;
+        };
+
         setChartData({
           labels,
           datasets: [
             {
-              label: `${stockSymbol.toUpperCase()} Price`,
+              label: `${stockSymbol.toUpperCase()} (${range})`,
               data: dataPoints,
-              fill: false,
-              borderColor: '#2563eb', // match brand blue
-              tension: 0.1,
+              fill: true,
+              borderWidth: 2.5,
+              borderColor: '#2563eb',
+              backgroundColor: (ctx) => gradientStroke(ctx.chart.ctx),
+              pointRadius: 0,
+              tension: 0.25,
             },
           ],
         });
@@ -277,6 +290,76 @@ const Dashboard = () => {
       setTradeMessage('Error fetching stock data.');
     }
   };
+
+  // =========================================
+  // Chart Panel JSX (replace your existing ChartPanel)
+  // =========================================
+  const ChartPanel = () => (
+    <div style={{ flex: 1, minHeight: 320 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+        {['1D', '1W', '1M', '6M', '1Y'].map((r) => (
+          <button
+            key={r}
+            onClick={() => {
+              setChartRange(r);
+              getStockPrice(r);
+            }}
+            style={{
+              padding: '4px 10px',
+              borderRadius: 6,
+              background: chartRange === r ? '#2563eb' : '#f3f4f6',
+              color: chartRange === r ? '#fff' : '#111827',
+              border: 'none',
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            {r}
+          </button>
+        ))}
+      </div>
+
+      {chartData ? (
+        <Line
+          data={chartData}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { color: '#6b7280', maxTicksLimit: 6 },
+              },
+              y: {
+                grid: { color: 'rgba(0,0,0,0.05)' },
+                ticks: { color: '#6b7280', callback: (v) => `$${v}` },
+              },
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                  label: (context) => `$${context.formattedValue}`,
+                },
+              },
+            },
+            interaction: { intersect: false, mode: 'nearest' },
+          }}
+        />
+      ) : (
+        <p className="note">No chart data available</p>
+      )}
+    </div>
+  );
+
+  useEffect(() => {
+    if (stockSymbol && chartRange && chartData === null) {
+      getStockPrice(chartRange);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockSymbol]);
 
   const checkTradingHoursAndProceed = (action) => {
     if (!isTradingHours()) {
@@ -681,15 +764,6 @@ const Dashboard = () => {
       </>
     );
 
-    const ChartPanel = () => (
-      <div style={{ flex: 1, minHeight: 300 }}>
-        {chartData ? (
-          <Line data={chartData} options={{ responsive: true, maintainAspectRatio: false }} />
-        ) : (
-          <p className="note">No chart data available</p>
-        )}
-      </div>
-    );
 
     if (selectedAccount.type === 'global') {
       return (
