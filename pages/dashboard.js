@@ -366,12 +366,6 @@ const Dashboard = () => {
     </div>
   );
 
-  useEffect(() => {
-    if (stockSymbol && chartRange && chartData === null) {
-      getStockPrice(chartRange);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stockSymbol]);
 
   const checkTradingHoursAndProceed = (action) => {
     if (!isTradingHours()) {
