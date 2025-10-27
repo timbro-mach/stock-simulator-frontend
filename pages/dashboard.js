@@ -965,6 +965,8 @@ const Dashboard = () => {
           {isAdmin && (
             <div className="card section">
               <h2>🛠️ Admin Panel</h2>
+
+              {/* Remove User from Competition */}
               <div className="section">
                 <h3>Remove User from Competition</h3>
                 <input
@@ -982,6 +984,7 @@ const Dashboard = () => {
                 <button onClick={handleRemoveUserFromCompetition}>Remove</button>
               </div>
 
+              {/* Remove User from Team */}
               <div className="section">
                 <h3>Remove User from Team</h3>
                 <input
@@ -990,27 +993,6 @@ const Dashboard = () => {
                   value={removeTeamUserUsername}
                   onChange={(e) => setRemoveTeamUserUsername(e.target.value)}
                 />
-
-                <div className="section">
-                  <h3>Manage Competitions</h3>
-                  {featuredCompetitions.length > 0 ? (
-                    featuredCompetitions.map((comp) => (
-                      <div key={comp.code} style={{ marginBottom: '10px' }}>
-                        <p>
-                          <strong>{comp.name}</strong> (Code: {comp.code})<br />
-                          Open: {comp.is_open ? '✅' : '❌'}
-                        </p>
-                        <button onClick={() => toggleCompetitionOpen(comp.code, comp.is_open)}>
-                          {comp.is_open ? 'Close Competition' : 'Open Competition'}
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="note">No competitions found.</p>
-                  )}
-                </div>
-
-
                 <input
                   type="text"
                   placeholder="Team ID"
@@ -1020,9 +1002,30 @@ const Dashboard = () => {
                 <button onClick={handleRemoveUserFromTeam}>Remove</button>
               </div>
 
+              {/* Manage Competitions */}
+              <div className="section">
+                <h3>Manage Competitions</h3>
+                {featuredCompetitions.length > 0 ? (
+                  featuredCompetitions.map((comp) => (
+                    <div key={comp.code} style={{ marginBottom: '10px' }}>
+                      <p>
+                        <strong>{comp.name}</strong> (Code: {comp.code})<br />
+                        Open: {comp.is_open ? '✅' : '❌'}
+                      </p>
+                      <button onClick={() => toggleCompetitionOpen(comp.code, comp.is_open)}>
+                        {comp.is_open ? 'Close Competition' : 'Open Competition'}
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="note">No competitions found.</p>
+                )}
+              </div>
+
               {adminMessage && <p className="note">{adminMessage}</p>}
             </div>
           )}
+
 
           {/* Featured Competitions (Dashboard mode only) */}
           {!showTrading && (
