@@ -352,21 +352,23 @@ const Dashboard = () => {
     }
   };
 
-  const handleRemoveUserFromTeam = async () => {
+  // Toggle competition open/closed
+  const toggleCompetitionOpen = async (competitionCode, currentStatus) => {
     try {
       const payload = {
         admin_username: username,
-        target_username: removeTeamUserUsername,
-        team_id: removeTeamId,
+        competition_code: competitionCode,
+        is_open: !currentStatus
       };
-      const res = await axios.post(`${BASE_URL}/admin/remove_user_from_team`, payload);
-      setAdminMessage(res.data.message);
-      fetchUserData();
+      const res = await axios.post(`${BASE_URL}/admin/update_competition_open`, payload);
+      alert(res.data.message);
+      fetchFeaturedCompetitions();
     } catch (error) {
-      console.error('Error removing user from team:', error);
-      setAdminMessage('Failed to remove user from team.');
+      console.error('Error toggling competition open status:', error);
+      alert('Failed to update competition open/closed status.');
     }
   };
+
 
   // =========================================
   // Trading handlers
@@ -988,6 +990,27 @@ const Dashboard = () => {
                   value={removeTeamUserUsername}
                   onChange={(e) => setRemoveTeamUserUsername(e.target.value)}
                 />
+
+                <div className="section">
+                  <h3>Manage Competitions</h3>
+                  {featuredCompetitions.length > 0 ? (
+                    featuredCompetitions.map((comp) => (
+                      <div key={comp.code} style={{ marginBottom: '10px' }}>
+                        <p>
+                          <strong>{comp.name}</strong> (Code: {comp.code})<br />
+                          Open: {comp.is_open ? '✅' : '❌'}
+                        </p>
+                        <button onClick={() => toggleCompetitionOpen(comp.code, comp.is_open)}>
+                          {comp.is_open ? 'Close Competition' : 'Open Competition'}
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="note">No competitions found.</p>
+                  )}
+                </div>
+
+
                 <input
                   type="text"
                   placeholder="Team ID"
