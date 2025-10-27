@@ -44,6 +44,8 @@ const Dashboard = () => {
   // Trading state
   // =========================================
   const [stockSymbol, setStockSymbol] = useState('');
+  const [chartSymbol, setChartSymbol] = useState(''); // ✅ separates typing vs. displayed chart symbol
+
   const [stockPrice, setStockPrice] = useState(null);
   const [tradeQuantity, setTradeQuantity] = useState(0);
   const [tradeMessage, setTradeMessage] = useState('');
@@ -238,24 +240,22 @@ const Dashboard = () => {
   const [chartRange, setChartRange] = useState('1M');
 
   const getStockPrice = async (range = chartRange) => {
-    if (!isTradingHours()) {
-      setTradeMessage('Market is closed. Trading hours are 6:30 AM – 1:00 PM PST.');
-      return;
-    }
-    if (!stockSymbol) {
+    const symbolToUse = chartSymbol || stockSymbol;
+    if (!symbolToUse) {
       setTradeMessage('Please enter a stock symbol.');
       return;
     }
 
     try {
-      const response = await axios.get(`${BASE_URL}/stock/${stockSymbol}`);
+      const response = await axios.get(`${BASE_URL}/stock/${symbolToUse}`);
+
       if (response.data?.price) {
         setStockPrice(response.data.price);
         setTradeMessage(`Current price for ${stockSymbol.toUpperCase()}: $${response.data.price.toFixed(2)}`);
       }
 
       // Try multi-day chart
-      const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${stockSymbol}?range=${range}`);
+      const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`);
       if (chartResponse.data && chartResponse.data.length > 0) {
         const labels = chartResponse.data.map(p => p.date);
         const dataPoints = chartResponse.data.map(p => p.close);
@@ -291,6 +291,15 @@ const Dashboard = () => {
     }
   };
 
+  // Confirmed search to avoid reloading on every keystroke
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (stockSymbol.trim()) {
+      setChartSymbol(stockSymbol.trim().toUpperCase());
+      getStockPrice(chartRange);
+    }
+  };
+
   // =========================================
   // Chart Panel JSX (replace your existing ChartPanel)
   // =========================================
@@ -320,37 +329,40 @@ const Dashboard = () => {
       </div>
 
       {chartData ? (
-        <Line
-          data={chartData}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              x: {
-                grid: { display: false },
-                ticks: { color: '#6b7280', maxTicksLimit: 6 },
-              },
-              y: {
-                grid: { color: 'rgba(0,0,0,0.05)' },
-                ticks: { color: '#6b7280', callback: (v) => `$${v}` },
-              },
-            },
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                mode: 'index',
-                intersect: false,
-                callbacks: {
-                  label: (context) => `$${context.formattedValue}`,
+        <div style={{ height: '300px', width: '100%' }}>
+          <Line
+            data={chartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: {
+                  grid: { display: false },
+                  ticks: { color: '#6b7280', maxTicksLimit: 6 },
+                },
+                y: {
+                  grid: { color: 'rgba(0,0,0,0.05)' },
+                  ticks: { color: '#6b7280', callback: (v) => `$${v}` },
                 },
               },
-            },
-            interaction: { intersect: false, mode: 'nearest' },
-          }}
-        />
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  mode: 'index',
+                  intersect: false,
+                  callbacks: {
+                    label: (context) => `$${context.formattedValue}`,
+                  },
+                },
+              },
+              interaction: { intersect: false, mode: 'nearest' },
+            }}
+          />
+        </div>
       ) : (
         <p className="note">No chart data available</p>
       )}
+
     </div>
   );
 
@@ -739,13 +751,17 @@ const Dashboard = () => {
     const SharedInputs = ({ onBuy, onSell }) => (
       <>
         <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="Stock Symbol"
-            value={stockSymbol}
-            onChange={(e) => setStockSymbol(e.target.value)}
-          />
-          <button onClick={getStockPrice}>Get Price</button>
+          <form onSubmit={handleSearch} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="Stock Symbol"
+              value={stockSymbol}
+              onChange={(e) => setStockSymbol(e.target.value)}
+            />
+            <button type="submit">🔍 Search</button>
+          </form>
+          {stockPrice !== null && <p className="note">Price: ${Number(stockPrice).toFixed(2)}</p>}
+
           {stockPrice !== null && <p className="note">Price: ${Number(stockPrice).toFixed(2)}</p>}
         </div>
 
