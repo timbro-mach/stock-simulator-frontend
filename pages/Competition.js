@@ -29,9 +29,9 @@ const Competition = () => {
       const response = await axios.post(`${BASE_URL}/competition/create`, {
         username,
         competition_name: competitionName,
-        start_date: startDate,     // New field
-        end_date: endDate,         // New field
-        featured: isFeatured,      // New field
+        start_date: startDate,
+        end_date: endDate,
+        featured: isFeatured,
       });
       setCompetitionCode(response.data.competition_code);
       setMessage(response.data.message);
@@ -58,8 +58,8 @@ const Competition = () => {
     try {
       const response = await axios.post(`${BASE_URL}/competition/team/join`, {
         username,
-        competition_code: teamJoinCode.competition_code, // competition code to join
-        team_code: teamJoinCode.team_code,              // team code from your team account
+        competition_code: teamJoinCode.competition_code,
+        team_code: teamJoinCode.team_code,
       });
       setMessage(response.data.message);
     } catch (error) {
@@ -68,54 +68,70 @@ const Competition = () => {
     }
   };
 
-  // For team join input, we use an object with competition_code and team_code fields.
   const handleTeamJoinInputChange = (e) => {
     const { name, value } = e.target;
-    setTeamJoinCode(prev => ({ ...prev, [name]: value }));
+    setTeamJoinCode((prev) => ({ ...prev, [name]: value }));
   };
 
   return (
-    <div className="competition-container">
-      <h2>Group Competitions</h2>
-      <div>
-        <h3>Create Competition (Admin)</h3>
+    <div className="wrap">
+      <h1>🏁 Group Competitions</h1>
+      <p className="sub">
+        Create or join competitions to test your trading strategies against others.
+      </p>
+
+      {/* --- Admin Create Competition --- */}
+      <div className="card">
+        <h2>🧭 Create Competition (Admin)</h2>
+        <p className="note">Admins can create and optionally feature competitions.</p>
+
         <input
           type="text"
           placeholder="Competition Name (optional)"
           value={competitionName}
           onChange={(e) => setCompetitionName(e.target.value)}
         />
-        <div>
-          <label>
-            Start Date:
-            <input 
-              type="date" 
-              value={startDate} 
-              onChange={(e) => setStartDate(e.target.value)} 
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '10px' }}>
+          <div>
+            <label>Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
             />
-          </label>
-          <label>
-            End Date:
-            <input 
-              type="date" 
-              value={endDate} 
-              onChange={(e) => setEndDate(e.target.value)} 
+          </div>
+          <div>
+            <label>End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
             />
-          </label>
-          <label>
-            Feature Competition:
-            <input 
-              type="checkbox" 
-              checked={isFeatured} 
-              onChange={(e) => setIsFeatured(e.target.checked)} 
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label>Feature Competition:</label>
+            <input
+              type="checkbox"
+              checked={isFeatured}
+              onChange={(e) => setIsFeatured(e.target.checked)}
             />
-          </label>
+          </div>
         </div>
+
         <button onClick={createCompetition}>Create Competition</button>
-        {competitionCode && <p>Your Competition Code: {competitionCode}</p>}
+
+        {competitionCode && (
+          <p className="note">
+            ✅ Your Competition Code: <strong>{competitionCode}</strong>
+          </p>
+        )}
       </div>
-      <div>
-        <h3>Join Competition (Individual)</h3>
+
+      {/* --- Join Competition (Individual) --- */}
+      <div className="card">
+        <h2>👤 Join Competition (Individual)</h2>
+        <p className="note">Enter the competition code shared by an admin.</p>
         <input
           type="text"
           placeholder="Enter Competition Code"
@@ -124,8 +140,11 @@ const Competition = () => {
         />
         <button onClick={joinCompetition}>Join Competition</button>
       </div>
-      <div>
-        <h3>Join Competition (As Team)</h3>
+
+      {/* --- Join Competition (Team) --- */}
+      <div className="card">
+        <h2>👥 Join Competition (As Team)</h2>
+        <p className="note">Join as a team using your unique team code.</p>
         <input
           type="text"
           placeholder="Enter Competition Code"
@@ -142,7 +161,12 @@ const Competition = () => {
         />
         <button onClick={joinCompetitionAsTeam}>Join Competition as Team</button>
       </div>
-      {message && <p>{message}</p>}
+
+      {message && (
+        <div className="card" style={{ background: '#f9fafb' }}>
+          <p className="note">{message}</p>
+        </div>
+      )}
     </div>
   );
 };
