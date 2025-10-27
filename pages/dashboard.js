@@ -237,10 +237,13 @@ const Dashboard = () => {
   // =========================================
   // Improved getStockPrice with range
   // =========================================
+  if (!chartSymbol) return; // no confirmed chart yet
+
   const [chartRange, setChartRange] = useState('1M');
 
   const getStockPrice = async (range = chartRange) => {
-    const symbolToUse = chartSymbol || stockSymbol;
+    const symbolToUse = chartSymbol?.trim().toUpperCase();
+
     if (!symbolToUse) {
       setTradeMessage('Please enter a stock symbol.');
       return;
@@ -294,10 +297,14 @@ const Dashboard = () => {
   // Confirmed search to avoid reloading on every keystroke
   const handleSearch = (e) => {
     e.preventDefault();
-    if (stockSymbol.trim()) {
-      setChartSymbol(stockSymbol.trim().toUpperCase());
-      getStockPrice(chartRange);
-    }
+    const cleanSymbol = stockSymbol.trim().toUpperCase();
+    if (!cleanSymbol) return;
+
+    // ✅ Update displayed chart symbol first
+    setChartSymbol(cleanSymbol);
+
+    // ✅ Then load data explicitly
+    getStockPrice(chartRange);
   };
 
   // =========================================
