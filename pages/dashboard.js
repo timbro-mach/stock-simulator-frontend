@@ -240,6 +240,31 @@ const Dashboard = () => {
         }
     }, [username]);
 
+    const [enteredCode, setEnteredCode] = useState('');
+
+    const joinFeaturedCompetition = async (codeOverride = null) => {
+        const compCode = codeOverride || (modalCompetition ? enteredCode || modalCompetition.code : null);
+        if (!compCode) return alert('Please enter the competition code.');
+
+        setIsLoading(true);
+        try {
+            const res = await axios.post(`${BASE_URL}/competition/join`, {
+                username,
+                competition_code: compCode,
+            });
+            alert(res.data.message);
+            closeModal();
+            fetchUserData();
+        } catch (error) {
+            console.error('Error joining competition:', error);
+            alert('Error joining competition.');
+        } finally {
+            setIsLoading(false);
+            setEnteredCode('');
+        }
+    };
+
+
     const fetchFeaturedCompetitions = async () => {
         setIsLoading(true);
         try {
@@ -698,24 +723,6 @@ const Dashboard = () => {
         setModalCompetition(null);
     };
 
-    const joinFeaturedCompetition = async () => {
-        if (!modalCompetition) return;
-        setIsLoading(true);
-        try {
-            const res = await axios.post(`${BASE_URL}/competition/join`, {
-                username,
-                competition_code: modalCompetition.code,
-            });
-            alert(res.data.message);
-            closeModal();
-            fetchUserData();
-        } catch (error) {
-            console.error('Error joining competition:', error);
-            alert('Error joining competition.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
 
     /* -------------------------------------------------------------------------- */
@@ -1118,19 +1125,50 @@ const Dashboard = () => {
                         </div>
                     )}
 
+
                     {/* Featured Competitions (Dashboard mode only) */}
                     {!showTrading && (
                         <div className="card section">
                             <h2>🏅 Featured Competitions</h2>
                             {featuredCompetitions.length > 0 ? (
                                 featuredCompetitions.map((comp) => {
-                                    const status = comp.join === 'Join directly' ? 'Open' : 'Restricted';
+                                    const isRestricted = !comp.is_open; // depends on your backend
+                                    const status = isRestricted ? 'Restricted' : 'Open';
+
                                     return (
-                                        <div key={comp.code} className="section" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <div
+                                            key={comp.code}
+                                            className="section"
+                                            style={{
+                                                display: 'flex',
+                                                gap: 12,
+                                                alignItems: 'center',
+                                                flexWrap: 'wrap',
+                                                justifyContent: 'space-between',
+                                            }}
+                                        >
                                             <span>
-                                                <strong>{comp.name}</strong> • {status} • {new Date(comp.start_date).toLocaleDateString()} → {new Date(comp.end_date).toLocaleDateString()}
+                                                <strong>{comp.name}</strong> • {status} •{' '}
+                                                {new Date(comp.start_date).toLocaleDateString()} →{' '}
+                                                {new Date(comp.end_date).toLocaleDateString()}
                                             </span>
-                                            <button onClick={() => openJoinModal(comp)} disabled={isLoading}>Join</button>
+
+                                            <button
+                                                className="primary"
+                                                onClick={() => {
+                                                    if (isRestricted) {
+                                                        // open modal that asks for competition code
+                                                        setModalCompetition(comp);
+                                                        setShowModal(true);
+                                                    } else {
+                                                        // join directly if open
+                                                        joinFeaturedCompetition(comp.code);
+                                                    }
+                                                }}
+                                                disabled={isLoading}
+                                            >
+                                                Join
+                                            </button>
                                         </div>
                                     );
                                 })
@@ -1139,6 +1177,7 @@ const Dashboard = () => {
                             )}
                         </div>
                     )}
+
 
 
                     {/* Trading Workspace */}
@@ -1438,21 +1477,38 @@ const Dashboard = () => {
                     }}
                 >
                     <div className="card" style={{ maxWidth: 540, margin: 0 }}>
-                        <h2>Join Competition</h2>
+                        <h2>🔒 Restricted Competition</h2>
                         <p>
-                            Do you want to join <strong>{modalCompetition.name}</strong>?
+                            Enter the access code to join <strong>{modalCompetition.name}</strong>.
                         </p>
                         <p className="note">
                             {new Date(modalCompetition.start_date).toLocaleDateString()} →{' '}
                             {new Date(modalCompetition.end_date).toLocaleDateString()}
                         </p>
+
+                        <div className="section">
+                            <label>Competition Code</label>
+                            <input
+                                type="text"
+                                placeholder="Enter Code"
+                                value={enteredCode}
+                                onChange={(e) => setEnteredCode(e.target.value)}
+                                disabled={isLoading}
+                            />
+                        </div>
+
                         <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button onClick={joinFeaturedCompetition} disabled={isLoading}>Join</button>
-                            <button className="logout-button" onClick={closeModal} disabled={isLoading}>Cancel</button>
+                            <button onClick={() => joinFeaturedCompetition()} disabled={isLoading}>
+                                Join
+                            </button>
+                            <button className="logout-button" onClick={closeModal} disabled={isLoading}>
+                                Cancel
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
+
         </div>
     );
 };
