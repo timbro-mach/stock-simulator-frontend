@@ -1140,14 +1140,6 @@ const Dashboard = () => {
                         </div>
                     )}
 
-                    {/* Mode Toggle */}
-                    <div className="section">
-                        {showTrading ? (
-                            <button onClick={() => setShowTrading(false)} disabled={isLoading}>⬅ Back to Dashboard</button>
-                        ) : (
-                            <button onClick={() => setShowTrading(true)} disabled={isLoading}>🚀 Start Trading</button>
-                        )}
-                    </div>
 
                     {/* Trading Workspace */}
                     {showTrading ? (
