@@ -1000,13 +1000,42 @@ const Dashboard = () => {
     // =========================================
     return (
         <div className="dashboard-container">
-            <header>
-                <h1>📊 Stock Market Simulator</h1>
+            <header style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '10px'
+            }}>
+                <div>
+                    <h1>📊 Stock Market Simulator</h1>
+                    {isLoggedIn && (
+                        <p className="note" style={{ marginTop: 2 }}>
+                            Welcome back, <span className="em">{username}</span>.
+                        </p>
+                    )}
+                </div>
+
                 {isLoggedIn && (
-                    <p className="note">Welcome back, <span className="em">{username}</span>.</p>
+                    <button
+                        onClick={() => setShowTrading(!showTrading)}
+                        disabled={isLoading}
+                        style={{
+                            background: showTrading ? '#1d4ed8' : '#2563eb',
+                            color: 'white',
+                            padding: '8px 16px',
+                            border: 'none',
+                            borderRadius: 8,
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: 'background 0.2s',
+                        }}
+                    >
+                        {showTrading ? '⬅ Back to Dashboard' : '🚀 Start Trading'}
+                    </button>
                 )}
-                {isLoading && <p className="note">Loading...</p>}
             </header>
+
 
             {isLoggedIn ? (
                 <div>
