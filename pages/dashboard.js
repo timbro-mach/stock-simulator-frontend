@@ -125,6 +125,8 @@ const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQu
 
 SharedInputs.displayName = 'SharedInputs';
 
+
+
 const Dashboard = () => {
     // =========================================
     // Auth & Global UI State
@@ -790,6 +792,63 @@ const Dashboard = () => {
         }
     };
 
+
+    /* -------------------------------------------------------------------------- */
+    /*                             ACCOUNT SUMMARY BOX                             */
+    /* -------------------------------------------------------------------------- */
+    const AccountSummaryBox = memo(({ account, isGlobal, onReset }) => {
+        const {
+            cash_balance = 0,
+            total_value = 0,
+            pnl = 0,
+            daily_pnl = 0,
+            return_pct = 0,
+            name = '',
+            code = ''
+        } = account || {};
+
+        const format = (n) =>
+            typeof n === 'number'
+                ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : '0.00';
+        const pct = (n) =>
+            typeof n === 'number' ? n.toFixed(2) + '%' : '0.00%';
+
+        return (
+            <div className="card section" style={{ minWidth: 280, maxWidth: 360 }}>
+                <h3>{isGlobal ? 'Global Account' : name + (code ? ` (${code})` : '')}</h3>
+                <p className="note">Cash: ${format(cash_balance)}</p>
+                <p className="note">Total Value: <strong>${format(total_value)}</strong></p>
+                <p className="note">
+                    P&L: <span style={{ color: pnl >= 0 ? 'green' : 'red' }}>${format(pnl)}</span>
+                </p>
+                <p className="note">
+                    Daily P&L: <span style={{ color: daily_pnl >= 0 ? 'green' : 'red' }}>${format(daily_pnl)}</span>
+                </p>
+                <p className="note">
+                    Return: <span style={{ color: return_pct >= 0 ? 'green' : 'red' }}>{pct(return_pct)}</span>
+                </p>
+                {isGlobal && (
+                    <button
+                        onClick={onReset}
+                        style={{
+                            marginTop: 8,
+                            background: '#dc2626',
+                            color: 'white',
+                            padding: '6px 12px',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Reset to $100,000
+                    </button>
+                )}
+            </div>
+        );
+    });
+    AccountSummaryBox.displayName = 'AccountSummaryBox';
+
     // =========================================
     // Render helpers
     // =========================================
@@ -798,9 +857,7 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h2>Account Summary — Global</h2>
-                    <p className="note">User: {username}</p>
-                    <p className="note">Cash Balance: ${(globalAccount.cash_balance ?? 0).toFixed(2)}</p>
-                    <p className="note">Total Account Value: ${(globalAccount.total_value ?? 0).toFixed(2)}</p>
+                    <AccountSummaryBox account={globalAccount} isGlobal={true} onReset={resetGlobalAccount} />
                 </div>
             );
         }
@@ -811,11 +868,7 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h2>Account Summary — Competition (Individual)</h2>
-                    <p className="note">
-                        {compAcc.name} — Code: <span className="em">{compAcc.code}</span>
-                    </p>
-                    <p className="note">Cash Balance: ${(compAcc.competition_cash ?? 0).toFixed(2)}</p>
-                    <p className="note">Total Account Value: ${(compAcc.total_value ?? 0).toFixed(2)}</p>
+                    <AccountSummaryBox account={compAcc} isGlobal={false} />
                 </div>
             );
         }
@@ -828,17 +881,13 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h2>Account Summary — Team</h2>
-                    <p className="note">
-                        Team: <span className="em">{teamAcc.name}</span> — Comp Code: <span className="em">{teamAcc.code}</span>
-                    </p>
-                    <p className="note">Cash Balance: ${(teamAcc.competition_cash ?? 0).toFixed(2)}</p>
-                    <p className="note">Total Account Value: ${(teamAcc.total_value ?? 0).toFixed(2)}</p>
+                    <AccountSummaryBox account={teamAcc} isGlobal={false} />
                 </div>
             );
         }
-
         return null;
     };
+
 
     const renderPortfolioBox = () => {
         if (selectedAccount.type === 'global') {
