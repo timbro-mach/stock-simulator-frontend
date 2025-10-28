@@ -1452,20 +1452,18 @@ const Dashboard = () => {
                                 </p>
                                 <ul style={{ marginTop: 10, paddingLeft: 18, color: '#334155' }}>
                                     <li>
-                                        💰 <strong>Global Account</strong> — Everyone has this personal practice account starting with
-                                        <em> $100,000 virtual cash</em>. Trade anytime to build skill and confidence. Reset the balance whenever you want.
+                                        💰 <strong>Global Account</strong> — Everyone starts with a personal practice account loaded with
+                                        <em> $100,000 virtual cash</em>. Trade anytime to build your investing skills and reset your balance whenever you want.
                                     </li>
                                     <li>
-                                        🏁 <strong>Competition Accounts</strong> — You can create or join competitions easily.
-                                        Each competition has a competition code, its own leaderboard, balance, P&L and competition dates.
+                                        🏁 <strong>Competition Accounts</strong> — Join or create stock trading competitions. Each competition has its own code, leaderboard, balance, and start/end dates — perfect for classes or clubs.
                                     </li>
                                     <li>
-                                        🤝 <strong>Team Accounts</strong> — Trade with friends! Create a team of classmates or friends to trade and compete together.
-                                        Teams accounts have their own leaderboard and balances and results are shared by your team.
+                                        🤝 <strong>Team Accounts</strong> — Trade collaboratively with friends or classmates. Teams share a balance, make trades together, and compete on team leaderboards.
                                     </li>
                                 </ul>
                                 <p className="note" style={{ marginTop: 8 }}>
-                                    Login below or click <em>“Create Account”</em> to get started!
+                                    🚀 Get Started: Log in below or click <em>“Create Account”</em> to get started!
                                 </p>
                             </div>
 
