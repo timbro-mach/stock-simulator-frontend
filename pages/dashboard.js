@@ -543,118 +543,43 @@ const Dashboard = () => {
         return cleanTyped === cleanChart;
     };
 
-    const checkTradingHoursAndProceed = (action) => {
-        if (!isTradingHours()) {
-            setTradeMessage('Market is closed. Trading hours are 6:30 AM – 1:00 PM PST.');
-            return false;
-        }
-        action();
-        return true;
-    };
 
-    const executeTrade = async (endpoint, payload) => {
-        setIsLoading(true);
+    const executeTrade = async (action) => {
+        if (!stockSymbol || tradeQuantity <= 0) {
+            setTradeMessage("Enter a valid symbol and quantity.");
+            return;
+        }
+
+        setTradeMessage("Processing trade...");
+
         try {
-            const res = await axios.post(`${BASE_URL}${endpoint}`, payload);
-            if (res.data?.message) {
-                setTradeMessage(res.data.message);
-                fetchUserData();
+            let endpoint = "";
+            let payload = { username, symbol: stockSymbol, quantity: tradeQuantity };
+
+            if (selectedAccount.type === "global") {
+                endpoint = `/${action}`; // /buy or /sell
+            } else if (selectedAccount.type === "competition") {
+                endpoint = `/competition/${action}`;
+                payload.competition_code = selectedAccount.id; // e.g. "a37b9c21"
+            } else if (selectedAccount.type === "team") {
+                endpoint = `/team/${action}`;
+                payload.team_id = selectedAccount.team_id; // numeric ID
+            } else if (selectedAccount.type === "team_competition") {
+                endpoint = `/competition/team/${action}`;
+                payload.competition_code = selectedAccount.competition_code;
+                payload.team_id = selectedAccount.team_id;
             }
-        } catch (error) {
-            console.error('Trade failed:', error);
-            setTradeMessage('Trade failed.');
-        } finally {
-            setIsLoading(false);
+
+            console.log("🔹 Sending trade:", endpoint, payload);
+            const res = await axios.post(`${BASE_URL}${endpoint}`, payload);
+            setTradeMessage(res.data.message || "Trade successful.");
+            fetchUserData(); // refresh account balances & holdings
+        } catch (err) {
+            console.error("Trade error:", err.response?.data || err.message);
+            setTradeMessage(err.response?.data?.message || "Trade failed.");
         }
     };
 
-    const buyStockGlobal = () => {
-        if (!stockSymbol || tradeQuantity <= 0) {
-            return setTradeMessage('Enter valid symbol and quantity.');
-        }
-        if (!checkSymbolMatch()) {
-            return setTradeMessage('Search for the symbol first to confirm price and chart.');
-        }
-        if (!checkTradingHoursAndProceed(() => { })) return;
-        executeTrade('/buy', { username, symbol: stockSymbol, quantity: tradeQuantity });
-    };
-
-    const sellStockGlobal = () => {
-        if (!stockSymbol || tradeQuantity <= 0) {
-            return setTradeMessage('Enter valid symbol and quantity.');
-        }
-        if (!checkSymbolMatch()) {
-            return setTradeMessage('Search for the symbol first to confirm price and chart.');
-        }
-        if (!checkTradingHoursAndProceed(() => { })) return;
-        executeTrade('/sell', { username, symbol: stockSymbol, quantity: tradeQuantity });
-    };
-
-    const buyStockCompetition = () => {
-        if (!stockSymbol || tradeQuantity <= 0) {
-            return setTradeMessage('Enter valid symbol and quantity.');
-        }
-        if (!checkSymbolMatch()) {
-            return setTradeMessage('Search for the symbol first to confirm price and chart.');
-        }
-        if (!checkTradingHoursAndProceed(() => { })) return;
-        executeTrade('/competition/buy', {
-            username,
-            competition_code: selectedAccount.id,
-            symbol: stockSymbol,
-            quantity: tradeQuantity,
-        });
-    };
-
-    const sellStockCompetition = () => {
-        if (!stockSymbol || tradeQuantity <= 0) {
-            return setTradeMessage('Enter valid symbol and quantity.');
-        }
-        if (!checkSymbolMatch()) {
-            return setTradeMessage('Search for the symbol first to confirm price and chart.');
-        }
-        if (!checkTradingHoursAndProceed(() => { })) return;
-        executeTrade('/competition/sell', {
-            username,
-            competition_code: selectedAccount.id,
-            symbol: stockSymbol,
-            quantity: tradeQuantity,
-        });
-    };
-
-    const buyStockTeam = () => {
-        if (!stockSymbol || tradeQuantity <= 0) {
-            return setTradeMessage('Enter valid symbol and quantity.');
-        }
-        if (!checkSymbolMatch()) {
-            return setTradeMessage('Search for the symbol first to confirm price and chart.');
-        }
-        if (!checkTradingHoursAndProceed(() => { })) return;
-        executeTrade('/competition/team/buy', {
-            username,
-            team_id: selectedAccount.team_id,
-            competition_code: selectedAccount.competition_code,
-            symbol: stockSymbol,
-            quantity: tradeQuantity,
-        });
-    };
-
-    const sellStockTeam = () => {
-        if (!stockSymbol || tradeQuantity <= 0) {
-            return setTradeMessage('Enter valid symbol and quantity.');
-        }
-        if (!checkSymbolMatch()) {
-            return setTradeMessage('Search for the symbol first to confirm price and chart.');
-        }
-        if (!checkTradingHoursAndProceed(() => { })) return;
-        executeTrade('/competition/team/sell', {
-            username,
-            team_id: selectedAccount.team_id,
-            competition_code: selectedAccount.competition_code,
-            symbol: stockSymbol,
-            quantity: tradeQuantity,
-        });
-    };
 
     // =========================================
     // Teams & Competitions
@@ -852,6 +777,22 @@ const Dashboard = () => {
     // =========================================
     // Render helpers
     // =========================================
+    const resetGlobalAccount = async () => {
+        if (!window.confirm("Are you sure you want to reset your global account to $100,000?")) return;
+        setIsLoading(true);
+        try {
+            const res = await axios.post(`${BASE_URL}/reset_global`, { username });
+            alert(res.data.message);
+            fetchUserData();
+        } catch (error) {
+            console.error("Error resetting global account:", error);
+            alert("Failed to reset global account.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+
     const renderAccountDetails = () => {
         if (selectedAccount.type === 'global') {
             return (
@@ -1015,95 +956,44 @@ const Dashboard = () => {
     };
 
     const renderTradeBox = () => {
-        if (selectedAccount.type === 'global') {
-            return (
-                <div className="card section">
-                    <h3>Trade Stocks (Global)</h3>
-                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                        <div style={{ flex: 1, minWidth: 280 }}>
-                            <SharedInputs
-                                onBuy={buyStockGlobal}
-                                onSell={sellStockGlobal}
-                                stockSymbol={stockSymbol}
-                                setStockSymbol={setStockSymbol}
-                                tradeQuantity={tradeQuantity}
-                                setTradeQuantity={setTradeQuantity}
-                                handleSearch={handleSearch}
-                                stockPrice={stockPrice}
-                                chartSymbol={chartSymbol}
-                                tradeMessage={tradeMessage}
-                            />
-                        </div>
-                        <ChartPanel
-                            chartData={chartData}
-                            chartRange={chartRange}
-                            onRangeChange={handleRangeChange}
+        return (
+            <div className="card section">
+                <h3>
+                    Trade Stocks —{" "}
+                    {selectedAccount.type === "global"
+                        ? "Global"
+                        : selectedAccount.type === "competition"
+                            ? "Competition (Individual)"
+                            : "Competition (Team)"}
+                </h3>
+
+                <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 280 }}>
+                        <SharedInputs
+                            onBuy={() => executeTrade("buy")}
+                            onSell={() => executeTrade("sell")}
+                            stockSymbol={stockSymbol}
+                            setStockSymbol={setStockSymbol}
+                            tradeQuantity={tradeQuantity}
+                            setTradeQuantity={setTradeQuantity}
+                            handleSearch={handleSearch}
+                            stockPrice={stockPrice}
+                            chartSymbol={chartSymbol}
+                            tradeMessage={tradeMessage}
                         />
                     </div>
-                </div>
-            );
-        }
 
-        if (selectedAccount.type === 'competition') {
-            return (
-                <div className="card section">
-                    <h3>Trade Stocks (Competition — Individual)</h3>
-                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                        <div style={{ flex: 1, minWidth: 280 }}>
-                            <SharedInputs
-                                onBuy={buyStockCompetition}
-                                onSell={sellStockCompetition}
-                                stockSymbol={stockSymbol}
-                                setStockSymbol={setStockSymbol}
-                                tradeQuantity={tradeQuantity}
-                                setTradeQuantity={setTradeQuantity}
-                                handleSearch={handleSearch}
-                                stockPrice={stockPrice}
-                                chartSymbol={chartSymbol}
-                                tradeMessage={tradeMessage}
-                            />
-                        </div>
-                        <ChartPanel
-                            chartData={chartData}
-                            chartRange={chartRange}
-                            onRangeChange={handleRangeChange}
-                        />
-                    </div>
+                    <ChartPanel
+                        chartData={chartData}
+                        chartRange={chartRange}
+                        onRangeChange={handleRangeChange}
+                    />
                 </div>
-            );
-        }
-
-        if (selectedAccount.type === 'team') {
-            return (
-                <div className="card section">
-                    <h3>Trade Stocks (Competition — Team)</h3>
-                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                        <div style={{ flex: 1, minWidth: 280 }}>
-                            <SharedInputs
-                                onBuy={buyStockTeam}
-                                onSell={sellStockTeam}
-                                stockSymbol={stockSymbol}
-                                setStockSymbol={setStockSymbol}
-                                tradeQuantity={tradeQuantity}
-                                setTradeQuantity={setTradeQuantity}
-                                handleSearch={handleSearch}
-                                stockPrice={stockPrice}
-                                chartSymbol={chartSymbol}
-                                tradeMessage={tradeMessage}
-                            />
-                        </div>
-                        <ChartPanel
-                            chartData={chartData}
-                            chartRange={chartRange}
-                            onRangeChange={handleRangeChange}
-                        />
-                    </div>
-                </div>
-            );
-        }
-
-        return null;
+            </div>
+        );
     };
+
+
 
     // =========================================
     // Main Render
