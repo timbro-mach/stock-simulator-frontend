@@ -175,11 +175,23 @@ SharedInputs.displayName = 'SharedInputs';
 /*                             ACCOUNT SUMMARY BOX                             */
 /* -------------------------------------------------------------------------- */
 const AccountSummaryBox = memo(({ account, isGlobal, onReset }) => {
-    const { cash_balance, total_value, pnl, daily_pnl, return_pct, name, code } = account;
+    // provide safe defaults if any field is missing
+    const {
+        cash_balance = 0,
+        total_value = 0,
+        pnl = 0,
+        daily_pnl = 0,
+        return_pct = 0,
+        name = '',
+        code = ''
+    } = account || {};
 
     const format = (n) =>
-        n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const pct = (n) => n.toFixed(2) + '%';
+        typeof n === 'number'
+            ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '0.00';
+    const pct = (n) =>
+        typeof n === 'number' ? n.toFixed(2) + '%' : '0.00%';
 
     return (
         <div className="card section" style={{ minWidth: 280, maxWidth: 360 }}>
@@ -214,6 +226,7 @@ const AccountSummaryBox = memo(({ account, isGlobal, onReset }) => {
         </div>
     );
 });
+
 AccountSummaryBox.displayName = 'AccountSummaryBox';
 
 /* -------------------------------------------------------------------------- */
@@ -580,6 +593,15 @@ const Dashboard = () => {
 
     const handleRegister = async (e) => {
         e.preventDefault();
+        if (!username || !password || !email) {
+            alert('All fields are required.');
+            return;
+        }
+        if (!email.includes('@')) {
+            alert('Please enter a valid email.');
+            return;
+        }
+
         setIsLoading(true);
         try {
             const res = await axios.post(`${BASE_URL}/register`, { username, password, email });
@@ -587,7 +609,7 @@ const Dashboard = () => {
             setIsRegistering(false);
             setEmail('');
         } catch (error) {
-            alert(error.response?.data?.message || 'Failed to register.');
+            alert(error.response?.data?.message || 'Registration failed.');
         } finally {
             setIsLoading(false);
         }
