@@ -1447,21 +1447,21 @@ const Dashboard = () => {
                                 }}
                             >
                                 <p className="note" style={{ margin: 0, color: '#1e293b' }}>
-                                    👋 <strong>Welcome to the Stock Market Simulator!</strong><br />
-                                    Here’s how your accounts work:
+                                    👋 <strong>Welcome to the free Stock Market Simulator!</strong><br />
+                                    Here’s how it works:
                                 </p>
                                 <ul style={{ marginTop: 10, paddingLeft: 18, color: '#334155' }}>
                                     <li>
-                                        💰 <strong>Global Account</strong> — Your personal practice account starting with
-                                        <em> $100,000</em>. Trade anytime to build skill and confidence. Reset the balance whenever you want.
+                                        💰 <strong>Global Account</strong> — Everyone has this personal practice account starting with
+                                        <em> $100,000 virtual cash</em>. Trade anytime to build skill and confidence. Reset the balance whenever you want.
                                     </li>
                                     <li>
-                                        🏁 <strong>Competition Accounts</strong> — Created automatically when you join a competition.
-                                        Each has its own leaderboard, balance, P&L and competition dates.
+                                        🏁 <strong>Competition Accounts</strong> — You can create or join competitions easily.
+                                        Each competition has a competition code, its own leaderboard, balance, P&L and competition dates.
                                     </li>
                                     <li>
-                                        🤝 <strong>Team Accounts</strong> — Create a team of classmates or friends to trade and compete together.
-                                        All trades and results are shared by your team.
+                                        🤝 <strong>Team Accounts</strong> — Trade with friends! Create a team of classmates or friends to trade and compete together.
+                                        Teams accounts have their own leaderboard and balances and results are shared by your team.
                                     </li>
                                 </ul>
                                 <p className="note" style={{ marginTop: 8 }}>
