@@ -1435,6 +1435,40 @@ const Dashboard = () => {
                     ) : (
                         <form onSubmit={handleLogin}>
                             <h2>Login</h2>
+                            <div
+                                className="section"
+                                style={{
+                                    background: '#f1f5f9',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: 10,
+                                    padding: 14,
+                                    marginBottom: 14,
+                                    lineHeight: 1.6,
+                                }}
+                            >
+                                <p className="note" style={{ margin: 0, color: '#1e293b' }}>
+                                    👋 <strong>Welcome to the Stock Market Simulator!</strong><br />
+                                    Here’s how your accounts work:
+                                </p>
+                                <ul style={{ marginTop: 10, paddingLeft: 18, color: '#334155' }}>
+                                    <li>
+                                        💰 <strong>Global Account</strong> — Your personal practice account starting with
+                                        <em> $100,000</em>. Trade anytime to build skill and confidence. Reset the balance whenever you want.
+                                    </li>
+                                    <li>
+                                        🏁 <strong>Competition Accounts</strong> — Created automatically when you join a competition.
+                                        Each has its own leaderboard, balance, P&L and competition dates.
+                                    </li>
+                                    <li>
+                                        🤝 <strong>Team Accounts</strong> — Create a team of classmates or friends to trade and compete together.
+                                        All trades and results are shared by your team.
+                                    </li>
+                                </ul>
+                                <p className="note" style={{ marginTop: 8 }}>
+                                    Login below or click <em>“Create Account”</em> to get started!
+                                </p>
+                            </div>
+
                             <input
                                 type="text"
                                 placeholder="Enter username"
