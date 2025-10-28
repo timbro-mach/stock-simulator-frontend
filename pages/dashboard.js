@@ -209,13 +209,19 @@ const Dashboard = () => {
     // Helpers
     // =========================================
     const isTradingHours = () => {
-        const pstDateString = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+        const now = new Date();
+        const pstDateString = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
         const pstDate = new Date(pstDateString);
-        const current = pstDate.getHours() * 60 + pstDate.getMinutes();
-        const start = 6 * 60 + 30;
-        const end = 13 * 60;
-        return current >= start && current < end;
+
+        const day = pstDate.getDay(); // 0 = Sunday, 6 = Saturday
+        if (day === 0 || day === 6) return false; // weekends closed
+
+        const currentMinutes = pstDate.getHours() * 60 + pstDate.getMinutes();
+        const openMinutes = 6 * 60 + 30; // 6:30 AM
+        const closeMinutes = 13 * 60; // 1:00 PM
+        return currentMinutes >= openMinutes && currentMinutes < closeMinutes;
     };
+
 
     const fetchUserData = useCallback(async () => {
         if (!username) return;
@@ -559,7 +565,8 @@ const Dashboard = () => {
         }
 
         setChartSymbol(cleanSymbol);
-        getStockPrice(chartRange);
+        setTimeout(() => getStockPrice(chartRange, cleanSymbol), 0);
+
     };
 
     const checkSymbolMatch = () => {
@@ -572,6 +579,11 @@ const Dashboard = () => {
     const executeTrade = async (action) => {
         if (!stockSymbol || tradeQuantity <= 0) {
             setTradeMessage("Enter a valid symbol and quantity.");
+            return;
+        }
+
+        if (!isTradingHours()) {
+            setTradeMessage("Market is closed. Trading hours are 6:30 AM – 1:00 PM PST (9:30 AM – 4:00 PM EST), Monday through Friday.");
             return;
         }
 
