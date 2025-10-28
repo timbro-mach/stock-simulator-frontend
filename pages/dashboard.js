@@ -454,7 +454,7 @@ const Dashboard = () => {
         setIsLoading(true);
         try {
             const payload = {
-                admin_username: username,
+                username: username,
                 competition_code: competitionCode,
             };
             const res = await axios.post(`${BASE_URL}/admin/delete_competition`, payload);
