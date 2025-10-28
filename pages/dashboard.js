@@ -13,251 +13,147 @@ import {
     Legend,
 } from 'chart.js';
 
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    PointElement,
-    LineElement,
-    Title,
-    Tooltip,
-    Legend
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-/* -------------------------------------------------------------------------- */
-/*                               CHART PANEL                                  */
-/* -------------------------------------------------------------------------- */
-const ChartPanel = memo(({ chartData, chartRange, onRangeChange }) => {
-    const getGradient = (ctx, chartArea) => {
-        if (!chartArea) return null;
-        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-        gradient.addColorStop(0, 'rgba(37,99,235,0.4)');
-        gradient.addColorStop(1, 'rgba(37,99,235,0.0)');
-        return gradient;
-    };
-
-    const dataWithGradient = chartData
-        ? {
-            ...chartData,
-            datasets: chartData.datasets.map((ds) => ({
-                ...ds,
-                backgroundColor: (context) => {
-                    const chart = context.chart;
-                    const { ctx, chartArea } = chart;
-                    return getGradient(ctx, chartArea);
-                },
-            })),
-        }
-        : null;
-
-    return (
-        <div style={{ flex: 1, minHeight: 320 }}>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                {['1D', '1W', '1M', '6M', '1Y'].map((r) => (
-                    <button
-                        key={r}
-                        onClick={() => onRangeChange(r)}
-                        style={{
-                            padding: '4px 10px',
-                            borderRadius: 6,
-                            background: chartRange === r ? '#2563eb' : '#f3f4f6',
-                            color: chartRange === r ? '#fff' : '#111827',
-                            border: 'none',
-                            fontSize: 13,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        {r}
-                    </button>
-                ))}
-            </div>
-
-            {dataWithGradient ? (
-                <div style={{ height: '300px', width: '100%' }}>
-                    <Line
-                        data={dataWithGradient}
-                        options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                x: { grid: { display: false }, ticks: { color: '#6b7280', maxTicksLimit: 6 } },
-                                y: {
-                                    grid: { color: 'rgba(0,0,0,0.05)' },
-                                    ticks: { color: '#6b7280', callback: (v) => `$${v}` },
-                                },
-                            },
-                            plugins: {
-                                legend: { display: false },
-                                tooltip: {
-                                    mode: 'index',
-                                    intersect: false,
-                                    callbacks: { label: (ctx) => `$${ctx.formattedValue}` },
-                                },
-                            },
-                            interaction: { intersect: false, mode: 'nearest' },
-                        }}
-                    />
-                </div>
-            ) : (
-                <p className="note">No chart data available</p>
-            )}
-        </div>
-    );
-});
-ChartPanel.displayName = 'ChartPanel';
-
-/* -------------------------------------------------------------------------- */
-/*                               SHARED INPUTS                                 */
-/* -------------------------------------------------------------------------- */
-const SharedInputs = memo(
-    ({
-        onBuy,
-        onSell,
-        stockSymbol,
-        setStockSymbol,
-        tradeQuantity,
-        setTradeQuantity,
-        handleSearch,
-        stockPrice,
-        chartSymbol,
-        tradeMessage,
-    }) => {
-        console.log('SharedInputs rendered');
-
-        return (
-            <>
-                <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <form
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            handleSearch(e);
-                        }}
-                        style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
-                    >
-                        <input
-                            type="text"
-                            placeholder="Stock Symbol"
-                            value={stockSymbol}
-                            onChange={(e) => setStockSymbol(e.target.value)}
-                            autoComplete="off"
-                        />
-                        <button type="submit">Search</button>
-                    </form>
-                    {stockPrice !== null && chartSymbol && (
-                        <p className="note">
-                            Price for {chartSymbol.toUpperCase()}: ${Number(stockPrice).toFixed(2)}
-                        </p>
-                    )}
-                </div>
-
-                <div className="section" style={{ display: 'flex', gap: 8 }}>
-                    <input
-                        type="number"
-                        placeholder="Quantity"
-                        value={tradeQuantity || ''}
-                        onChange={(e) =>
-                            setTradeQuantity(e.target.value === '' ? 0 : Number(e.target.value))
-                        }
-                        min="0"
-                        autoComplete="off"
-                    />
-                    <button onClick={onBuy}>Buy</button>
-                    <button onClick={onSell}>Sell</button>
-                </div>
-
-                {tradeMessage && <p className="note">{tradeMessage}</p>}
-            </>
-        );
-    }
-);
-SharedInputs.displayName = 'SharedInputs';
-
-/* -------------------------------------------------------------------------- */
-/*                             ACCOUNT SUMMARY BOX                             */
-/* -------------------------------------------------------------------------- */
-const AccountSummaryBox = memo(({ account, isGlobal, onReset }) => {
-    // provide safe defaults if any field is missing
-    const {
-        cash_balance = 0,
-        total_value = 0,
-        pnl = 0,
-        daily_pnl = 0,
-        return_pct = 0,
-        name = '',
-        code = ''
-    } = account || {};
-
-    const format = (n) =>
-        typeof n === 'number'
-            ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-            : '0.00';
-    const pct = (n) =>
-        typeof n === 'number' ? n.toFixed(2) + '%' : '0.00%';
-
-    return (
-        <div className="card section" style={{ minWidth: 280, maxWidth: 360 }}>
-            <h3>{isGlobal ? 'Global Account' : name + (code ? ` (${code})` : '')}</h3>
-            <p className="note">Cash: ${format(cash_balance)}</p>
-            <p className="note">Total Value: <strong>${format(total_value)}</strong></p>
-            <p className="note">
-                P&L: <span style={{ color: pnl >= 0 ? 'green' : 'red' }}>${format(pnl)}</span>
-            </p>
-            <p className="note">
-                Daily P&L: <span style={{ color: daily_pnl >= 0 ? 'green' : 'red' }}>${format(daily_pnl)}</span>
-            </p>
-            <p className="note">
-                Return: <span style={{ color: return_pct >= 0 ? 'green' : 'red' }}>{pct(return_pct)}</span>
-            </p>
-            {isGlobal && (
+// Memoized ChartPanel component
+const ChartPanel = memo(({ chartData, chartRange, onRangeChange }) => (
+    <div style={{ flex: 1, minHeight: 320 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+            {['1D', '1W', '1M', '6M', '1Y'].map((r) => (
                 <button
-                    onClick={onReset}
+                    key={r}
+                    onClick={() => onRangeChange(r)}
                     style={{
-                        marginTop: 8,
-                        background: '#dc2626',
-                        color: 'white',
-                        padding: '6px 12px',
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        background: chartRange === r ? '#2563eb' : '#f3f4f6',
+                        color: chartRange === r ? '#fff' : '#111827',
                         border: 'none',
-                        borderRadius: 4,
+                        fontSize: 13,
                         cursor: 'pointer',
                     }}
                 >
-                    Reset to $100,000
+                    {r}
                 </button>
-            )}
+            ))}
         </div>
+
+        {chartData ? (
+            <div style={{ height: '300px', width: '100%' }}>
+                <Line
+                    data={chartData}
+                    options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: { color: '#6b7280', maxTicksLimit: 6 },
+                            },
+                            y: {
+                                grid: { color: 'rgba(0,0,0,0.05)' },
+                                ticks: { color: '#6b7280', callback: (v) => `$${v} ` },
+                            },
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    label: (context) => `$${context.formattedValue} `,
+                                },
+                            },
+                        },
+                        interaction: { intersect: false, mode: 'nearest' },
+                    }}
+                />
+            </div>
+        ) : (
+            <p className="note">No chart data available</p>
+        )}
+    </div>
+));
+
+ChartPanel.displayName = 'ChartPanel';
+
+// Memoized SharedInputs component
+const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQuantity, setTradeQuantity, handleSearch, stockPrice, chartSymbol, tradeMessage }) => {
+    console.log('SharedInputs rendered'); // Debug to track re-renders
+
+    return (
+        <>
+            <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <form
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSearch(e);
+                    }}
+                    style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
+                >
+                    <input
+                        type="text"
+                        placeholder="Stock Symbol"
+                        value={stockSymbol}
+                        onChange={(e) => setStockSymbol(e.target.value)}
+                        autoComplete="off"
+                    />
+                    <button type="submit">🔍 Search</button>
+                </form>
+                {stockPrice !== null && chartSymbol && (
+                    <p className="note">Price for {chartSymbol.toUpperCase()}: ${Number(stockPrice).toFixed(2)}</p>
+                )}
+            </div>
+
+            <div className="section" style={{ display: 'flex', gap: 8 }}>
+                <input
+                    type="number"
+                    placeholder="Quantity"
+                    value={tradeQuantity || ''}
+                    onChange={(e) => setTradeQuantity(e.target.value === '' ? 0 : Number(e.target.value))}
+                    min="0"
+                    autoComplete="off"
+                />
+                <button onClick={onBuy}>Buy</button>
+                <button onClick={onSell}>Sell</button>
+            </div>
+
+            {tradeMessage && <p className="note">{tradeMessage}</p>}
+        </>
     );
 });
 
-AccountSummaryBox.displayName = 'AccountSummaryBox';
+SharedInputs.displayName = 'SharedInputs';
 
-/* -------------------------------------------------------------------------- */
-/*                                 DASHBOARD                                  */
-/* -------------------------------------------------------------------------- */
 const Dashboard = () => {
-    // Auth & UI State
+    // =========================================
+    // Auth & Global UI State
+    // =========================================
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [email, setEmail] = useState('');
     const [isRegistering, setIsRegistering] = useState(false);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(false); // NEW: Loading state
+
+    // Toggle dashboard vs trading workspace
     const [showTrading, setShowTrading] = useState(false);
 
-    // Accounts
-    const [globalAccount, setGlobalAccount] = useState({
-        cash_balance: 0,
-        portfolio: [],
-        total_value: 0,
-        pnl: 0,
-        daily_pnl: 0,
-        return_pct: 0,
-    });
+    // =========================================
+    // Accounts & Selections
+    // =========================================
+    const [globalAccount, setGlobalAccount] = useState({ cash_balance: 0, portfolio: [], total_value: 0 });
     const [competitionAccounts, setCompetitionAccounts] = useState([]);
     const [teamCompetitionAccounts, setTeamCompetitionAccounts] = useState([]);
     const [teams, setTeams] = useState([]);
+
+    // Selected account context for trading/actions
     const [selectedAccount, setSelectedAccount] = useState({ type: 'global' });
 
-    // Trading
+    // =========================================
+    // Trading state
+    // =========================================
     const [stockSymbol, setStockSymbol] = useState('');
     const [chartSymbol, setChartSymbol] = useState('');
     const [stockPrice, setStockPrice] = useState(null);
@@ -266,7 +162,9 @@ const Dashboard = () => {
     const [chartData, setChartData] = useState(null);
     const [chartRange, setChartRange] = useState('1M');
 
-    // Teams & Competitions
+    // =========================================
+    // Teams & Competitions state
+    // =========================================
     const [teamName, setTeamName] = useState('');
     const [joinTeamCode, setJoinTeamCode] = useState('');
     const [teamMessage, setTeamMessage] = useState('');
@@ -283,27 +181,35 @@ const Dashboard = () => {
     const [joinTeamCompetitionCode, setJoinTeamCompetitionCode] = useState('');
     const [teamCompetitionMessage, setTeamCompetitionMessage] = useState('');
 
-    // Featured Comps + Modal
+    // =========================================
+    // Featured comps + modal
+    // =========================================
     const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
-    const [allCompetitions, setAllCompetitions] = useState([]);
+    const [allCompetitions, setAllCompetitions] = useState([]); // NEW: For admin panel
     const [showModal, setShowModal] = useState(false);
     const [modalCompetition, setModalCompetition] = useState(null);
-    const [accessCode, setAccessCode] = useState('');
 
-    // Admin Tools
+    // =========================================
+    // Admin-only removal tools
+    // =========================================
     const [removeCompUserUsername, setRemoveCompUserUsername] = useState('');
     const [removeCompCode, setRemoveCompCode] = useState('');
     const [removeTeamUserUsername, setRemoveTeamUserUsername] = useState('');
     const [removeTeamId, setRemoveTeamId] = useState('');
     const [adminMessage, setAdminMessage] = useState('');
 
+    // =========================================
+    // API base
+    // =========================================
     const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
-    /* ------------------------------ Helpers ------------------------------ */
+    // =========================================
+    // Helpers
+    // =========================================
     const isTradingHours = () => {
-        const pstDate = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
-        const date = new Date(pstDate);
-        const current = date.getHours() * 60 + date.getMinutes();
+        const pstDateString = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+        const pstDate = new Date(pstDateString);
+        const current = pstDate.getHours() * 60 + pstDate.getMinutes();
         const start = 6 * 60 + 30;
         const end = 13 * 60;
         return current >= start && current < end;
@@ -314,22 +220,18 @@ const Dashboard = () => {
         setIsLoading(true);
         try {
             const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
-            setGlobalAccount(response.data.global_account || {
-                cash_balance: 0,
-                portfolio: [],
-                total_value: 0,
-                pnl: 0,
-                daily_pnl: 0,
-                return_pct: 0,
-            });
+            setGlobalAccount(response.data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
             setCompetitionAccounts(response.data.competition_accounts || []);
             setTeamCompetitionAccounts(response.data.team_competitions || []);
             if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
             if (response.data.teams) setTeams(response.data.teams);
         } catch (error) {
             if (error.response?.status === 404) {
+                console.error('User not found. Clearing session.');
                 localStorage.removeItem('username');
                 setIsLoggedIn(false);
+            } else {
+                console.error('Failed to load user data:', error);
             }
         } finally {
             setIsLoading(false);
@@ -339,24 +241,17 @@ const Dashboard = () => {
     const fetchFeaturedCompetitions = async () => {
         setIsLoading(true);
         try {
-            const url = isAdmin
-                ? `${BASE_URL}/admin/competitions?admin_username=${username}`
-                : `${BASE_URL}/featured_competitions`;
+            const url = isAdmin ? `${BASE_URL}/admin/competitions?admin_username=${username}` : `${BASE_URL}/featured_competitions`;
             const response = await axios.get(url);
             const currentDate = new Date();
             if (isAdmin) {
                 setAllCompetitions(response.data || []);
-                setFeaturedCompetitions(
-                    response.data
-                        .filter((comp) => comp.featured && (new Date(comp.end_date) >= currentDate || comp.end_date === null))
-                        .slice(0, 10)
-                );
+                setFeaturedCompetitions(response.data.filter(comp => comp.featured && (new Date(comp.end_date) >= currentDate || comp.end_date === null)).slice(0, 10));
             } else {
-                setFeaturedCompetitions(
-                    response.data
-                        .filter((comp) => new Date(comp.end_date) >= currentDate || comp.end_date === null)
-                        .slice(0, 10)
-                );
+                const validComps = response.data
+                    .filter(comp => new Date(comp.end_date) >= currentDate || comp.end_date === null)
+                    .slice(0, 10);
+                setFeaturedCompetitions(validComps || []);
             }
         } catch (error) {
             console.error('Error fetching competitions:', error);
@@ -367,26 +262,16 @@ const Dashboard = () => {
         }
     };
 
-    const resetGlobalAccount = async () => {
-        if (!window.confirm('Reset your Global account to $100,000 and delete all holdings?')) return;
-        setIsLoading(true);
-        try {
-            const res = await axios.post(`${BASE_URL}/reset_global`, { username });
-            alert(res.data.message);
-            fetchUserData();
-        } catch (error) {
-            alert('Reset failed: ' + (error.response?.data?.message || 'Unknown error'));
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    /* ------------------------------ Effects ------------------------------ */
+    // =========================================
+    // Effects
+    // =========================================
     useEffect(() => {
-        const storedUsername = localStorage.getItem('username');
-        if (storedUsername) {
-            setUsername(storedUsername);
-            setIsLoggedIn(true);
+        if (typeof window !== 'undefined') {
+            const storedUsername = localStorage.getItem('username');
+            if (storedUsername) {
+                setUsername(storedUsername);
+                setIsLoggedIn(true);
+            }
         }
     }, []);
 
@@ -407,17 +292,181 @@ const Dashboard = () => {
         }
     }, [stockSymbol, chartSymbol]);
 
-    /* --------------------------- Trading Logic --------------------------- */
-    const handleRangeChange = useCallback(
-        (range) => {
-            setChartRange(range);
-            if (chartSymbol) getStockPrice(range);
-        },
-        [chartSymbol]
-    );
+    // =========================================
+    // Auth handlers
+    // =========================================
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        try {
+            const res = await axios.post(`${BASE_URL}/login`, { username, password });
+            if (res.data.username) {
+                localStorage.setItem('username', username);
+                setIsLoggedIn(true);
+                if (res.data.is_admin !== undefined) setIsAdmin(res.data.is_admin);
+                if (res.data.teams) setTeams(res.data.teams);
+                fetchUserData();
+                fetchFeaturedCompetitions();
+            }
+        } catch (error) {
+            alert(error.response?.data?.message || 'Login failed');
+            console.error('Login failed:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRegister = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        try {
+            const res = await axios.post(`${BASE_URL}/register`, { username, password, email });
+            alert(res.data.message);
+            setIsRegistering(false);
+            setEmail('');
+        } catch (error) {
+            alert(error.response?.data?.message || 'Failed to register.');
+            console.error('Register error:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('username');
+        setUsername('');
+        setPassword('');
+        setEmail('');
+        setIsLoggedIn(false);
+        setIsAdmin(false);
+        setTeams([]);
+        setShowTrading(false);
+        setSelectedAccount({ type: 'global' });
+        setGlobalAccount({ cash_balance: 0, portfolio: [], total_value: 0 });
+        setCompetitionAccounts([]);
+        setTeamCompetitionAccounts([]);
+        setStockSymbol('');
+        setChartSymbol('');
+        setStockPrice(null);
+        setTradeQuantity(0);
+        setTradeMessage('');
+        setChartData(null);
+        setFeaturedCompetitions([]);
+        setAllCompetitions([]);
+    };
+
+    // =========================================
+    // Admin Actions
+    // =========================================
+    const handleRemoveUserFromCompetition = async () => {
+        setIsLoading(true);
+        try {
+            const payload = {
+                admin_username: username,
+                target_username: removeCompUserUsername,
+                competition_code: removeCompCode,
+            };
+            const res = await axios.post(`${BASE_URL}/admin/remove_user_from_competition`, payload);
+            setAdminMessage(res.data.message);
+            fetchUserData();
+            fetchFeaturedCompetitions();
+        } catch (error) {
+            console.error('Error removing user from competition:', error);
+            setAdminMessage('Failed to remove user from competition.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRemoveUserFromTeam = async () => {
+        setIsLoading(true);
+        try {
+            const payload = {
+                admin_username: username,
+                target_username: removeTeamUserUsername,
+                team_id: removeTeamId,
+            };
+            const res = await axios.post(`${BASE_URL}/admin/remove_user_from_team`, payload);
+            setAdminMessage(res.data.message);
+            fetchUserData();
+        } catch (error) {
+            console.error('Error removing user from team:', error);
+            setAdminMessage('Failed to remove user from team.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const toggleFeaturedStatus = async (competitionCode, currentFeatured) => {
+        setIsLoading(true);
+        try {
+            const payload = {
+                admin_username: username,
+                competition_code: competitionCode,
+                feature_competition: !currentFeatured,
+            };
+            const res = await axios.post(`${BASE_URL}/admin/update_featured_status`, payload);
+            alert(res.data.message);
+            fetchFeaturedCompetitions();
+        } catch (error) {
+            console.error('Error toggling featured status:', error);
+            alert('Failed to update featured status.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const deleteCompetition = async (competitionCode) => {
+        if (!window.confirm(`Are you sure you want to delete competition ${competitionCode}?`)) return;
+        setIsLoading(true);
+        try {
+            const payload = {
+                admin_username: username,
+                competition_code: competitionCode,
+            };
+            const res = await axios.post(`${BASE_URL}/admin/delete_competition`, payload);
+            alert(res.data.message);
+            fetchFeaturedCompetitions();
+        } catch (error) {
+            console.error('Error deleting competition:', error);
+            alert('Failed to delete competition.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const toggleCompetitionOpen = async (competitionCode, currentStatus) => {
+        setIsLoading(true);
+        try {
+            const payload = {
+                admin_username: username,
+                competition_code: competitionCode,
+                is_open: !currentStatus,
+            };
+            const res = await axios.post(`${BASE_URL}/admin/update_competition_open`, payload);
+            alert(res.data.message);
+            fetchFeaturedCompetitions();
+        } catch (error) {
+            console.error('Error toggling competition open status:', error);
+            alert('Failed to update competition open/closed status.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // =========================================
+    // Trading handlers
+    // =========================================
+    const handleRangeChange = useCallback((range) => {
+        setChartRange(range);
+        if (chartSymbol) {
+            getStockPrice(range);
+        }
+    }, [chartSymbol]);
 
     const getStockPrice = async (range = chartRange) => {
         if (!chartSymbol) return;
+
         const symbolToUse = chartSymbol.trim().toUpperCase();
         if (!symbolToUse) {
             setTradeMessage('Please enter a stock symbol.');
@@ -426,7 +475,9 @@ const Dashboard = () => {
 
         setIsLoading(true);
         try {
+            console.log('Fetching data for:', symbolToUse);
             const response = await axios.get(`${BASE_URL}/stock/${symbolToUse}`);
+
             if (response.data?.price) {
                 setStockPrice(response.data.price);
                 setTradeMessage(`Current price for ${symbolToUse}: $${response.data.price.toFixed(2)}`);
@@ -434,8 +485,15 @@ const Dashboard = () => {
 
             const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`);
             if (chartResponse.data && chartResponse.data.length > 0) {
-                const labels = chartResponse.data.map((p) => p.date);
-                const dataPoints = chartResponse.data.map((p) => p.close);
+                const labels = chartResponse.data.map(p => p.date);
+                const dataPoints = chartResponse.data.map(p => p.close);
+
+                const gradientStroke = (ctx) => {
+                    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                    gradient.addColorStop(0, 'rgba(37,99,235,0.4)');
+                    gradient.addColorStop(1, 'rgba(37,99,235,0.0)');
+                    return gradient;
+                };
 
                 setChartData({
                     labels,
@@ -446,6 +504,7 @@ const Dashboard = () => {
                             fill: true,
                             borderWidth: 2.5,
                             borderColor: '#2563eb',
+                            backgroundColor: (ctx) => gradientStroke(ctx.chart.ctx),
                             pointRadius: 0,
                             tension: 0.25,
                         },
@@ -471,6 +530,7 @@ const Dashboard = () => {
             setTradeMessage('Please enter a stock symbol.');
             return;
         }
+
         setChartSymbol(cleanSymbol);
         getStockPrice(chartRange);
     };
@@ -507,22 +567,34 @@ const Dashboard = () => {
     };
 
     const buyStockGlobal = () => {
-        if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
-        if (!checkSymbolMatch()) return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        if (!stockSymbol || tradeQuantity <= 0) {
+            return setTradeMessage('Enter valid symbol and quantity.');
+        }
+        if (!checkSymbolMatch()) {
+            return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        }
         if (!checkTradingHoursAndProceed(() => { })) return;
         executeTrade('/buy', { username, symbol: stockSymbol, quantity: tradeQuantity });
     };
 
     const sellStockGlobal = () => {
-        if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
-        if (!checkSymbolMatch()) return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        if (!stockSymbol || tradeQuantity <= 0) {
+            return setTradeMessage('Enter valid symbol and quantity.');
+        }
+        if (!checkSymbolMatch()) {
+            return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        }
         if (!checkTradingHoursAndProceed(() => { })) return;
         executeTrade('/sell', { username, symbol: stockSymbol, quantity: tradeQuantity });
     };
 
     const buyStockCompetition = () => {
-        if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
-        if (!checkSymbolMatch()) return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        if (!stockSymbol || tradeQuantity <= 0) {
+            return setTradeMessage('Enter valid symbol and quantity.');
+        }
+        if (!checkSymbolMatch()) {
+            return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        }
         if (!checkTradingHoursAndProceed(() => { })) return;
         executeTrade('/competition/buy', {
             username,
@@ -533,8 +605,12 @@ const Dashboard = () => {
     };
 
     const sellStockCompetition = () => {
-        if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
-        if (!checkSymbolMatch()) return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        if (!stockSymbol || tradeQuantity <= 0) {
+            return setTradeMessage('Enter valid symbol and quantity.');
+        }
+        if (!checkSymbolMatch()) {
+            return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        }
         if (!checkTradingHoursAndProceed(() => { })) return;
         executeTrade('/competition/sell', {
             username,
@@ -545,8 +621,12 @@ const Dashboard = () => {
     };
 
     const buyStockTeam = () => {
-        if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
-        if (!checkSymbolMatch()) return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        if (!stockSymbol || tradeQuantity <= 0) {
+            return setTradeMessage('Enter valid symbol and quantity.');
+        }
+        if (!checkSymbolMatch()) {
+            return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        }
         if (!checkTradingHoursAndProceed(() => { })) return;
         executeTrade('/competition/team/buy', {
             username,
@@ -558,8 +638,12 @@ const Dashboard = () => {
     };
 
     const sellStockTeam = () => {
-        if (!stockSymbol || tradeQuantity <= 0) return setTradeMessage('Enter valid symbol and quantity.');
-        if (!checkSymbolMatch()) return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        if (!stockSymbol || tradeQuantity <= 0) {
+            return setTradeMessage('Enter valid symbol and quantity.');
+        }
+        if (!checkSymbolMatch()) {
+            return setTradeMessage('Search for the symbol first to confirm price and chart.');
+        }
         if (!checkTradingHoursAndProceed(() => { })) return;
         executeTrade('/competition/team/sell', {
             username,
@@ -570,94 +654,172 @@ const Dashboard = () => {
         });
     };
 
-    /* -------------------------- Auth Handlers -------------------------- */
-    const handleLogin = async (e) => {
-        e.preventDefault();
+    // =========================================
+    // Teams & Competitions
+    // =========================================
+    const createTeam = async () => {
+        if (!teamName) return setTeamMessage('Please enter a team name.');
         setIsLoading(true);
         try {
-            const res = await axios.post(`${BASE_URL}/login`, { username, password });
-            if (res.data.username) {
-                localStorage.setItem('username', username);
-                setIsLoggedIn(true);
-                if (res.data.is_admin !== undefined) setIsAdmin(res.data.is_admin);
-                if (res.data.teams) setTeams(res.data.teams);
-                fetchUserData();
-                fetchFeaturedCompetitions();
-            }
+            const res = await axios.post(`${BASE_URL}/team/create`, { username, team_name: teamName });
+            setTeamMessage(`Team created successfully! Your Team Code is ${res.data.team_code}`);
+            setTeamName('');
+            fetchUserData();
         } catch (error) {
-            alert(error.response?.data?.message || 'Login failed');
+            console.error('Error creating team:', error);
+            setTeamMessage('Error creating team.');
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleRegister = async (e) => {
-        e.preventDefault();
-        if (!username || !password || !email) {
-            alert('All fields are required.');
-            return;
-        }
-        if (!email.includes('@')) {
-            alert('Please enter a valid email.');
-            return;
-        }
-
+    const joinTeam = async () => {
+        if (!joinTeamCode) return setTeamMessage('Please enter a team code.');
         setIsLoading(true);
         try {
-            const res = await axios.post(`${BASE_URL}/register`, { username, password, email });
+            const res = await axios.post(`${BASE_URL}/team/join`, { username, team_code: joinTeamCode });
+            setTeamMessage(res.data.message);
+            setJoinTeamCode('');
+            fetchUserData();
+        } catch (error) {
+            console.error('Error joining team:', error);
+            setTeamMessage('Error joining team.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const createCompetition = async () => {
+        if (!competitionName) return setCompetitionMessage('Please enter a competition name.');
+        setIsLoading(true);
+        try {
+            const payload = {
+                username,
+                competition_name: competitionName,
+                start_date: compStartDate,
+                end_date: compEndDate,
+                max_position_limit: maxPositionLimit,
+                featured: isAdmin ? featureCompetition : false, // Restrict featuring to admins
+            };
+            console.log('Creating competition with payload:', payload); // Debug
+            const res = await axios.post(`${BASE_URL}/competition/create`, payload);
+            setCompetitionMessage(`Competition created successfully! Code: ${res.data.competition_code}`);
+            setCompetitionName('');
+            setCompStartDate('');
+            setCompEndDate('');
+            setMaxPositionLimit('100%');
+            setFeatureCompetition(false);
+            fetchUserData();
+            fetchFeaturedCompetitions();
+        } catch (error) {
+            console.error('Error creating competition:', error);
+            setCompetitionMessage(error.response?.data?.message || 'Error creating competition.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const joinCompetition = async () => {
+        if (!joinCompetitionCode) return setCompetitionMessage('Please enter a competition code.');
+        setIsLoading(true);
+        try {
+            const res = await axios.post(`${BASE_URL}/competition/join`, { username, competition_code: joinCompetitionCode });
+            setCompetitionMessage(res.data.message);
+            setJoinCompetitionCode('');
+            fetchUserData();
+        } catch (error) {
+            console.error('Error joining competition:', error);
+            setCompetitionMessage('Error joining competition.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const joinCompetitionAsTeam = async () => {
+        if (!joinTeamCompetitionTeamCode || !joinTeamCompetitionCode) {
+            return setTeamCompetitionMessage('Please enter both team code and competition code.');
+        }
+        setIsLoading(true);
+        try {
+            const res = await axios.post(`${BASE_URL}/competition/team/join`, {
+                username,
+                team_code: joinTeamCompetitionTeamCode,
+                competition_code: joinTeamCompetitionCode,
+            });
+            setTeamCompetitionMessage(res.data.message);
+            setJoinTeamCompetitionTeamCode('');
+            setJoinTeamCompetitionCode('');
+            fetchUserData();
+        } catch (error) {
+            console.error('Error joining competition as team:', error);
+            setTeamCompetitionMessage('Error joining competition as team.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // =========================================
+    // Featured Competitions modal
+    // =========================================
+    const openJoinModal = (competition) => {
+        setModalCompetition(competition);
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setModalCompetition(null);
+    };
+
+    const joinFeaturedCompetition = async () => {
+        if (!modalCompetition) return;
+        setIsLoading(true);
+        try {
+            const res = await axios.post(`${BASE_URL}/competition/join`, {
+                username,
+                competition_code: modalCompetition.code,
+            });
             alert(res.data.message);
-            setIsRegistering(false);
-            setEmail('');
+            closeModal();
+            fetchUserData();
         } catch (error) {
-            alert(error.response?.data?.message || 'Registration failed.');
+            console.error('Error joining competition:', error);
+            alert('Error joining competition.');
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('username');
-        setUsername('');
-        setPassword('');
-        setEmail('');
-        setIsLoggedIn(false);
-        setIsAdmin(false);
-        setTeams([]);
-        setShowTrading(false);
-        setSelectedAccount({ type: 'global' });
-        setGlobalAccount({ cash_balance: 0, portfolio: [], total_value: 0, pnl: 0, daily_pnl: 0, return_pct: 0 });
-        setCompetitionAccounts([]);
-        setTeamCompetitionAccounts([]);
-        setStockSymbol('');
-        setChartSymbol('');
-        setStockPrice(null);
-        setTradeQuantity(0);
-        setTradeMessage('');
-        setChartData(null);
-        setFeaturedCompetitions([]);
-        setAllCompetitions([]);
-    };
-
-    /* --------------------------- Render Helpers --------------------------- */
+    // =========================================
+    // Render helpers
+    // =========================================
     const renderAccountDetails = () => {
         if (selectedAccount.type === 'global') {
             return (
                 <div className="card section">
                     <h2>Account Summary — Global</h2>
-                    <AccountSummaryBox account={globalAccount} isGlobal={true} onReset={resetGlobalAccount} />
+                    <p className="note">User: {username}</p>
+                    <p className="note">Cash Balance: ${(globalAccount.cash_balance ?? 0).toFixed(2)}</p>
+                    <p className="note">Total Account Value: ${(globalAccount.total_value ?? 0).toFixed(2)}</p>
                 </div>
             );
         }
+
         if (selectedAccount.type === 'competition') {
             const compAcc = competitionAccounts.find((a) => a.code === selectedAccount.id);
             if (!compAcc) return null;
             return (
                 <div className="card section">
                     <h2>Account Summary — Competition (Individual)</h2>
-                    <AccountSummaryBox account={compAcc} isGlobal={false} />
+                    <p className="note">
+                        {compAcc.name} — Code: <span className="em">{compAcc.code}</span>
+                    </p>
+                    <p className="note">Cash Balance: ${(compAcc.competition_cash ?? 0).toFixed(2)}</p>
+                    <p className="note">Total Account Value: ${(compAcc.total_value ?? 0).toFixed(2)}</p>
                 </div>
             );
         }
+
         if (selectedAccount.type === 'team') {
             const teamAcc = teamCompetitionAccounts.find(
                 (a) => a.team_id === selectedAccount.team_id && a.code === selectedAccount.competition_code
@@ -666,10 +828,15 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h2>Account Summary — Team</h2>
-                    <AccountSummaryBox account={teamAcc} isGlobal={false} />
+                    <p className="note">
+                        Team: <span className="em">{teamAcc.name}</span> — Comp Code: <span className="em">{teamAcc.code}</span>
+                    </p>
+                    <p className="note">Cash Balance: ${(teamAcc.competition_cash ?? 0).toFixed(2)}</p>
+                    <p className="note">Total Account Value: ${(teamAcc.total_value ?? 0).toFixed(2)}</p>
                 </div>
             );
         }
+
         return null;
     };
 
@@ -678,7 +845,7 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h3>Your Global Portfolio</h3>
-                    {globalAccount.portfolio?.length > 0 ? (
+                    {globalAccount.portfolio && globalAccount.portfolio.length > 0 ? (
                         <table>
                             <thead>
                                 <tr>
@@ -686,16 +853,16 @@ const Dashboard = () => {
                                     <th>Quantity</th>
                                     <th>Current Price</th>
                                     <th>Total Value</th>
-                                    <th>P&L</th>
+                                    <th>P&amp;L</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {globalAccount.portfolio.map((holding, i) => {
+                                {globalAccount.portfolio.map((holding, index) => {
                                     const pnl = holding.buy_price
                                         ? (holding.current_price - holding.buy_price) * holding.quantity
                                         : 0;
                                     return (
-                                        <tr key={i}>
+                                        <tr key={index}>
                                             <td>{holding.symbol}</td>
                                             <td>{holding.quantity}</td>
                                             <td>${holding.current_price.toFixed(2)}</td>
@@ -718,7 +885,7 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h3>Your Competition Portfolio (Individual)</h3>
-                    {compAcc?.portfolio?.length > 0 ? (
+                    {compAcc && compAcc.portfolio && compAcc.portfolio.length > 0 ? (
                         <table>
                             <thead>
                                 <tr>
@@ -726,16 +893,16 @@ const Dashboard = () => {
                                     <th>Quantity</th>
                                     <th>Current Price</th>
                                     <th>Total Value</th>
-                                    <th>P&L</th>
+                                    <th>P&amp;L</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {compAcc.portfolio.map((holding, i) => {
+                                {compAcc.portfolio.map((holding, index) => {
                                     const pnl = holding.buy_price
                                         ? (holding.current_price - holding.buy_price) * holding.quantity
                                         : 0;
                                     return (
-                                        <tr key={i}>
+                                        <tr key={index}>
                                             <td>{holding.symbol}</td>
                                             <td>{holding.quantity}</td>
                                             <td>${holding.current_price.toFixed(2)}</td>
@@ -760,7 +927,7 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h3>Your Competition Portfolio (Team)</h3>
-                    {teamAcc?.portfolio?.length > 0 ? (
+                    {teamAcc && teamAcc.portfolio && teamAcc.portfolio.length > 0 ? (
                         <table>
                             <thead>
                                 <tr>
@@ -768,16 +935,16 @@ const Dashboard = () => {
                                     <th>Quantity</th>
                                     <th>Current Price</th>
                                     <th>Total Value</th>
-                                    <th>P&L</th>
+                                    <th>P&amp;L</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {teamAcc.portfolio.map((holding, i) => {
+                                {teamAcc.portfolio.map((holding, index) => {
                                     const pnl = holding.buy_price
                                         ? (holding.current_price - holding.buy_price) * holding.quantity
                                         : 0;
                                     return (
-                                        <tr key={i}>
+                                        <tr key={index}>
                                             <td>{holding.symbol}</td>
                                             <td>{holding.quantity}</td>
                                             <td>${holding.current_price.toFixed(2)}</td>
@@ -818,7 +985,11 @@ const Dashboard = () => {
                                 tradeMessage={tradeMessage}
                             />
                         </div>
-                        <ChartPanel chartData={chartData} chartRange={chartRange} onRangeChange={handleRangeChange} />
+                        <ChartPanel
+                            chartData={chartData}
+                            chartRange={chartRange}
+                            onRangeChange={handleRangeChange}
+                        />
                     </div>
                 </div>
             );
@@ -843,7 +1014,11 @@ const Dashboard = () => {
                                 tradeMessage={tradeMessage}
                             />
                         </div>
-                        <ChartPanel chartData={chartData} chartRange={chartRange} onRangeChange={handleRangeChange} />
+                        <ChartPanel
+                            chartData={chartData}
+                            chartRange={chartRange}
+                            onRangeChange={handleRangeChange}
+                        />
                     </div>
                 </div>
             );
@@ -868,7 +1043,11 @@ const Dashboard = () => {
                                 tradeMessage={tradeMessage}
                             />
                         </div>
-                        <ChartPanel chartData={chartData} chartRange={chartRange} onRangeChange={handleRangeChange} />
+                        <ChartPanel
+                            chartData={chartData}
+                            chartRange={chartRange}
+                            onRangeChange={handleRangeChange}
+                        />
                     </div>
                 </div>
             );
@@ -877,38 +1056,116 @@ const Dashboard = () => {
         return null;
     };
 
-    /* ------------------------------ Render ------------------------------ */
+    // =========================================
+    // Main Render
+    // =========================================
     return (
         <div className="dashboard-container">
             <header>
-                <h1>Stock Market Simulator</h1>
-                {isLoggedIn && <p className="note">Welcome back, <span className="em">{username}</span>.</p>}
+                <h1>📊 Stock Market Simulator</h1>
+                {isLoggedIn && (
+                    <p className="note">Welcome back, <span className="em">{username}</span>.</p>
+                )}
                 {isLoading && <p className="note">Loading...</p>}
             </header>
 
             {isLoggedIn ? (
                 <div>
-                    {/* Featured Competitions */}
+                    {/* Admin Panel */}
+                    {isAdmin && (
+                        <div className="card section">
+                            <h2>🛠️ Admin Panel</h2>
+
+                            <div className="section">
+                                <h3>Remove User from Competition</h3>
+                                <input
+                                    type="text"
+                                    placeholder="Target Username"
+                                    value={removeCompUserUsername}
+                                    onChange={(e) => setRemoveCompUserUsername(e.target.value)}
+                                    disabled={isLoading}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Competition Code"
+                                    value={removeCompCode}
+                                    onChange={(e) => setRemoveCompCode(e.target.value)}
+                                    disabled={isLoading}
+                                />
+                                <button onClick={handleRemoveUserFromCompetition} disabled={isLoading}>
+                                    Remove
+                                </button>
+                            </div>
+
+                            <div className="section">
+                                <h3>Remove User from Team</h3>
+                                <input
+                                    type="text"
+                                    placeholder="Target Username"
+                                    value={removeTeamUserUsername}
+                                    onChange={(e) => setRemoveTeamUserUsername(e.target.value)}
+                                    disabled={isLoading}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Team ID"
+                                    value={removeTeamId}
+                                    onChange={(e) => setRemoveTeamId(e.target.value)}
+                                    disabled={isLoading}
+                                />
+                                <button onClick={handleRemoveUserFromTeam} disabled={isLoading}>
+                                    Remove
+                                </button>
+                            </div>
+
+                            <div className="section">
+                                <h3>Manage Competitions</h3>
+                                {allCompetitions.length > 0 ? (
+                                    allCompetitions.map((comp) => (
+                                        <div key={comp.code} style={{ marginBottom: '10px' }}>
+                                            <p>
+                                                <strong>{comp.name}</strong> (Code: {comp.code})<br />
+                                                Open: {comp.is_open ? '✅' : '❌'} | Featured: {comp.featured ? '⭐' : '☆'}<br />
+                                                {comp.start_date && comp.end_date ? `${new Date(comp.start_date).toLocaleDateString()} → ${new Date(comp.end_date).toLocaleDateString()}` : 'No dates set'}
+                                            </p>
+                                            <div style={{ display: 'flex', gap: 8 }}>
+                                                <button onClick={() => toggleCompetitionOpen(comp.code, comp.is_open)} disabled={isLoading}>
+                                                    {comp.is_open ? 'Close Competition' : 'Open Competition'}
+                                                </button>
+                                                <button onClick={() => toggleFeaturedStatus(comp.code, comp.featured)} disabled={isLoading}>
+                                                    {comp.featured ? 'Unfeature' : 'Feature'}
+                                                </button>
+                                                <button onClick={() => deleteCompetition(comp.code)} disabled={isLoading}>
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="note">No competitions found.</p>
+                                )}
+                            </div>
+
+                            {adminMessage && <p className="note">{adminMessage}</p>}
+                        </div>
+                    )}
+
+                    {/* Featured Competitions (Dashboard mode only) */}
                     {!showTrading && (
                         <div className="card section">
-                            <h2>Featured Competitions</h2>
+                            <h2>🏅 Featured Competitions</h2>
                             {featuredCompetitions.length > 0 ? (
-                                featuredCompetitions.map((comp) => (
-                                    <div
-                                        key={comp.code}
-                                        className="section"
-                                        style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}
-                                    >
-                                        <span>
-                                            <strong>{comp.name}</strong> • {comp.is_open ? 'Open' : 'Restricted'} •{' '}
-                                            {new Date(comp.start_date).toLocaleDateString()} →{' '}
-                                            {new Date(comp.end_date).toLocaleDateString()}
-                                        </span>
-                                        <button onClick={() => { setModalCompetition(comp); setShowModal(true); }} disabled={isLoading}>
-                                            Join
-                                        </button>
-                                    </div>
-                                ))
+                                featuredCompetitions.map((comp) => {
+                                    const status = comp.join === 'Join directly' ? 'Open' : 'Restricted';
+                                    return (
+                                        <div key={comp.code} className="section" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <span>
+                                                <strong>{comp.name}</strong> • {status} • {new Date(comp.start_date).toLocaleDateString()} → {new Date(comp.end_date).toLocaleDateString()}
+                                            </span>
+                                            <button onClick={() => openJoinModal(comp)} disabled={isLoading}>Join</button>
+                                        </div>
+                                    );
+                                })
                             ) : (
                                 <p className="note">No featured competitions available.</p>
                             )}
@@ -918,25 +1175,19 @@ const Dashboard = () => {
                     {/* Mode Toggle */}
                     <div className="section">
                         {showTrading ? (
-                            <button onClick={() => setShowTrading(false)} disabled={isLoading}>
-                                Back to Dashboard
-                            </button>
+                            <button onClick={() => setShowTrading(false)} disabled={isLoading}>⬅ Back to Dashboard</button>
                         ) : (
-                            <button onClick={() => setShowTrading(true)} disabled={isLoading}>
-                                Start Trading
-                            </button>
+                            <button onClick={() => setShowTrading(true)} disabled={isLoading}>🚀 Start Trading</button>
                         )}
                     </div>
 
                     {/* Trading Workspace */}
-                    {showTrading && (
+                    {showTrading ? (
                         <>
                             <div className="card section">
                                 <h2>Accounts</h2>
                                 <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                    <button onClick={() => setSelectedAccount({ type: 'global' })} disabled={isLoading}>
-                                        Global Account
-                                    </button>
+                                    <button onClick={() => setSelectedAccount({ type: 'global', id: null })} disabled={isLoading}>Global Account</button>
                                     {competitionAccounts.map((acc) => (
                                         <button
                                             key={acc.code}
@@ -984,61 +1235,231 @@ const Dashboard = () => {
                                 </div>
                             )}
                         </>
+                    ) : (
+                        <>
+                            <div className="card section">
+                                <h2>👥 Teams</h2>
+                                <div className="section">
+                                    <h3>Create Team</h3>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter Team Name"
+                                        value={teamName}
+                                        onChange={(e) => setTeamName(e.target.value)}
+                                        disabled={isLoading}
+                                    />
+                                    <button className="team-button" onClick={createTeam} disabled={isLoading}>
+                                        Create Team
+                                    </button>
+                                </div>
+
+                                <div className="section">
+                                    <h3>Join Team</h3>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter Team Code"
+                                        value={joinTeamCode}
+                                        onChange={(e) => setJoinTeamCode(e.target.value)}
+                                        disabled={isLoading}
+                                    />
+                                    <button className="team-button" onClick={joinTeam} disabled={isLoading}>
+                                        Join Team
+                                    </button>
+                                </div>
+
+                                {teamMessage && <p className="note">{teamMessage}</p>}
+                            </div>
+
+                            <div className="card section">
+                                <h2>🏁 Group Competitions</h2>
+                                <div className="section">
+                                    <h3>Create Competition</h3>
+                                    <div className="section" style={{ display: 'grid', gap: 10, maxWidth: 520 }}>
+                                        <label className="em">Competition Name</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Enter Competition Name"
+                                            value={competitionName}
+                                            onChange={(e) => setCompetitionName(e.target.value)}
+                                            disabled={isLoading}
+                                        />
+                                        <label className="em">Start Date</label>
+                                        <input
+                                            type="date"
+                                            value={compStartDate}
+                                            onChange={(e) => setCompStartDate(e.target.value)}
+                                            disabled={isLoading}
+                                        />
+                                        <label className="em">End Date</label>
+                                        <input
+                                            type="date"
+                                            value={compEndDate}
+                                            onChange={(e) => setCompEndDate(e.target.value)}
+                                            disabled={isLoading}
+                                        />
+                                        <label className="em">Max Position Limit</label>
+                                        <select
+                                            value={maxPositionLimit}
+                                            onChange={(e) => setMaxPositionLimit(e.target.value)}
+                                            disabled={isLoading}
+                                        >
+                                            <option value="5%">5%</option>
+                                            <option value="10%">10%</option>
+                                            <option value="25%">25%</option>
+                                            <option value="50%">50%</option>
+                                            <option value="100%">100%</option>
+                                        </select>
+                                        {isAdmin && (
+                                            <label className="em" style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: '200px' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={featureCompetition}
+                                                    onChange={(e) => setFeatureCompetition(e.target.checked)}
+                                                    disabled={isLoading}
+                                                />
+                                                Feature This Competition
+                                            </label>
+                                        )}
+                                        <button className="competition-button" onClick={createCompetition} disabled={isLoading}>
+                                            {isLoading ? 'Creating...' : 'Create Competition'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="section">
+                                    <h3>Join Competition</h3>
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Enter Competition Code"
+                                            value={joinCompetitionCode}
+                                            onChange={(e) => setJoinCompetitionCode(e.target.value)}
+                                            disabled={isLoading}
+                                        />
+                                        <button className="competition-button" onClick={joinCompetition} disabled={isLoading}>
+                                            Join Competition
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {competitionMessage && <p className="note">{competitionMessage}</p>}
+                            </div>
+
+                            <div className="card section">
+                                <h2>🤝 Team Competitions</h2>
+                                <div className="section" style={{ display: 'grid', gap: 8, maxWidth: 520 }}>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter Team Code"
+                                        value={joinTeamCompetitionTeamCode}
+                                        onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
+                                        disabled={isLoading}
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Enter Competition Code"
+                                        value={joinTeamCompetitionCode}
+                                        onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
+                                        disabled={isLoading}
+                                    />
+                                    <button className="competition-button" onClick={joinCompetitionAsTeam} disabled={isLoading}>
+                                        Join Competition as Team
+                                    </button>
+                                </div>
+                                {teamCompetitionMessage && <p className="note">{teamCompetitionMessage}</p>}
+                            </div>
+
+                            <button className="logout-button" onClick={handleLogout} disabled={isLoading}>
+                                Logout
+                            </button>
+                        </>
                     )}
                 </div>
             ) : (
-                /* Login/Register Form */
-                <div className="card section" style={{ maxWidth: 400 }}>
-                    <h2>{isRegistering ? 'Register' : 'Login'}</h2>
-                    <form onSubmit={isRegistering ? handleRegister : handleLogin}>
-                        <input
-                            type="text"
-                            placeholder="Username"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            required
-                        />
-                        <input
-                            type="password"
-                            placeholder="Password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                        />
-                        {isRegistering && (
+                <div className="card" style={{ maxWidth: 420, margin: '0 auto' }}>
+                    {isRegistering ? (
+                        <form onSubmit={handleRegister}>
+                            <h2>Create Account</h2>
+                            <input
+                                type="text"
+                                placeholder="Enter username"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                autoComplete="off"
+                                disabled={isLoading}
+                            />
                             <input
                                 type="email"
-                                placeholder="Email"
+                                placeholder="Enter email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                required
+                                autoComplete="off"
+                                disabled={isLoading}
                             />
-                        )}
-                        <button type="submit" disabled={isLoading}>
-                            {isRegistering ? 'Register' : 'Login'}
-                        </button>
-                    </form>
-                    <p className="note">
-                        {isRegistering ? (
-                            <>
+                            <input
+                                type="password"
+                                placeholder="Enter password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                autoComplete="off"
+                                disabled={isLoading}
+                            />
+                            <button type="submit" disabled={isLoading}>
+                                {isLoading ? 'Creating...' : 'Create Account'}
+                            </button>
+                            <p className="note">
                                 Already have an account?{' '}
-                                <button className="link" onClick={() => setIsRegistering(false)}>
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setIsRegistering(false);
+                                        setEmail('');
+                                    }}
+                                >
                                     Login
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                New user?{' '}
-                                <button className="link" onClick={() => setIsRegistering(true)}>
-                                    Register
-                                </button>
-                            </>
-                        )}
-                    </p>
+                                </a>
+                            </p>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleLogin}>
+                            <h2>Login</h2>
+                            <input
+                                type="text"
+                                placeholder="Enter username"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                autoComplete="off"
+                                disabled={isLoading}
+                            />
+                            <input
+                                type="password"
+                                placeholder="Enter password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                autoComplete="off"
+                                disabled={isLoading}
+                            />
+                            <button type="submit" disabled={isLoading}>
+                                {isLoading ? 'Logging in...' : 'Login'}
+                            </button>
+                            <p className="note">
+                                Don&apos;t have an account?{' '}
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setIsRegistering(true);
+                                    }}
+                                >
+                                    Create Account
+                                </a>
+                            </p>
+                        </form>
+                    )}
                 </div>
             )}
 
-            {/* Join Modal */}
             {showModal && modalCompetition && (
                 <div
                     className="modal-overlay"
@@ -1056,51 +1477,18 @@ const Dashboard = () => {
                         paddingTop: '20px',
                     }}
                 >
-                    <div className="card" style={{ maxWidth: 540 }}>
+                    <div className="card" style={{ maxWidth: 540, margin: 0 }}>
                         <h2>Join Competition</h2>
                         <p>
-                            <strong>{modalCompetition.name}</strong>
+                            Do you want to join <strong>{modalCompetition.name}</strong>?
                         </p>
                         <p className="note">
                             {new Date(modalCompetition.start_date).toLocaleDateString()} →{' '}
                             {new Date(modalCompetition.end_date).toLocaleDateString()}
                         </p>
-                        {!modalCompetition.is_open && (
-                            <div style={{ margin: '10px 0' }}>
-                                <label className="em">Access Code:</label>
-                                <input
-                                    type="text"
-                                    value={accessCode}
-                                    onChange={(e) => setAccessCode(e.target.value)}
-                                    placeholder="Enter access code"
-                                    style={{ width: '100%', marginTop: 4 }}
-                                />
-                            </div>
-                        )}
-                        <div className="section" style={{ display: 'flex', gap: 8 }}>
-                            <button
-                                onClick={async () => {
-                                    setIsLoading(true);
-                                    try {
-                                        const payload = { username, competition_code: modalCompetition.code };
-                                        if (!modalCompetition.is_open) payload.access_code = accessCode;
-                                        const res = await axios.post(`${BASE_URL}/competition/join`, payload);
-                                        alert(res.data.message);
-                                        setShowModal(false);
-                                        fetchUserData();
-                                    } catch (error) {
-                                        alert(error.response?.data?.message || 'Failed to join.');
-                                    } finally {
-                                        setIsLoading(false);
-                                    }
-                                }}
-                                disabled={isLoading}
-                            >
-                                Join
-                            </button>
-                            <button className="logout-button" onClick={() => setShowModal(false)} disabled={isLoading}>
-                                Cancel
-                            </button>
+                        <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button onClick={joinFeaturedCompetition} disabled={isLoading}>Join</button>
+                            <button className="logout-button" onClick={closeModal} disabled={isLoading}>Cancel</button>
                         </div>
                     </div>
                 </div>
