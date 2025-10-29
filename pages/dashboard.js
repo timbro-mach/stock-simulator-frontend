@@ -249,26 +249,39 @@ const Dashboard = () => {
     const [enteredCode, setEnteredCode] = useState('');
 
     const joinFeaturedCompetition = async (codeOverride = null) => {
-        const compCode = codeOverride || (modalCompetition ? enteredCode || modalCompetition.code : null);
-        if (!compCode) return alert('Please enter the competition code.');
+        const compCode = codeOverride || (modalCompetition ? modalCompetition.code : null);
+        const enteredAccessCode = enteredCode?.trim();
+
+        if (!compCode) {
+            alert("Missing competition code.");
+            return;
+        }
+
+        // 🔒 Require access code if restricted
+        if (modalCompetition && modalCompetition.is_open === false && !enteredAccessCode) {
+            alert("Please enter the access code to join this restricted competition.");
+            return;
+        }
 
         setIsLoading(true);
         try {
             const res = await axios.post(`${BASE_URL}/competition/join`, {
                 username,
                 competition_code: compCode,
+                access_code: enteredAccessCode || null, // ✅ send it
             });
             alert(res.data.message);
             closeModal();
             fetchUserData();
         } catch (error) {
-            console.error('Error joining competition:', error);
-            alert('Error joining competition.');
+            console.error("Error joining competition:", error);
+            alert("Error joining competition.");
         } finally {
             setIsLoading(false);
-            setEnteredCode('');
+            setEnteredCode("");
         }
     };
+
 
 
     const fetchFeaturedCompetitions = async () => {
