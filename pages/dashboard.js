@@ -95,7 +95,7 @@ const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQu
                         type="text"
                         placeholder="Stock Symbol"
                         value={stockSymbol}
-                        onChange={(e) => setStockSymbol(e.target.value)}
+                        oonChange={(e) => setStockSymbol(e.target.value.toUpperCase())}
                         autoComplete="off"
                     />
                     <button type="submit">🔍 Search</button>
@@ -556,18 +556,58 @@ const Dashboard = () => {
         }
     };
 
-    const handleSearch = (e) => {
+    const handleSearch = async (e) => {
         e.preventDefault();
-        const cleanSymbol = stockSymbol.trim().toUpperCase();
-        if (!cleanSymbol) {
-            setTradeMessage('Please enter a stock symbol.');
+
+        // Always use latest input directly — fixes the “two-click” bug
+        const symbolInput = stockSymbol.trim().toUpperCase();
+        if (!symbolInput) {
+            setTradeMessage('Please enter a valid stock symbol.');
             return;
         }
 
-        setChartSymbol(cleanSymbol);
-        setTimeout(() => getStockPrice(chartRange, cleanSymbol), 0);
+        setIsLoading(true);
+        setChartSymbol(symbolInput);
+        setTradeMessage('');
 
+        try {
+            const res = await axios.get(`${BASE_URL}/stock/${symbolInput}`);
+            if (res.data?.price) {
+                setStockPrice(res.data.price);
+                setTradeMessage(`Current price for ${symbolInput}: $${res.data.price.toFixed(2)}`);
+            }
+
+            const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`);
+            if (chartResponse.data && chartResponse.data.length > 0) {
+                const labels = chartResponse.data.map(p => p.date);
+                const dataPoints = chartResponse.data.map(p => p.close);
+
+                setChartData({
+                    labels,
+                    datasets: [
+                        {
+                            label: `${symbolInput} (${chartRange})`,
+                            data: dataPoints,
+                            borderWidth: 2.5,
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37,99,235,0.1)',
+                            pointRadius: 0,
+                            tension: 0.25,
+                        },
+                    ],
+                });
+            } else {
+                setChartData(null);
+                setTradeMessage(`No chart data available for ${symbolInput}`);
+            }
+        } catch (error) {
+            console.error('Error fetching stock data:', error);
+            setTradeMessage('Error fetching stock data.');
+        } finally {
+            setIsLoading(false);
+        }
     };
+
 
     const checkSymbolMatch = () => {
         const cleanTyped = stockSymbol.trim().toUpperCase();
@@ -1067,11 +1107,12 @@ const Dashboard = () => {
                                 <h3>Remove User from Competition</h3>
                                 <input
                                     type="text"
-                                    placeholder="Target Username"
-                                    value={removeCompUserUsername}
-                                    onChange={(e) => setRemoveCompUserUsername(e.target.value)}
-                                    disabled={isLoading}
+                                    placeholder="Stock Symbol"
+                                    value={stockSymbol}
+                                    onChange={(e) => setStockSymbol(e.target.value.toUpperCase())}
+                                    autoComplete="off"
                                 />
+
                                 <input
                                     type="text"
                                     placeholder="Competition Code"
