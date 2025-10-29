@@ -1133,23 +1133,25 @@ const Dashboard = () => {
                                 <h3>Remove User from Competition</h3>
                                 <input
                                     type="text"
-                                    placeholder="Stock Symbol"
-                                    value={stockSymbol}
-                                    onChange={(e) => setStockSymbol(e.target.value.toUpperCase())}
+                                    placeholder="Target Username"
+                                    value={removeCompUserUsername}
+                                    onChange={(e) => setRemoveCompUserUsername(e.target.value)}
+                                    disabled={isLoading}
                                     autoComplete="off"
                                 />
-
                                 <input
                                     type="text"
                                     placeholder="Competition Code"
                                     value={removeCompCode}
                                     onChange={(e) => setRemoveCompCode(e.target.value)}
                                     disabled={isLoading}
+                                    autoComplete="off"
                                 />
                                 <button onClick={handleRemoveUserFromCompetition} disabled={isLoading}>
                                     Remove
                                 </button>
                             </div>
+
 
                             <div className="section">
                                 <h3>Remove User from Team</h3>
