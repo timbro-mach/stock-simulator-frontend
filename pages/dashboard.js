@@ -274,26 +274,39 @@ const Dashboard = () => {
     const fetchFeaturedCompetitions = async () => {
         setIsLoading(true);
         try {
-            const url = isAdmin ? `${BASE_URL}/admin/competitions?admin_username=${username}` : `${BASE_URL}/featured_competitions`;
+            const url = isAdmin
+                ? `${BASE_URL}/admin/competitions?admin_username=${username}`
+                : `${BASE_URL}/featured_competitions`;
+
             const response = await axios.get(url);
+            const comps = response.data || [];
             const currentDate = new Date();
+
+            const isActive = (comp) => {
+                if (!comp.end_date || comp.end_date === "" || comp.end_date === null) return true;
+                const endDate = new Date(comp.end_date);
+                return !isNaN(endDate.getTime()) && endDate >= currentDate;
+            };
+
             if (isAdmin) {
-                setAllCompetitions(response.data || []);
-                setFeaturedCompetitions(response.data.filter(comp => comp.featured && (new Date(comp.end_date) >= currentDate || comp.end_date === null)).slice(0, 10));
+                setAllCompetitions(comps);
+                setFeaturedCompetitions(
+                    comps.filter((comp) => comp.featured).slice(0, 10) // ✅ show all featured comps
+                );
             } else {
-                const validComps = response.data
-                    .filter(comp => new Date(comp.end_date) >= currentDate || comp.end_date === null)
-                    .slice(0, 10);
-                setFeaturedCompetitions(validComps || []);
+                setFeaturedCompetitions(
+                    comps.filter((comp) => isActive(comp)).slice(0, 10) // ✅ show only active featured comps
+                );
             }
         } catch (error) {
-            console.error('Error fetching competitions:', error);
+            console.error("Error fetching competitions:", error);
             setFeaturedCompetitions([]);
             if (isAdmin) setAllCompetitions([]);
         } finally {
             setIsLoading(false);
         }
     };
+
 
     // =========================================
     // Effects
