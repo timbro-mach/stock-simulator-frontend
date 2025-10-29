@@ -804,13 +804,13 @@ const Dashboard = () => {
                 <p className="note">Cash: ${format(cash_balance)}</p>
                 <p className="note">Total Value: <strong>${format(total_value)}</strong></p>
                 <p className="note">
-                    P&L: <span style={{ color: pnl >= 0 ? 'green' : 'red' }}>${format(pnl)}</span>
+                    Daily P&L: <span style={{ color: pnl >= 0 ? 'green' : 'red' }}>${format(pnl)}</span>
                 </p>
                 <p className="note">
-                    Daily P&L: <span style={{ color: daily_pnl >= 0 ? 'green' : 'red' }}>${format(daily_pnl)}</span>
+                    Total P&L: <span style={{ color: daily_pnl >= 0 ? 'green' : 'red' }}>${format(daily_pnl)}</span>
                 </p>
                 <p className="note">
-                    Return: <span style={{ color: return_pct >= 0 ? 'green' : 'red' }}>{pct(return_pct)}</span>
+                    Total Return: <span style={{ color: return_pct >= 0 ? 'green' : 'red' }}>{pct(return_pct)}</span>
                 </p>
                 {isGlobal && (
                     <button
