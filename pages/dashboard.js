@@ -95,7 +95,7 @@ const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQu
                         type="text"
                         placeholder="Stock Symbol"
                         value={stockSymbol}
-                        oonChange={(e) => setStockSymbol(e.target.value.toUpperCase())}
+                        onChange={(e) => setStockSymbol(e.target.value.toUpperCase())}
                         autoComplete="off"
                     />
                     <button type="submit">🔍 Search</button>
