@@ -205,8 +205,8 @@ const Dashboard = () => {
     // =========================================
     //const BASE_URL = 'https://stock-simulator-backend.onrender.com';
 
-    // const BASE_URL = "http://127.0.0.1:10000";  // ← local testing
-    const BASE_URL = "http://127.0.0.1:10000";
+    const BASE_URL = "http://127.0.0.1:10000";  // ← local testing
+    //const BASE_URL = "http://127.0.0.1:10000";
 
     // =========================================
     // Helpers
