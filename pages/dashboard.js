@@ -203,7 +203,10 @@ const Dashboard = () => {
     // =========================================
     // API base
     // =========================================
-    const BASE_URL = 'https://stock-simulator-backend.onrender.com';
+    //const BASE_URL = 'https://stock-simulator-backend.onrender.com';
+
+    // const BASE_URL = "http://127.0.0.1:10000";  // ← local testing
+    const BASE_URL = "http://127.0.0.1:10000";
 
     // =========================================
     // Helpers
@@ -830,10 +833,10 @@ const Dashboard = () => {
                 <p className="note">Cash: ${format(cash_balance)}</p>
                 <p className="note">Total Value: <strong>${format(total_value)}</strong></p>
                 <p className="note">
-                    Daily P&L: <span style={{ color: pnl >= 0 ? 'green' : 'red' }}>${format(pnl)}</span>
+                    Daily P&L: <span style={{ color: daily_pnl >= 0 ? 'green' : 'red' }}>${format(daily_pnl)}</span>
                 </p>
                 <p className="note">
-                    Total P&L: <span style={{ color: daily_pnl >= 0 ? 'green' : 'red' }}>${format(daily_pnl)}</span>
+                    Total P&L: <span style={{ color: pnl >= 0 ? 'green' : 'red' }}>${format(pnl)}</span>
                 </p>
                 <p className="note">
                     Total Return: <span style={{ color: return_pct >= 0 ? 'green' : 'red' }}>{pct(return_pct)}</span>
