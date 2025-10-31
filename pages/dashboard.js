@@ -841,8 +841,9 @@ const Dashboard = () => {
         const {
             cash_balance = 0,
             total_value = 0,
-            pnl = 0,
-            daily_pnl = 0,
+            pnl = 0,             // total P&L (realized + unrealized)
+
+            realized_pnl = 0,    // realized only
             return_pct = 0,
             name = '',
             code = ''
@@ -860,15 +861,27 @@ const Dashboard = () => {
                 <h3>{isGlobal ? 'Global Account' : name + (code ? ` (${code})` : '')}</h3>
                 <p className="note">Cash: ${format(cash_balance)}</p>
                 <p className="note">Total Value: <strong>${format(total_value)}</strong></p>
+
                 <p className="note">
-                    Daily P&L: <span style={{ color: pnl >= 0 ? 'green' : 'red' }}>${format(pnl)}</span>
+                    Realized P&L: <span style={{ color: realized_pnl >= 0 ? 'green' : 'red' }}>
+                        ${format(realized_pnl)}
+                    </span>
                 </p>
                 <p className="note">
-                    Total P&L: <span style={{ color: daily_pnl >= 0 ? 'green' : 'red' }}>${format(daily_pnl)}</span>
+                    Total P&L:{" "}
+                    <span style={{ color: pnl >= 0 ? "green" : "red" }}>
+                        ${format(pnl)}
+                    </span>
+                </p>
+                <p className="note" style={{ fontSize: 12, color: "#6b7280", marginTop: -6 }}>
+                    (Includes realized + unrealized gains)
                 </p>
                 <p className="note">
-                    Total Return: <span style={{ color: return_pct >= 0 ? 'green' : 'red' }}>{pct(return_pct)}</span>
+                    Total Return: <span style={{ color: return_pct >= 0 ? 'green' : 'red' }}>
+                        {pct(return_pct)}
+                    </span>
                 </p>
+
                 {isGlobal && (
                     <button
                         onClick={onReset}
@@ -889,6 +902,7 @@ const Dashboard = () => {
         );
     });
     AccountSummaryBox.displayName = 'AccountSummaryBox';
+
 
     // =========================================
     // Render helpers
