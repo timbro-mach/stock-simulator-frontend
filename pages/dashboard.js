@@ -138,6 +138,8 @@ const Dashboard = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [isLoading, setIsLoading] = useState(false); // NEW: Loading state
+    const [removeUserUsername, setRemoveUserUsername] = useState('');
+
 
     // Toggle dashboard vs trading workspace
     const [showTrading, setShowTrading] = useState(false);
@@ -390,6 +392,35 @@ const Dashboard = () => {
             setIsLoading(false);
         }
     };
+
+    const handleDeleteUser = async () => {
+        if (!removeUserUsername) {
+            setAdminMessage('Please enter a username to delete.');
+            return;
+        }
+
+        if (!window.confirm(`Are you sure you want to delete user ${removeUserUsername}? This cannot be undone.`)) return;
+
+        setIsLoading(true);
+        try {
+            const payload = {
+                username, // this is the admin's username
+                target_username: removeUserUsername,
+            };
+            const res = await axios.post(`${BASE_URL}/admin/delete_user`, payload);
+            setAdminMessage(res.data.message);
+            fetchUserData();
+            fetchFeaturedCompetitions();
+            setRemoveUserUsername('');
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            setAdminMessage(error.response?.data?.message || 'Failed to delete user.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+
 
     const handleLogout = () => {
         localStorage.removeItem('username');
@@ -1175,6 +1206,22 @@ const Dashboard = () => {
                             </div>
 
                             <div className="section">
+                                <h3>Delete User</h3>
+                                <input
+                                    type="text"
+                                    placeholder="Target Username"
+                                    value={removeUserUsername}
+                                    onChange={(e) => setRemoveUserUsername(e.target.value)}
+                                    disabled={isLoading}
+                                />
+                                <button onClick={handleDeleteUser} disabled={isLoading}>
+                                    Delete User
+                                </button>
+                            </div>
+
+
+
+                            <div className="section">
                                 <h3>Manage Competitions</h3>
                                 {allCompetitions.length > 0 ? (
                                     allCompetitions.map((comp) => (
@@ -1205,6 +1252,9 @@ const Dashboard = () => {
                             {adminMessage && <p className="note">{adminMessage}</p>}
                         </div>
                     )}
+
+
+
 
 
                     {/* Featured Competitions (Dashboard mode only) */}
