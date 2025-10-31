@@ -259,7 +259,6 @@ const Dashboard = () => {
             return;
         }
 
-        // 🔒 Require access code if restricted
         if (modalCompetition && modalCompetition.is_open === false && !enteredAccessCode) {
             alert("Please enter the access code to join this restricted competition.");
             return;
@@ -270,11 +269,13 @@ const Dashboard = () => {
             const res = await axios.post(`${BASE_URL}/competition/join`, {
                 username,
                 competition_code: compCode,
-                access_code: enteredAccessCode || null, // ✅ send it
+                access_code: enteredAccessCode || null,
             });
             alert(res.data.message);
             closeModal();
-            fetchUserData();
+
+            // ✅ Wait for account refresh before continuing
+            await fetchUserData();
         } catch (error) {
             console.error("Error joining competition:", error);
             alert("Error joining competition.");
@@ -283,6 +284,7 @@ const Dashboard = () => {
             setEnteredCode("");
         }
     };
+
 
 
 
@@ -781,20 +783,27 @@ const Dashboard = () => {
     };
 
     const joinCompetition = async () => {
-        if (!joinCompetitionCode) return setCompetitionMessage('Please enter a competition code.');
+        if (!joinCompetitionCode)
+            return setCompetitionMessage("Please enter a competition code.");
         setIsLoading(true);
         try {
-            const res = await axios.post(`${BASE_URL}/competition/join`, { username, competition_code: joinCompetitionCode });
+            const res = await axios.post(`${BASE_URL}/competition/join`, {
+                username,
+                competition_code: joinCompetitionCode,
+            });
             setCompetitionMessage(res.data.message);
-            setJoinCompetitionCode('');
-            fetchUserData();
+            setJoinCompetitionCode("");
+
+            // ✅ Refresh user data *after* join completes
+            await fetchUserData();
         } catch (error) {
-            console.error('Error joining competition:', error);
-            setCompetitionMessage('Error joining competition.');
+            console.error("Error joining competition:", error);
+            setCompetitionMessage("Error joining competition.");
         } finally {
             setIsLoading(false);
         }
     };
+
 
     const joinCompetitionAsTeam = async () => {
         if (!joinTeamCompetitionTeamCode || !joinTeamCompetitionCode) {
