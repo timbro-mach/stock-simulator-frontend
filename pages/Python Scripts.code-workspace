@@ -8,7 +8,13 @@
 		},
 		{
 			"path": "../../../Users/timab/OneDrive/Desktop/stock-simulator-backend"
+		},
+		{
+			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "Python Scripts",
+		"liveServer.settings.port": 5501
+	}
 }
