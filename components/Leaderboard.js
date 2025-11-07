@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 
 export default function Leaderboard({ competitionCode, variant = 'competition' }) {
-  // variant can be "competition" or "team"
   const [leaderboard, setLeaderboard] = useState([]);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true); // ✅ NEW loading state
+  const [loading, setLoading] = useState(true);
+  const [displayLimit, setDisplayLimit] = useState(10); // ✅ New state for pagination
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        setLoading(true); // ✅ Start loading
+        setLoading(true);
         const backendUrl = 'https://stock-simulator-backend.onrender.com';
         if (!competitionCode) {
           setError('Please select a competition account.');
@@ -18,13 +18,11 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
           return;
         }
 
-        // Use different endpoints based on the variant.
         const url =
           variant === 'team'
             ? `${backendUrl}/competition/${competitionCode}/team_leaderboard`
             : `${backendUrl}/competition/${competitionCode}/leaderboard`;
 
-        console.log('Fetching leaderboard from:', url);
         const res = await axios.get(url);
         setLeaderboard(res.data || []);
         setError(null);
@@ -32,16 +30,70 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
         console.error('Failed to load leaderboard:', error);
         setError('Failed to load leaderboard. Please try again.');
       } finally {
-        setLoading(false); // ✅ End loading
+        setLoading(false);
       }
     };
 
     fetchLeaderboard();
   }, [competitionCode, variant]);
 
+  // ✅ Handle visible subset based on button choice
+  const visibleLeaderboard =
+    displayLimit === 'all' ? leaderboard : leaderboard.slice(0, displayLimit);
+
   return (
     <div>
       <h2>{variant === 'team' ? 'Team Leaderboard' : 'Competition Leaderboard'}</h2>
+
+      {/* Pagination buttons */}
+      {!loading && leaderboard.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <button
+            onClick={() => setDisplayLimit(10)}
+            style={{
+              marginRight: 6,
+              background: displayLimit === 10 ? '#2563eb' : '#f3f4f6',
+              color: displayLimit === 10 ? '#fff' : '#111827',
+              border: 'none',
+              padding: '4px 10px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+          >
+            Top 10
+          </button>
+          <button
+            onClick={() => setDisplayLimit(25)}
+            style={{
+              marginRight: 6,
+              background: displayLimit === 25 ? '#2563eb' : '#f3f4f6',
+              color: displayLimit === 25 ? '#fff' : '#111827',
+              border: 'none',
+              padding: '4px 10px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+          >
+            Top 25
+          </button>
+          <button
+            onClick={() => setDisplayLimit('all')}
+            style={{
+              background: displayLimit === 'all' ? '#2563eb' : '#f3f4f6',
+              color: displayLimit === 'all' ? '#fff' : '#111827',
+              border: 'none',
+              padding: '4px 10px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+          >
+            Show All
+          </button>
+        </div>
+      )}
 
       {/* ✅ Loading animation */}
       {loading && (
@@ -61,9 +113,9 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
 
       {!loading && error && <p style={{ color: 'red' }}>{error}</p>}
 
-      {!loading && !error && leaderboard.length > 0 && (
+      {!loading && !error && visibleLeaderboard.length > 0 && (
         <ul>
-          {leaderboard.map((entry, index) => (
+          {visibleLeaderboard.map((entry, index) => (
             <li key={index}>
               {index + 1}. {entry.name} - ${Number(entry.total_value || 0).toFixed(2)}
             </li>
@@ -71,7 +123,7 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
         </ul>
       )}
 
-      {!loading && !error && leaderboard.length === 0 && (
+      {!loading && !error && visibleLeaderboard.length === 0 && (
         <p>No leaderboard data available.</p>
       )}
     </div>
