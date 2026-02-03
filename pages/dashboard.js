@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import axios from 'axios';
+import Link from 'next/link';
+import { getApiBaseUrl } from '../lib/api';
 import Leaderboard from '../components/Leaderboard';
 import { Line } from 'react-chartjs-2';
 import {
@@ -205,7 +207,7 @@ const Dashboard = () => {
     // =========================================
     // API base
     // =========================================
-    const BASE_URL = 'https://stock-simulator-backend.onrender.com';
+    const BASE_URL = getApiBaseUrl();
 
     // =========================================
     // Helpers
@@ -1639,6 +1641,9 @@ const Dashboard = () => {
                                 >
                                     Create Account
                                 </a>
+                            </p>
+                            <p className="note">
+                                <Link href="/forgot-password">Forgot password?</Link>
                             </p>
                         </form>
                     )}
