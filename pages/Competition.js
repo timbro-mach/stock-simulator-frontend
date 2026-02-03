@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { getApiBaseUrl } from '../lib/api';
 
 const Competition = () => {
   const [competitionName, setCompetitionName] = useState('');
@@ -13,7 +14,7 @@ const Competition = () => {
   const [endDate, setEndDate] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
 
-  const BASE_URL = 'https://stock-simulator-backend.onrender.com';
+  const BASE_URL = getApiBaseUrl();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
