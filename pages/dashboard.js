@@ -159,7 +159,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
 ChartPanel.displayName = 'ChartPanel';
 
 // Memoized SharedInputs component
-const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQuantity, setTradeQuantity, handleSearch, stockPrice, chartSymbol, tradeMessage }) => {
+const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQuantity, setTradeQuantity, handleSearch, stockPrice, chartSymbol, tradeMessage, orderType, setOrderType, limitPrice, setLimitPrice }) => {
     console.log('SharedInputs rendered'); // Debug to track re-renders
 
     return (
@@ -186,17 +186,36 @@ const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQu
                 )}
             </div>
 
-            <div className="section" style={{ display: 'flex', gap: 8 }}>
-                <input
-                    type="number"
-                    placeholder="Quantity"
-                    value={tradeQuantity || ''}
-                    onChange={(e) => setTradeQuantity(e.target.value === '' ? 0 : Number(e.target.value))}
-                    min="0"
-                    autoComplete="off"
-                />
-                <button onClick={onBuy}>Buy</button>
-                <button onClick={onSell}>Sell</button>
+            <div className="section" style={{ display: 'grid', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <input
+                        type="number"
+                        placeholder="Quantity"
+                        value={tradeQuantity || ''}
+                        onChange={(e) => setTradeQuantity(e.target.value === '' ? 0 : Number(e.target.value))}
+                        min="0"
+                        autoComplete="off"
+                    />
+                    <select value={orderType} onChange={(e) => setOrderType(e.target.value)}>
+                        <option value="market">Market</option>
+                        <option value="limit">Limit</option>
+                    </select>
+                    {orderType === 'limit' && (
+                        <input
+                            type="number"
+                            placeholder="Limit Price"
+                            value={limitPrice}
+                            onChange={(e) => setLimitPrice(e.target.value)}
+                            min="0"
+                            step="0.01"
+                            autoComplete="off"
+                        />
+                    )}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button onClick={onBuy}>Buy</button>
+                    <button onClick={onSell}>Sell</button>
+                </div>
             </div>
 
             {tradeMessage && <p className="note">{tradeMessage}</p>}
@@ -244,6 +263,9 @@ const Dashboard = () => {
     const [stockPrice, setStockPrice] = useState(null);
     const [tradeQuantity, setTradeQuantity] = useState(0);
     const [tradeMessage, setTradeMessage] = useState('');
+    const [orderType, setOrderType] = useState('market');
+    const [limitPrice, setLimitPrice] = useState('');
+    const [pendingLimitOrders, setPendingLimitOrders] = useState([]);
     const [chartData, setChartData] = useState(null);
     const [chartMetrics, setChartMetrics] = useState(null);
     const [chartRange, setChartRange] = useState('1M');
@@ -524,6 +546,9 @@ const Dashboard = () => {
         setStockPrice(null);
         setTradeQuantity(0);
         setTradeMessage('');
+        setOrderType('market');
+        setLimitPrice('');
+        setPendingLimitOrders([]);
         setChartData(null);
         setFeaturedCompetitions([]);
         setAllCompetitions([]);
@@ -749,46 +774,106 @@ const Dashboard = () => {
     };
 
 
+    const buildTradeRequest = useCallback((action, accountContext, symbol, quantity) => {
+        let endpoint = '';
+        const payload = { username, symbol, quantity };
+
+        if (accountContext.type === 'global') {
+            endpoint = `/${action}`;
+        } else if (accountContext.type === 'competition') {
+            endpoint = `/competition/${action}`;
+            payload.competition_code = accountContext.id;
+        } else if (accountContext.type === 'team') {
+            endpoint = `/team/${action}`;
+            payload.team_id = accountContext.team_id;
+        } else if (accountContext.type === 'team_competition') {
+            endpoint = `/competition/team/${action}`;
+            payload.competition_code = accountContext.competition_code;
+            payload.team_id = accountContext.team_id;
+        }
+
+        return { endpoint, payload };
+    }, [username]);
+
     const executeTrade = async (action) => {
-        if (!stockSymbol || tradeQuantity <= 0) {
-            setTradeMessage("Enter a valid symbol and quantity.");
+        const cleanSymbol = stockSymbol.trim().toUpperCase();
+        const normalizedLimit = Number(limitPrice);
+
+        if (!cleanSymbol || tradeQuantity <= 0) {
+            setTradeMessage('Enter a valid symbol and quantity.');
+            return;
+        }
+
+        if (orderType === 'limit') {
+            if (!normalizedLimit || normalizedLimit <= 0) {
+                setTradeMessage('Enter a valid limit price.');
+                return;
+            }
+
+            const limitOrder = {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                action,
+                symbol: cleanSymbol,
+                quantity: tradeQuantity,
+                limitPrice: normalizedLimit,
+                accountContext: selectedAccount,
+                createdAt: new Date().toISOString(),
+            };
+            setPendingLimitOrders((prev) => [...prev, limitOrder]);
+            setTradeMessage(`Limit ${action} queued for ${cleanSymbol} at ${formatMoney(normalizedLimit)}.`);
+            setLimitPrice('');
             return;
         }
 
         if (!isTradingHours()) {
-            setTradeMessage("Market is closed. Trading hours are 6:30 AM – 1:00 PM PST (9:30 AM – 4:00 PM EST), Monday through Friday.");
+            setTradeMessage('Market is closed. Trading hours are 6:30 AM – 1:00 PM PST (9:30 AM – 4:00 PM EST), Monday through Friday.');
             return;
         }
 
-        setTradeMessage("Processing trade...");
+        setTradeMessage('Processing trade...');
 
         try {
-            let endpoint = "";
-            let payload = { username, symbol: stockSymbol, quantity: tradeQuantity };
-
-            if (selectedAccount.type === "global") {
-                endpoint = `/${action}`; // /buy or /sell
-            } else if (selectedAccount.type === "competition") {
-                endpoint = `/competition/${action}`;
-                payload.competition_code = selectedAccount.id; // e.g. "a37b9c21"
-            } else if (selectedAccount.type === "team") {
-                endpoint = `/team/${action}`;
-                payload.team_id = selectedAccount.team_id; // numeric ID
-            } else if (selectedAccount.type === "team_competition") {
-                endpoint = `/competition/team/${action}`;
-                payload.competition_code = selectedAccount.competition_code;
-                payload.team_id = selectedAccount.team_id;
-            }
-
-            console.log("🔹 Sending trade:", endpoint, payload);
+            const { endpoint, payload } = buildTradeRequest(action, selectedAccount, cleanSymbol, tradeQuantity);
+            console.log('🔹 Sending trade:', endpoint, payload);
             const res = await axios.post(`${BASE_URL}${endpoint}`, payload);
-            setTradeMessage(res.data.message || "Trade successful.");
-            fetchUserData(); // refresh account balances & holdings
+            setTradeMessage(res.data.message || 'Trade successful.');
+            fetchUserData();
         } catch (err) {
-            console.error("Trade error:", err.response?.data || err.message);
-            setTradeMessage(err.response?.data?.message || "Trade failed.");
+            console.error('Trade error:', err.response?.data || err.message);
+            setTradeMessage(err.response?.data?.message || 'Trade failed.');
         }
     };
+
+    useEffect(() => {
+        if (!pendingLimitOrders.length) return;
+
+        const interval = setInterval(async () => {
+            if (!isTradingHours()) return;
+
+            for (const order of pendingLimitOrders) {
+                try {
+                    const priceResponse = await axios.get(`${BASE_URL}/stock/${order.symbol}`);
+                    const currentPrice = Number(priceResponse.data?.price || 0);
+                    const canExecute = order.action === 'buy'
+                        ? currentPrice <= order.limitPrice
+                        : currentPrice >= order.limitPrice;
+
+                    if (!canExecute || !currentPrice) continue;
+
+                    const { endpoint, payload } = buildTradeRequest(order.action, order.accountContext, order.symbol, order.quantity);
+                    const tradeResponse = await axios.post(`${BASE_URL}${endpoint}`, payload);
+
+                    setPendingLimitOrders((prev) => prev.filter((pending) => pending.id !== order.id));
+                    setTradeMessage(tradeResponse.data.message || `Limit ${order.action} filled for ${order.symbol} at ${formatMoney(currentPrice)}.`);
+                    fetchUserData();
+                } catch (error) {
+                    console.error('Limit order processing error:', error.response?.data || error.message);
+                }
+            }
+        }, 15000);
+
+        return () => clearInterval(interval);
+    }, [BASE_URL, buildTradeRequest, fetchUserData, pendingLimitOrders]);
 
 
     // =========================================
@@ -1181,10 +1266,10 @@ const Dashboard = () => {
                 </h3>
 
                 <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 280 }}>
+                    <div style={{ flex: 1, minWidth: 340 }}>
                         <SharedInputs
-                            onBuy={() => executeTrade("buy")}
-                            onSell={() => executeTrade("sell")}
+                            onBuy={() => executeTrade('buy')}
+                            onSell={() => executeTrade('sell')}
                             stockSymbol={stockSymbol}
                             setStockSymbol={setStockSymbol}
                             tradeQuantity={tradeQuantity}
@@ -1193,8 +1278,13 @@ const Dashboard = () => {
                             stockPrice={stockPrice}
                             chartSymbol={chartSymbol}
                             tradeMessage={tradeMessage}
+                            orderType={orderType}
+                            setOrderType={setOrderType}
+                            limitPrice={limitPrice}
+                            setLimitPrice={setLimitPrice}
                         />
                     </div>
+
 
                     <ChartPanel
                         chartData={chartData}
@@ -1204,6 +1294,25 @@ const Dashboard = () => {
                         onRangeChange={handleRangeChange}
                     />
                 </div>
+
+                {pendingLimitOrders.length > 0 && (
+                    <div className="section" style={{ marginTop: 12 }}>
+                        <h4 style={{ margin: '0 0 8px' }}>Pending Limit Orders</h4>
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                            {pendingLimitOrders.map((order) => (
+                                <li key={order.id} style={{ marginBottom: 6 }}>
+                                    {order.action.toUpperCase()} {order.quantity} {order.symbol} @ {formatMoney(order.limitPrice)}
+                                    <button
+                                        onClick={() => setPendingLimitOrders((prev) => prev.filter((pending) => pending.id !== order.id))}
+                                        style={{ marginLeft: 8 }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
             </div>
         );
     };
