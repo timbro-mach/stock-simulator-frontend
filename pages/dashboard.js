@@ -21,6 +21,31 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 const formatSignedMoney = (value) => `${Number(value) >= 0 ? '+' : '-'}$${Math.abs(Number(value || 0)).toFixed(2)}`;
 
+const getPointTradingDay = (point) => {
+    const raw = String(point?.date || '').trim();
+    if (!raw) return '';
+    if (raw.includes('T')) return raw.split('T')[0];
+    if (raw.includes(' ')) return raw.split(' ')[0];
+    return raw;
+};
+
+const derivePreviousCloseFromPoints = (points, fallbackPrice) => {
+    if (!Array.isArray(points) || points.length === 0) return fallbackPrice;
+
+    const latestDay = getPointTradingDay(points[points.length - 1]);
+    for (let i = points.length - 2; i >= 0; i -= 1) {
+        const candidate = Number(points[i]?.close);
+        if (!Number.isFinite(candidate)) continue;
+        const candidateDay = getPointTradingDay(points[i]);
+        if (!latestDay || candidateDay !== latestDay) {
+            return candidate;
+        }
+    }
+
+    const secondLast = Number(points[points.length - 2]?.close);
+    return Number.isFinite(secondLast) ? secondLast : fallbackPrice;
+};
+
 const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) => {
     const labels = points.map((point) => point.date);
     const dataPoints = points.map((point) => Number(point.close));
@@ -28,8 +53,7 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
     const previousPrice = dataPoints[dataPoints.length - 2] ?? latestPrice;
     const firstPrice = dataPoints[0] ?? latestPrice;
 
-    const dailyPoints = dailyReferencePoints.map((point) => Number(point.close));
-    const dailyPreviousClose = dailyPoints[dailyPoints.length - 2] ?? previousPrice;
+    const dailyPreviousClose = derivePreviousCloseFromPoints(dailyReferencePoints, previousPrice);
     const rangeChangeValue = latestPrice - firstPrice;
     const rangeChangePercent = firstPrice ? (rangeChangeValue / firstPrice) * 100 : 0;
     const dayBaseline = range === '1D' ? firstPrice : dailyPreviousClose;
@@ -359,6 +383,10 @@ const Dashboard = () => {
     // API base
     // =========================================
     const BASE_URL = getApiBaseUrl();
+    const getPendingOrdersStorageKey = useCallback(
+        (user) => `pending_limit_orders:${String(user || '').trim().toLowerCase()}`,
+        [],
+    );
 
     // =========================================
     // Helpers
@@ -497,6 +525,36 @@ const Dashboard = () => {
             fetchFeaturedCompetitions();
         }
     }, [isLoggedIn, username, fetchUserData]);
+
+    useEffect(() => {
+        if (!isLoggedIn || !username) {
+            setPendingLimitOrders([]);
+            return;
+        }
+
+        const savedOrders = localStorage.getItem(getPendingOrdersStorageKey(username));
+        if (!savedOrders) {
+            setPendingLimitOrders([]);
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(savedOrders);
+            if (Array.isArray(parsed)) {
+                setPendingLimitOrders(parsed);
+            } else {
+                setPendingLimitOrders([]);
+            }
+        } catch (error) {
+            console.error('Failed to parse pending limit orders from storage:', error);
+            setPendingLimitOrders([]);
+        }
+    }, [getPendingOrdersStorageKey, isLoggedIn, username]);
+
+    useEffect(() => {
+        if (!isLoggedIn || !username) return;
+        localStorage.setItem(getPendingOrdersStorageKey(username), JSON.stringify(pendingLimitOrders));
+    }, [getPendingOrdersStorageKey, isLoggedIn, pendingLimitOrders, username]);
 
     useEffect(() => {
         const cleanTyped = stockSymbol.trim().toUpperCase();
@@ -909,7 +967,7 @@ const Dashboard = () => {
     };
 
     useEffect(() => {
-        if (!pendingLimitOrders.length) return;
+        if (!isLoggedIn || !username || !pendingLimitOrders.length) return;
 
         const interval = setInterval(async () => {
             if (!isTradingHours()) return;
@@ -937,7 +995,7 @@ const Dashboard = () => {
         }, 15000);
 
         return () => clearInterval(interval);
-    }, [BASE_URL, buildTradeRequest, fetchUserData, pendingLimitOrders]);
+    }, [BASE_URL, buildTradeRequest, fetchUserData, isLoggedIn, pendingLimitOrders, username]);
 
 
     // =========================================
