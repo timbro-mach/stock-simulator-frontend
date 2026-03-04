@@ -1262,7 +1262,7 @@ const Dashboard = () => {
                 </h3>
 
                 <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 280 }}>
+                    <div style={{ flex: 1, minWidth: 340 }}>
                         <SharedInputs
                             onBuy={() => executeTrade('buy')}
                             onSell={() => executeTrade('sell')}
