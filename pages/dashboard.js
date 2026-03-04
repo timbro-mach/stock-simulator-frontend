@@ -21,21 +21,6 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 const formatSignedMoney = (value) => `${Number(value) >= 0 ? '+' : '-'}$${Math.abs(Number(value || 0)).toFixed(2)}`;
 
-const getPreviousCloseFromReference = (referencePoints = [], latestPrice, fallbackPrice) => {
-    if (!referencePoints.length) return fallbackPrice;
-
-    const closes = referencePoints.map((point) => Number(point.close)).filter((value) => !Number.isNaN(value));
-    if (!closes.length) return fallbackPrice;
-
-    for (let i = closes.length - 1; i >= 0; i -= 1) {
-        if (closes[i] !== latestPrice) {
-            return closes[i];
-        }
-    }
-
-    return closes.length > 1 ? closes[closes.length - 2] : fallbackPrice;
-};
-
 const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) => {
     const labels = points.map((point) => point.date);
     const dataPoints = points.map((point) => Number(point.close));
@@ -43,7 +28,8 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
     const previousPrice = dataPoints[dataPoints.length - 2] ?? latestPrice;
     const firstPrice = dataPoints[0] ?? latestPrice;
 
-    const dailyPreviousClose = getPreviousCloseFromReference(dailyReferencePoints, latestPrice, previousPrice);
+    const dailyPoints = dailyReferencePoints.map((point) => Number(point.close));
+    const dailyPreviousClose = dailyPoints[dailyPoints.length - 2] ?? previousPrice;
     const dayChangeValue = latestPrice - dailyPreviousClose;
     const dayChangePercent = dailyPreviousClose ? (dayChangeValue / dailyPreviousClose) * 100 : 0;
     const rangeChangeValue = latestPrice - firstPrice;
@@ -673,13 +659,13 @@ const Dashboard = () => {
 
             const [chartResponse, dailyResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`),
-                range === '1M'
+                range === '1W'
                     ? Promise.resolve({ data: [] })
-                    : axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=1M`),
+                    : axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=1W`),
             ]);
 
             if (chartResponse.data && chartResponse.data.length > 0) {
-                const dailyReferencePoints = range === '1M' ? chartResponse.data : dailyResponse.data;
+                const dailyReferencePoints = range === '1W' ? chartResponse.data : dailyResponse.data;
                 const { chartData: nextChartData, metrics } = buildChartState({
                     points: chartResponse.data,
                     symbol: symbolToUse,
@@ -726,13 +712,13 @@ const Dashboard = () => {
 
             const [chartResponse, dailyResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`),
-                chartRange === '1M'
+                chartRange === '1W'
                     ? Promise.resolve({ data: [] })
-                    : axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=1M`),
+                    : axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=1W`),
             ]);
 
             if (chartResponse.data && chartResponse.data.length > 0) {
-                const dailyReferencePoints = chartRange === '1M' ? chartResponse.data : dailyResponse.data;
+                const dailyReferencePoints = chartRange === '1W' ? chartResponse.data : dailyResponse.data;
                 const { chartData: nextChartData, metrics } = buildChartState({
                     points: chartResponse.data,
                     symbol: symbolInput,
