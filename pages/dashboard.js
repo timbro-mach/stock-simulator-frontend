@@ -30,10 +30,11 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
 
     const dailyPoints = dailyReferencePoints.map((point) => Number(point.close));
     const dailyPreviousClose = dailyPoints[dailyPoints.length - 2] ?? previousPrice;
-    const dayChangeValue = latestPrice - dailyPreviousClose;
-    const dayChangePercent = dailyPreviousClose ? (dayChangeValue / dailyPreviousClose) * 100 : 0;
     const rangeChangeValue = latestPrice - firstPrice;
     const rangeChangePercent = firstPrice ? (rangeChangeValue / firstPrice) * 100 : 0;
+    const dayBaseline = range === '1D' ? firstPrice : dailyPreviousClose;
+    const dayChangeValue = latestPrice - dayBaseline;
+    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
     const isPositive = dayChangeValue >= 0;
 
     return {
@@ -65,6 +66,54 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
             rangeChangePercent,
             previousClose: dailyPreviousClose,
             range,
+        },
+    };
+};
+
+const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
+    if (!Number.isFinite(liveQuotePrice) || !chartState?.chartData?.datasets?.[0]?.data?.length) {
+        return chartState;
+    }
+
+    const existingDataset = chartState.chartData.datasets[0];
+    const nextPoints = [...existingDataset.data];
+    nextPoints[nextPoints.length - 1] = liveQuotePrice;
+
+    const previousPoint = Number(nextPoints[nextPoints.length - 2] ?? liveQuotePrice);
+    const firstPoint = Number(nextPoints[0] ?? liveQuotePrice);
+    const previousClose = Number(chartState.metrics.previousClose ?? previousPoint);
+
+    const rangeChangeValue = liveQuotePrice - firstPoint;
+    const rangeChangePercent = firstPoint ? (rangeChangeValue / firstPoint) * 100 : 0;
+    const dayBaseline = chartState.metrics.range === '1D' ? firstPoint : previousClose;
+    const dayChangeValue = liveQuotePrice - dayBaseline;
+    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
+    const isPositive = dayChangeValue >= 0;
+
+    return {
+        chartData: {
+            ...chartState.chartData,
+            datasets: [
+                {
+                    ...existingDataset,
+                    data: nextPoints,
+                    borderColor: isPositive ? '#10b981' : '#ef4444',
+                    backgroundColor: (ctx) => {
+                        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 350);
+                        gradient.addColorStop(0, isPositive ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.32)');
+                        gradient.addColorStop(1, 'rgba(255,255,255,0.02)');
+                        return gradient;
+                    },
+                },
+            ],
+        },
+        metrics: {
+            ...chartState.metrics,
+            latestPrice: liveQuotePrice,
+            dayChangeValue,
+            dayChangePercent,
+            rangeChangeValue,
+            rangeChangePercent,
         },
     };
 };
@@ -676,11 +725,7 @@ const Dashboard = () => {
         try {
             console.log('Fetching data for:', symbolToUse);
             const response = await axios.get(`${BASE_URL}/stock/${symbolToUse}`);
-
-            if (response.data?.price) {
-                setStockPrice(response.data.price);
-                setTradeMessage(`Current price for ${symbolToUse}: $${response.data.price.toFixed(2)}`);
-            }
+            const liveQuotePrice = Number(response.data?.price);
 
             const [chartResponse, dailyResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`),
@@ -691,18 +736,29 @@ const Dashboard = () => {
 
             if (chartResponse.data && chartResponse.data.length > 0) {
                 const dailyReferencePoints = range === '1W' ? chartResponse.data : dailyResponse.data;
-                const { chartData: nextChartData, metrics } = buildChartState({
+                const nextChartState = buildChartState({
                     points: chartResponse.data,
                     symbol: symbolToUse,
                     range,
                     dailyReferencePoints,
                 });
-                setChartData(nextChartData);
-                setChartMetrics(metrics);
+                const syncedChartState = syncChartStateWithLiveQuote(nextChartState, liveQuotePrice);
+                const syncedPrice = Number(syncedChartState.metrics.latestPrice);
+                setChartData(syncedChartState.chartData);
+                setChartMetrics(syncedChartState.metrics);
+                if (Number.isFinite(syncedPrice)) {
+                    setStockPrice(syncedPrice);
+                    setTradeMessage(`Current price for ${symbolToUse}: $${syncedPrice.toFixed(2)}`);
+                }
             } else {
                 setChartData(null);
                 setChartMetrics(null);
-                setTradeMessage(`No chart data available for ${symbolToUse}`);
+                if (Number.isFinite(liveQuotePrice)) {
+                    setStockPrice(liveQuotePrice);
+                    setTradeMessage(`Current price for ${symbolToUse}: $${liveQuotePrice.toFixed(2)} (chart unavailable)`);
+                } else {
+                    setTradeMessage(`No chart data available for ${symbolToUse}`);
+                }
             }
         } catch (error) {
             console.error('Error fetching stock data:', error);
@@ -730,10 +786,7 @@ const Dashboard = () => {
 
         try {
             const res = await axios.get(`${BASE_URL}/stock/${symbolInput}`);
-            if (res.data?.price) {
-                setStockPrice(res.data.price);
-                setTradeMessage(`Current price for ${symbolInput}: $${res.data.price.toFixed(2)}`);
-            }
+            const liveQuotePrice = Number(res.data?.price);
 
             const [chartResponse, dailyResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`),
@@ -744,18 +797,29 @@ const Dashboard = () => {
 
             if (chartResponse.data && chartResponse.data.length > 0) {
                 const dailyReferencePoints = chartRange === '1W' ? chartResponse.data : dailyResponse.data;
-                const { chartData: nextChartData, metrics } = buildChartState({
+                const nextChartState = buildChartState({
                     points: chartResponse.data,
                     symbol: symbolInput,
                     range: chartRange,
                     dailyReferencePoints,
                 });
-                setChartData(nextChartData);
-                setChartMetrics(metrics);
+                const syncedChartState = syncChartStateWithLiveQuote(nextChartState, liveQuotePrice);
+                const syncedPrice = Number(syncedChartState.metrics.latestPrice);
+                setChartData(syncedChartState.chartData);
+                setChartMetrics(syncedChartState.metrics);
+                if (Number.isFinite(syncedPrice)) {
+                    setStockPrice(syncedPrice);
+                    setTradeMessage(`Current price for ${symbolInput}: $${syncedPrice.toFixed(2)}`);
+                }
             } else {
                 setChartData(null);
                 setChartMetrics(null);
-                setTradeMessage(`No chart data available for ${symbolInput}`);
+                if (Number.isFinite(liveQuotePrice)) {
+                    setStockPrice(liveQuotePrice);
+                    setTradeMessage(`Current price for ${symbolInput}: $${liveQuotePrice.toFixed(2)} (chart unavailable)`);
+                } else {
+                    setTradeMessage(`No chart data available for ${symbolInput}`);
+                }
             }
         } catch (error) {
             console.error('Error fetching stock data:', error);
