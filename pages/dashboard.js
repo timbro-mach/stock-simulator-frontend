@@ -676,11 +676,7 @@ const Dashboard = () => {
         try {
             console.log('Fetching data for:', symbolToUse);
             const response = await axios.get(`${BASE_URL}/stock/${symbolToUse}`);
-
-            if (response.data?.price) {
-                setStockPrice(response.data.price);
-                setTradeMessage(`Current price for ${symbolToUse}: $${response.data.price.toFixed(2)}`);
-            }
+            const liveQuotePrice = Number(response.data?.price);
 
             const [chartResponse, dailyResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`),
@@ -697,12 +693,22 @@ const Dashboard = () => {
                     range,
                     dailyReferencePoints,
                 });
+                const syncedPrice = Number.isFinite(metrics.latestPrice) ? metrics.latestPrice : liveQuotePrice;
                 setChartData(nextChartData);
                 setChartMetrics(metrics);
+                if (Number.isFinite(syncedPrice)) {
+                    setStockPrice(syncedPrice);
+                    setTradeMessage(`Current price for ${symbolToUse}: $${syncedPrice.toFixed(2)}`);
+                }
             } else {
                 setChartData(null);
                 setChartMetrics(null);
-                setTradeMessage(`No chart data available for ${symbolToUse}`);
+                if (Number.isFinite(liveQuotePrice)) {
+                    setStockPrice(liveQuotePrice);
+                    setTradeMessage(`Current price for ${symbolToUse}: $${liveQuotePrice.toFixed(2)} (chart unavailable)`);
+                } else {
+                    setTradeMessage(`No chart data available for ${symbolToUse}`);
+                }
             }
         } catch (error) {
             console.error('Error fetching stock data:', error);
@@ -730,10 +736,7 @@ const Dashboard = () => {
 
         try {
             const res = await axios.get(`${BASE_URL}/stock/${symbolInput}`);
-            if (res.data?.price) {
-                setStockPrice(res.data.price);
-                setTradeMessage(`Current price for ${symbolInput}: $${res.data.price.toFixed(2)}`);
-            }
+            const liveQuotePrice = Number(res.data?.price);
 
             const [chartResponse, dailyResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`),
@@ -750,12 +753,22 @@ const Dashboard = () => {
                     range: chartRange,
                     dailyReferencePoints,
                 });
+                const syncedPrice = Number.isFinite(metrics.latestPrice) ? metrics.latestPrice : liveQuotePrice;
                 setChartData(nextChartData);
                 setChartMetrics(metrics);
+                if (Number.isFinite(syncedPrice)) {
+                    setStockPrice(syncedPrice);
+                    setTradeMessage(`Current price for ${symbolInput}: $${syncedPrice.toFixed(2)}`);
+                }
             } else {
                 setChartData(null);
                 setChartMetrics(null);
-                setTradeMessage(`No chart data available for ${symbolInput}`);
+                if (Number.isFinite(liveQuotePrice)) {
+                    setStockPrice(liveQuotePrice);
+                    setTradeMessage(`Current price for ${symbolInput}: $${liveQuotePrice.toFixed(2)} (chart unavailable)`);
+                } else {
+                    setTradeMessage(`No chart data available for ${symbolInput}`);
+                }
             }
         } catch (error) {
             console.error('Error fetching stock data:', error);
