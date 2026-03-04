@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
 import { getApiBaseUrl } from '../lib/api';
+import { normalizeChartPoints, toTimestamp } from '../lib/chartData';
 import Leaderboard from '../components/Leaderboard';
 import { Line } from 'react-chartjs-2';
 import {
@@ -49,11 +50,6 @@ const RANGE_LOOKBACK_DAYS = {
     '1M': 30,
     '6M': 182,
     '1Y': 365,
-};
-
-const toTimestamp = (value) => {
-    const parsed = new Date(value).getTime();
-    return Number.isFinite(parsed) ? parsed : NaN;
 };
 
 const getRangeBaselinePrice = (points, range, fallbackPrice) => {
@@ -145,7 +141,7 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [], int
                         return gradient;
                     },
                     pointRadius: 0,
-                    tension: 0.24,
+                    tension: range === '1D' ? 0.08 : 0.24,
                 },
             ],
         },
@@ -166,6 +162,16 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [], int
 const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
     if (!Number.isFinite(liveQuotePrice) || !chartState?.chartData?.datasets?.[0]?.data?.length) {
         return chartState;
+    }
+
+    const chartRange = chartState.metrics?.range;
+    const labels = chartState.chartData?.labels || [];
+    const lastLabel = labels[labels.length - 1];
+    if (chartRange === '1D') {
+        const lastTs = toTimestamp(lastLabel);
+        if (!Number.isFinite(lastTs) || Date.now() - lastTs > 2 * 60 * 1000) {
+            return chartState;
+        }
     }
 
     const existingDataset = chartState.chartData.datasets[0];
@@ -860,29 +866,26 @@ const Dashboard = () => {
         setIsLoading(true);
         try {
             console.log('Fetching data for:', symbolToUse);
-            const response = await axios.get(`${BASE_URL}/stock/${symbolToUse}`);
-            const liveQuotePrice = Number(response.data?.price);
+            const snapshotResponse = await axios.get(`/api/stock/snapshot?symbol=${symbolToUse}&range=${range}`);
+            const {
+                chartPoints,
+                dailyReferencePoints,
+                intradayReferencePoints,
+                liveQuotePrice,
+                shouldSyncLiveQuote,
+            } = snapshotResponse.data;
 
-            const [chartResponse, dailyResponse, intradayResponse] = await Promise.all([
-                axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`),
-                range === '1W'
-                    ? Promise.resolve({ data: [] })
-                    : axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=1W`),
-                range === '1D'
-                    ? Promise.resolve({ data: [] })
-                    : axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=1D`),
-            ]);
-
-            if (chartResponse.data && chartResponse.data.length > 0) {
-                const dailyReferencePoints = range === '1W' ? chartResponse.data : dailyResponse.data;
+            if (chartPoints && chartPoints.length > 0) {
                 const nextChartState = buildChartState({
-                    points: chartResponse.data,
+                    points: normalizeChartPoints(chartPoints),
                     symbol: symbolToUse,
                     range,
                     dailyReferencePoints,
-                    intradayReferencePoints: range === '1D' ? chartResponse.data : intradayResponse.data,
+                    intradayReferencePoints,
                 });
-                const syncedChartState = syncChartStateWithLiveQuote(nextChartState, liveQuotePrice);
+                const syncedChartState = shouldSyncLiveQuote
+                    ? syncChartStateWithLiveQuote(nextChartState, Number(liveQuotePrice))
+                    : nextChartState;
                 const syncedPrice = Number(syncedChartState.metrics.latestPrice);
                 setChartData(syncedChartState.chartData);
                 setChartMetrics(syncedChartState.metrics);
@@ -925,29 +928,26 @@ const Dashboard = () => {
         setTradeMessage('');
 
         try {
-            const res = await axios.get(`${BASE_URL}/stock/${symbolInput}`);
-            const liveQuotePrice = Number(res.data?.price);
+            const snapshotResponse = await axios.get(`/api/stock/snapshot?symbol=${symbolInput}&range=${chartRange}`);
+            const {
+                chartPoints,
+                dailyReferencePoints,
+                intradayReferencePoints,
+                liveQuotePrice,
+                shouldSyncLiveQuote,
+            } = snapshotResponse.data;
 
-            const [chartResponse, dailyResponse, intradayResponse] = await Promise.all([
-                axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`),
-                chartRange === '1W'
-                    ? Promise.resolve({ data: [] })
-                    : axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=1W`),
-                chartRange === '1D'
-                    ? Promise.resolve({ data: [] })
-                    : axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=1D`),
-            ]);
-
-            if (chartResponse.data && chartResponse.data.length > 0) {
-                const dailyReferencePoints = chartRange === '1W' ? chartResponse.data : dailyResponse.data;
+            if (chartPoints && chartPoints.length > 0) {
                 const nextChartState = buildChartState({
-                    points: chartResponse.data,
+                    points: normalizeChartPoints(chartPoints),
                     symbol: symbolInput,
                     range: chartRange,
                     dailyReferencePoints,
-                    intradayReferencePoints: chartRange === '1D' ? chartResponse.data : intradayResponse.data,
+                    intradayReferencePoints,
                 });
-                const syncedChartState = syncChartStateWithLiveQuote(nextChartState, liveQuotePrice);
+                const syncedChartState = shouldSyncLiveQuote
+                    ? syncChartStateWithLiveQuote(nextChartState, Number(liveQuotePrice))
+                    : nextChartState;
                 const syncedPrice = Number(syncedChartState.metrics.latestPrice);
                 setChartData(syncedChartState.chartData);
                 setChartMetrics(syncedChartState.metrics);
