@@ -29,6 +29,49 @@ const getPointTradingDay = (point) => {
     return raw;
 };
 
+const RANGE_LOOKBACK_DAYS = {
+    '1W': 7,
+    '1M': 30,
+    '6M': 182,
+    '1Y': 365,
+};
+
+const toTimestamp = (value) => {
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : NaN;
+};
+
+const getRangeBaselinePrice = (points, range, fallbackPrice) => {
+    const lookbackDays = RANGE_LOOKBACK_DAYS[range];
+    if (!lookbackDays || !Array.isArray(points) || !points.length) return fallbackPrice;
+
+    const datedPoints = points
+        .map((point) => ({
+            close: Number(point?.close),
+            ts: toTimestamp(point?.date),
+        }))
+        .filter((point) => Number.isFinite(point.close) && Number.isFinite(point.ts))
+        .sort((a, b) => a.ts - b.ts);
+
+    if (!datedPoints.length) return fallbackPrice;
+
+    const latestTs = datedPoints[datedPoints.length - 1].ts;
+    const targetTs = latestTs - lookbackDays * 24 * 60 * 60 * 1000;
+
+    let atOrBefore = null;
+    let after = null;
+    for (const point of datedPoints) {
+        if (point.ts <= targetTs) {
+            atOrBefore = point;
+            continue;
+        }
+        after = point;
+        break;
+    }
+
+    return atOrBefore?.close ?? after?.close ?? fallbackPrice;
+};
+
 const derivePreviousCloseFromPoints = (points, fallbackPrice) => {
     if (!Array.isArray(points) || points.length === 0) return fallbackPrice;
 
@@ -54,8 +97,9 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
     const firstPrice = dataPoints[0] ?? latestPrice;
 
     const dailyPreviousClose = derivePreviousCloseFromPoints(dailyReferencePoints, previousPrice);
-    const rangeChangeValue = latestPrice - firstPrice;
-    const rangeChangePercent = firstPrice ? (rangeChangeValue / firstPrice) * 100 : 0;
+    const rangeBaselinePrice = getRangeBaselinePrice(points, range, firstPrice);
+    const rangeChangeValue = latestPrice - rangeBaselinePrice;
+    const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
     const dayBaseline = range === '1D' ? firstPrice : dailyPreviousClose;
     const dayChangeValue = latestPrice - dayBaseline;
     const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
@@ -90,6 +134,57 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
             rangeChangePercent,
             previousClose: dailyPreviousClose,
             range,
+            rangeBaselinePrice,
+        },
+    };
+};
+
+const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
+    if (!Number.isFinite(liveQuotePrice) || !chartState?.chartData?.datasets?.[0]?.data?.length) {
+        return chartState;
+    }
+
+    const existingDataset = chartState.chartData.datasets[0];
+    const nextPoints = [...existingDataset.data];
+    nextPoints[nextPoints.length - 1] = liveQuotePrice;
+
+    const previousPoint = Number(nextPoints[nextPoints.length - 2] ?? liveQuotePrice);
+    const firstPoint = Number(nextPoints[0] ?? liveQuotePrice);
+    const previousClose = Number(chartState.metrics.previousClose ?? previousPoint);
+
+    const rangeBaselinePrice = Number(chartState.metrics.rangeBaselinePrice ?? firstPoint);
+    const rangeChangeValue = liveQuotePrice - rangeBaselinePrice;
+    const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
+    const dayBaseline = chartState.metrics.range === '1D' ? firstPoint : previousClose;
+    const dayChangeValue = liveQuotePrice - dayBaseline;
+    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
+    const isPositive = dayChangeValue >= 0;
+
+    return {
+        chartData: {
+            ...chartState.chartData,
+            datasets: [
+                {
+                    ...existingDataset,
+                    data: nextPoints,
+                    borderColor: isPositive ? '#10b981' : '#ef4444',
+                    backgroundColor: (ctx) => {
+                        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 350);
+                        gradient.addColorStop(0, isPositive ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.32)');
+                        gradient.addColorStop(1, 'rgba(255,255,255,0.02)');
+                        return gradient;
+                    },
+                },
+            ],
+        },
+        metrics: {
+            ...chartState.metrics,
+            latestPrice: liveQuotePrice,
+            dayChangeValue,
+            dayChangePercent,
+            rangeChangeValue,
+            rangeChangePercent,
+            rangeBaselinePrice,
         },
     };
 };
