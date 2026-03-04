@@ -19,16 +19,19 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+const formatSignedMoney = (value) => `${Number(value) >= 0 ? '+' : '-'}$${Math.abs(Number(value || 0)).toFixed(2)}`;
 
-const buildChartState = ({ points, symbol, range }) => {
+const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) => {
     const labels = points.map((point) => point.date);
     const dataPoints = points.map((point) => Number(point.close));
     const latestPrice = dataPoints[dataPoints.length - 1];
     const previousPrice = dataPoints[dataPoints.length - 2] ?? latestPrice;
     const firstPrice = dataPoints[0] ?? latestPrice;
 
-    const dayChangeValue = latestPrice - previousPrice;
-    const dayChangePercent = previousPrice ? (dayChangeValue / previousPrice) * 100 : 0;
+    const dailyPoints = dailyReferencePoints.map((point) => Number(point.close));
+    const dailyPreviousClose = dailyPoints[dailyPoints.length - 2] ?? previousPrice;
+    const dayChangeValue = latestPrice - dailyPreviousClose;
+    const dayChangePercent = dailyPreviousClose ? (dayChangeValue / dailyPreviousClose) * 100 : 0;
     const rangeChangeValue = latestPrice - firstPrice;
     const rangeChangePercent = firstPrice ? (rangeChangeValue / firstPrice) * 100 : 0;
     const isPositive = dayChangeValue >= 0;
@@ -60,7 +63,7 @@ const buildChartState = ({ points, symbol, range }) => {
             dayChangePercent,
             rangeChangeValue,
             rangeChangePercent,
-            previousClose: previousPrice,
+            previousClose: dailyPreviousClose,
             range,
         },
     };
@@ -74,7 +77,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                 <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>{chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Stock Overview'}</h3>
                 {chartMetrics && (
                     <p style={{ margin: '5px 0 0', color: chartMetrics.dayChangeValue >= 0 ? '#047857' : '#b91c1c', fontWeight: 600 }}>
-                        {chartMetrics.dayChangeValue >= 0 ? '+' : ''}{formatMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) today
+                        {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) today
                     </p>
                 )}
             </div>
@@ -82,7 +85,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(130px, auto))', gap: 6 }}>
                     <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>Current: <strong style={{ color: '#111827' }}>{formatMoney(chartMetrics.latestPrice)}</strong></p>
                     <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>Prev close: <strong style={{ color: '#111827' }}>{formatMoney(chartMetrics.previousClose)}</strong></p>
-                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>{chartMetrics.range} change: <strong style={{ color: chartMetrics.rangeChangeValue >= 0 ? '#047857' : '#b91c1c' }}>{chartMetrics.rangeChangeValue >= 0 ? '+' : ''}{formatMoney(chartMetrics.rangeChangeValue)}</strong></p>
+                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>{chartMetrics.range} change: <strong style={{ color: chartMetrics.rangeChangeValue >= 0 ? '#047857' : '#b91c1c' }}>{formatSignedMoney(chartMetrics.rangeChangeValue)}</strong></p>
                     <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>{chartMetrics.range} %: <strong style={{ color: chartMetrics.rangeChangePercent >= 0 ? '#047857' : '#b91c1c' }}>{chartMetrics.rangeChangePercent >= 0 ? '+' : ''}{chartMetrics.rangeChangePercent.toFixed(2)}%</strong></p>
                 </div>
             )}
@@ -138,8 +141,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                                         const previousPrice = context.dataIndex > 0 ? Number(points[context.dataIndex - 1]) : currentPrice;
                                         const dollarChange = currentPrice - previousPrice;
                                         const percentChange = previousPrice ? (dollarChange / previousPrice) * 100 : 0;
-                                        const changePrefix = dollarChange >= 0 ? '+' : '';
-                                        return `${formatMoney(currentPrice)} (${changePrefix}${formatMoney(dollarChange)} / ${changePrefix}${percentChange.toFixed(2)}%)`;
+                                        return `${formatMoney(currentPrice)} (${formatSignedMoney(dollarChange)} / ${dollarChange >= 0 ? '+' : ''}${percentChange.toFixed(2)}%)`;
                                     },
                                 },
                             },
@@ -655,9 +657,21 @@ const Dashboard = () => {
                 setTradeMessage(`Current price for ${symbolToUse}: $${response.data.price.toFixed(2)}`);
             }
 
-            const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`);
+            const [chartResponse, dailyResponse] = await Promise.all([
+                axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`),
+                range === '1W'
+                    ? Promise.resolve({ data: [] })
+                    : axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=1W`),
+            ]);
+
             if (chartResponse.data && chartResponse.data.length > 0) {
-                const { chartData: nextChartData, metrics } = buildChartState({ points: chartResponse.data, symbol: symbolToUse, range });
+                const dailyReferencePoints = range === '1W' ? chartResponse.data : dailyResponse.data;
+                const { chartData: nextChartData, metrics } = buildChartState({
+                    points: chartResponse.data,
+                    symbol: symbolToUse,
+                    range,
+                    dailyReferencePoints,
+                });
                 setChartData(nextChartData);
                 setChartMetrics(metrics);
             } else {
@@ -696,9 +710,21 @@ const Dashboard = () => {
                 setTradeMessage(`Current price for ${symbolInput}: $${res.data.price.toFixed(2)}`);
             }
 
-            const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`);
+            const [chartResponse, dailyResponse] = await Promise.all([
+                axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`),
+                chartRange === '1W'
+                    ? Promise.resolve({ data: [] })
+                    : axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=1W`),
+            ]);
+
             if (chartResponse.data && chartResponse.data.length > 0) {
-                const { chartData: nextChartData, metrics } = buildChartState({ points: chartResponse.data, symbol: symbolInput, range: chartRange });
+                const dailyReferencePoints = chartRange === '1W' ? chartResponse.data : dailyResponse.data;
+                const { chartData: nextChartData, metrics } = buildChartState({
+                    points: chartResponse.data,
+                    symbol: symbolInput,
+                    range: chartRange,
+                    dailyReferencePoints,
+                });
                 setChartData(nextChartData);
                 setChartMetrics(metrics);
             } else {
