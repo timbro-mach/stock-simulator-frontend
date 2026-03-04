@@ -21,6 +21,33 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 const formatSignedMoney = (value) => `${Number(value) >= 0 ? '+' : '-'}$${Math.abs(Number(value || 0)).toFixed(2)}`;
 
+const DATE_FORMATTERS = {
+    intraday: new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: 'America/New_York',
+    }),
+    shortDate: new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'America/New_York',
+    }),
+    monthYear: new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        year: '2-digit',
+        timeZone: 'America/New_York',
+    }),
+};
+
+const formatChartDateLabel = (value, range) => {
+    const date = new Date(value);
+    if (!value || Number.isNaN(date.getTime())) return String(value || '');
+
+    if (range === '1D') return DATE_FORMATTERS.intraday.format(date);
+    if (range === '1W' || range === '1M') return DATE_FORMATTERS.shortDate.format(date);
+    return DATE_FORMATTERS.monthYear.format(date);
+};
+
 const getPointTradingDay = (point) => {
     const raw = String(point?.date || '').trim();
     if (!raw) return '';
@@ -251,7 +278,13 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                         scales: {
                             x: {
                                 grid: { display: false },
-                                ticks: { color: '#6b7280', maxTicksLimit: 6 },
+                                ticks: {
+                                    color: '#6b7280',
+                                    maxTicksLimit: 6,
+                                    callback(value) {
+                                        return formatChartDateLabel(this.getLabelForValue(value), chartRange);
+                                    },
+                                },
                             },
                             y: {
                                 grid: { color: 'rgba(0,0,0,0.05)' },
@@ -264,6 +297,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                                 mode: 'index',
                                 intersect: false,
                                 callbacks: {
+                                    title: (items) => formatChartDateLabel(items[0]?.label, chartRange),
                                     label: (context) => {
                                         const points = context.dataset.data;
                                         const currentPrice = Number(context.parsed.y);
