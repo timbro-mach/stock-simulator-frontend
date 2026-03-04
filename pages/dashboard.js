@@ -89,7 +89,14 @@ const derivePreviousCloseFromPoints = (points, fallbackPrice) => {
     return Number.isFinite(secondLast) ? secondLast : fallbackPrice;
 };
 
-const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) => {
+const getIntradayBaselinePrice = (points, fallbackPrice) => {
+    if (!Array.isArray(points) || points.length === 0) return fallbackPrice;
+
+    const firstPoint = Number(points[0]?.close);
+    return Number.isFinite(firstPoint) ? firstPoint : fallbackPrice;
+};
+
+const buildChartState = ({ points, symbol, range, dailyReferencePoints = [], intradayReferencePoints = [] }) => {
     const labels = points.map((point) => point.date);
     const dataPoints = points.map((point) => Number(point.close));
     const latestPrice = dataPoints[dataPoints.length - 1];
@@ -100,7 +107,8 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
     const rangeBaselinePrice = getRangeBaselinePrice(points, range, firstPrice);
     const rangeChangeValue = latestPrice - rangeBaselinePrice;
     const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
-    const dayBaseline = range === '1D' ? firstPrice : dailyPreviousClose;
+    const dayBaselinePrice = getIntradayBaselinePrice(intradayReferencePoints, dailyPreviousClose);
+    const dayBaseline = Number.isFinite(dayBaselinePrice) ? dayBaselinePrice : dailyPreviousClose;
     const dayChangeValue = latestPrice - dayBaseline;
     const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
     const isPositive = dayChangeValue >= 0;
@@ -133,6 +141,7 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
             rangeChangeValue,
             rangeChangePercent,
             previousClose: dailyPreviousClose,
+            dayBaselinePrice: dayBaseline,
             range,
             rangeBaselinePrice,
         },
@@ -155,7 +164,7 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
     const rangeBaselinePrice = Number(chartState.metrics.rangeBaselinePrice ?? firstPoint);
     const rangeChangeValue = liveQuotePrice - rangeBaselinePrice;
     const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
-    const dayBaseline = chartState.metrics.range === '1D' ? firstPoint : previousClose;
+    const dayBaseline = Number(chartState.metrics.dayBaselinePrice ?? previousClose);
     const dayChangeValue = liveQuotePrice - dayBaseline;
     const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
     const isPositive = dayChangeValue >= 0;
@@ -185,54 +194,6 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
             rangeChangeValue,
             rangeChangePercent,
             rangeBaselinePrice,
-        },
-    };
-};
-
-const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
-    if (!Number.isFinite(liveQuotePrice) || !chartState?.chartData?.datasets?.[0]?.data?.length) {
-        return chartState;
-    }
-
-    const existingDataset = chartState.chartData.datasets[0];
-    const nextPoints = [...existingDataset.data];
-    nextPoints[nextPoints.length - 1] = liveQuotePrice;
-
-    const previousPoint = Number(nextPoints[nextPoints.length - 2] ?? liveQuotePrice);
-    const firstPoint = Number(nextPoints[0] ?? liveQuotePrice);
-    const previousClose = Number(chartState.metrics.previousClose ?? previousPoint);
-
-    const rangeChangeValue = liveQuotePrice - firstPoint;
-    const rangeChangePercent = firstPoint ? (rangeChangeValue / firstPoint) * 100 : 0;
-    const dayBaseline = chartState.metrics.range === '1D' ? firstPoint : previousClose;
-    const dayChangeValue = liveQuotePrice - dayBaseline;
-    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
-    const isPositive = dayChangeValue >= 0;
-
-    return {
-        chartData: {
-            ...chartState.chartData,
-            datasets: [
-                {
-                    ...existingDataset,
-                    data: nextPoints,
-                    borderColor: isPositive ? '#10b981' : '#ef4444',
-                    backgroundColor: (ctx) => {
-                        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 350);
-                        gradient.addColorStop(0, isPositive ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.32)');
-                        gradient.addColorStop(1, 'rgba(255,255,255,0.02)');
-                        return gradient;
-                    },
-                },
-            ],
-        },
-        metrics: {
-            ...chartState.metrics,
-            latestPrice: liveQuotePrice,
-            dayChangeValue,
-            dayChangePercent,
-            rangeChangeValue,
-            rangeChangePercent,
         },
     };
 };
@@ -880,11 +841,14 @@ const Dashboard = () => {
             const response = await axios.get(`${BASE_URL}/stock/${symbolToUse}`);
             const liveQuotePrice = Number(response.data?.price);
 
-            const [chartResponse, dailyResponse] = await Promise.all([
+            const [chartResponse, dailyResponse, intradayResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`),
                 range === '1W'
                     ? Promise.resolve({ data: [] })
                     : axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=1W`),
+                range === '1D'
+                    ? Promise.resolve({ data: [] })
+                    : axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=1D`),
             ]);
 
             if (chartResponse.data && chartResponse.data.length > 0) {
@@ -894,6 +858,7 @@ const Dashboard = () => {
                     symbol: symbolToUse,
                     range,
                     dailyReferencePoints,
+                    intradayReferencePoints: range === '1D' ? chartResponse.data : intradayResponse.data,
                 });
                 const syncedChartState = syncChartStateWithLiveQuote(nextChartState, liveQuotePrice);
                 const syncedPrice = Number(syncedChartState.metrics.latestPrice);
@@ -941,11 +906,14 @@ const Dashboard = () => {
             const res = await axios.get(`${BASE_URL}/stock/${symbolInput}`);
             const liveQuotePrice = Number(res.data?.price);
 
-            const [chartResponse, dailyResponse] = await Promise.all([
+            const [chartResponse, dailyResponse, intradayResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`),
                 chartRange === '1W'
                     ? Promise.resolve({ data: [] })
                     : axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=1W`),
+                chartRange === '1D'
+                    ? Promise.resolve({ data: [] })
+                    : axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=1D`),
             ]);
 
             if (chartResponse.data && chartResponse.data.length > 0) {
@@ -955,6 +923,7 @@ const Dashboard = () => {
                     symbol: symbolInput,
                     range: chartRange,
                     dailyReferencePoints,
+                    intradayReferencePoints: chartRange === '1D' ? chartResponse.data : intradayResponse.data,
                 });
                 const syncedChartState = syncChartStateWithLiveQuote(nextChartState, liveQuotePrice);
                 const syncedPrice = Number(syncedChartState.metrics.latestPrice);
