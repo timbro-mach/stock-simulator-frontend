@@ -189,6 +189,54 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
     };
 };
 
+const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
+    if (!Number.isFinite(liveQuotePrice) || !chartState?.chartData?.datasets?.[0]?.data?.length) {
+        return chartState;
+    }
+
+    const existingDataset = chartState.chartData.datasets[0];
+    const nextPoints = [...existingDataset.data];
+    nextPoints[nextPoints.length - 1] = liveQuotePrice;
+
+    const previousPoint = Number(nextPoints[nextPoints.length - 2] ?? liveQuotePrice);
+    const firstPoint = Number(nextPoints[0] ?? liveQuotePrice);
+    const previousClose = Number(chartState.metrics.previousClose ?? previousPoint);
+
+    const rangeChangeValue = liveQuotePrice - firstPoint;
+    const rangeChangePercent = firstPoint ? (rangeChangeValue / firstPoint) * 100 : 0;
+    const dayBaseline = chartState.metrics.range === '1D' ? firstPoint : previousClose;
+    const dayChangeValue = liveQuotePrice - dayBaseline;
+    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
+    const isPositive = dayChangeValue >= 0;
+
+    return {
+        chartData: {
+            ...chartState.chartData,
+            datasets: [
+                {
+                    ...existingDataset,
+                    data: nextPoints,
+                    borderColor: isPositive ? '#10b981' : '#ef4444',
+                    backgroundColor: (ctx) => {
+                        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 350);
+                        gradient.addColorStop(0, isPositive ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.32)');
+                        gradient.addColorStop(1, 'rgba(255,255,255,0.02)');
+                        return gradient;
+                    },
+                },
+            ],
+        },
+        metrics: {
+            ...chartState.metrics,
+            latestPrice: liveQuotePrice,
+            dayChangeValue,
+            dayChangePercent,
+            rangeChangeValue,
+            rangeChangePercent,
+        },
+    };
+};
+
 // Memoized ChartPanel component
 const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol }) => (
     <div style={{ flex: 1, minHeight: 320, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(17,24,39,0.05)' }}>
