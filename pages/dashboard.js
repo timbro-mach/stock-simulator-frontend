@@ -13,25 +13,111 @@ import {
     Title,
     Tooltip,
     Legend,
+    Filler,
 } from 'chart.js';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+
+const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+const formatSignedMoney = (value) => `${Number(value) >= 0 ? '+' : '-'}$${Math.abs(Number(value || 0)).toFixed(2)}`;
+
+const getPreviousCloseFromReference = (referencePoints = [], latestPrice, fallbackPrice) => {
+    if (!referencePoints.length) return fallbackPrice;
+
+    const closes = referencePoints.map((point) => Number(point.close)).filter((value) => !Number.isNaN(value));
+    if (!closes.length) return fallbackPrice;
+
+    for (let i = closes.length - 1; i >= 0; i -= 1) {
+        if (closes[i] !== latestPrice) {
+            return closes[i];
+        }
+    }
+
+    return closes.length > 1 ? closes[closes.length - 2] : fallbackPrice;
+};
+
+const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) => {
+    const labels = points.map((point) => point.date);
+    const dataPoints = points.map((point) => Number(point.close));
+    const latestPrice = dataPoints[dataPoints.length - 1];
+    const previousPrice = dataPoints[dataPoints.length - 2] ?? latestPrice;
+    const firstPrice = dataPoints[0] ?? latestPrice;
+
+    const dailyPreviousClose = getPreviousCloseFromReference(dailyReferencePoints, latestPrice, previousPrice);
+    const dayChangeValue = latestPrice - dailyPreviousClose;
+    const dayChangePercent = dailyPreviousClose ? (dayChangeValue / dailyPreviousClose) * 100 : 0;
+    const rangeChangeValue = latestPrice - firstPrice;
+    const rangeChangePercent = firstPrice ? (rangeChangeValue / firstPrice) * 100 : 0;
+    const isPositive = dayChangeValue >= 0;
+
+    return {
+        chartData: {
+            labels,
+            datasets: [
+                {
+                    label: `${symbol} (${range})`,
+                    data: dataPoints,
+                    fill: true,
+                    borderWidth: 2.5,
+                    borderColor: isPositive ? '#10b981' : '#ef4444',
+                    backgroundColor: (ctx) => {
+                        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 350);
+                        gradient.addColorStop(0, isPositive ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.32)');
+                        gradient.addColorStop(1, 'rgba(255,255,255,0.02)');
+                        return gradient;
+                    },
+                    pointRadius: 0,
+                    tension: 0.24,
+                },
+            ],
+        },
+        metrics: {
+            latestPrice,
+            dayChangeValue,
+            dayChangePercent,
+            rangeChangeValue,
+            rangeChangePercent,
+            previousClose: dailyPreviousClose,
+            range,
+        },
+    };
+};
 
 // Memoized ChartPanel component
-const ChartPanel = memo(({ chartData, chartRange, onRangeChange }) => (
-    <div style={{ flex: 1, minHeight: 320 }}>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol }) => (
+    <div style={{ flex: 1, minHeight: 320, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(17,24,39,0.05)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+            <div>
+                <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>{chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Stock Overview'}</h3>
+                {chartMetrics && (
+                    <p style={{ margin: '5px 0 0', color: chartMetrics.dayChangeValue >= 0 ? '#047857' : '#b91c1c', fontWeight: 600 }}>
+                        {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) today
+                    </p>
+                )}
+            </div>
+            {chartMetrics && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(130px, auto))', gap: 6 }}>
+                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>Current: <strong style={{ color: '#111827' }}>{formatMoney(chartMetrics.latestPrice)}</strong></p>
+                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>Prev close: <strong style={{ color: '#111827' }}>{formatMoney(chartMetrics.previousClose)}</strong></p>
+                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>{chartMetrics.range} change: <strong style={{ color: chartMetrics.rangeChangeValue >= 0 ? '#047857' : '#b91c1c' }}>{formatSignedMoney(chartMetrics.rangeChangeValue)}</strong></p>
+                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>{chartMetrics.range} %: <strong style={{ color: chartMetrics.rangeChangePercent >= 0 ? '#047857' : '#b91c1c' }}>{chartMetrics.rangeChangePercent >= 0 ? '+' : ''}{chartMetrics.rangeChangePercent.toFixed(2)}%</strong></p>
+                </div>
+            )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
             {['1D', '1W', '1M', '6M', '1Y'].map((r) => (
                 <button
                     key={r}
                     onClick={() => onRangeChange(r)}
                     style={{
-                        padding: '4px 10px',
+                        padding: '5px 12px',
                         borderRadius: 6,
-                        background: chartRange === r ? '#2563eb' : '#f3f4f6',
-                        color: chartRange === r ? '#fff' : '#111827',
-                        border: 'none',
+                        background: chartRange === r ? '#1d4ed8' : '#f3f4f6',
+                        color: chartRange === r ? '#fff' : '#374151',
+                        border: chartRange === r ? '1px solid #1d4ed8' : '1px solid #d1d5db',
                         fontSize: 13,
+                        fontWeight: chartRange === r ? 600 : 500,
                         cursor: 'pointer',
                     }}
                 >
@@ -54,7 +140,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange }) => (
                             },
                             y: {
                                 grid: { color: 'rgba(0,0,0,0.05)' },
-                                ticks: { color: '#6b7280', callback: (v) => `$${v} ` },
+                                ticks: { color: '#6b7280', callback: (v) => formatMoney(v) },
                             },
                         },
                         plugins: {
@@ -63,7 +149,14 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange }) => (
                                 mode: 'index',
                                 intersect: false,
                                 callbacks: {
-                                    label: (context) => `$${context.formattedValue} `,
+                                    label: (context) => {
+                                        const points = context.dataset.data;
+                                        const currentPrice = Number(context.parsed.y);
+                                        const previousPrice = context.dataIndex > 0 ? Number(points[context.dataIndex - 1]) : currentPrice;
+                                        const dollarChange = currentPrice - previousPrice;
+                                        const percentChange = previousPrice ? (dollarChange / previousPrice) * 100 : 0;
+                                        return `${formatMoney(currentPrice)} (${formatSignedMoney(dollarChange)} / ${dollarChange >= 0 ? '+' : ''}${percentChange.toFixed(2)}%)`;
+                                    },
                                 },
                             },
                         },
@@ -166,6 +259,7 @@ const Dashboard = () => {
     const [tradeQuantity, setTradeQuantity] = useState(0);
     const [tradeMessage, setTradeMessage] = useState('');
     const [chartData, setChartData] = useState(null);
+    const [chartMetrics, setChartMetrics] = useState(null);
     const [chartRange, setChartRange] = useState('1M');
 
     // =========================================
@@ -577,41 +671,33 @@ const Dashboard = () => {
                 setTradeMessage(`Current price for ${symbolToUse}: $${response.data.price.toFixed(2)}`);
             }
 
-            const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`);
+            const [chartResponse, dailyResponse] = await Promise.all([
+                axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`),
+                range === '1M'
+                    ? Promise.resolve({ data: [] })
+                    : axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=1M`),
+            ]);
+
             if (chartResponse.data && chartResponse.data.length > 0) {
-                const labels = chartResponse.data.map(p => p.date);
-                const dataPoints = chartResponse.data.map(p => p.close);
-
-                const gradientStroke = (ctx) => {
-                    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                    gradient.addColorStop(0, 'rgba(37,99,235,0.4)');
-                    gradient.addColorStop(1, 'rgba(37,99,235,0.0)');
-                    return gradient;
-                };
-
-                setChartData({
-                    labels,
-                    datasets: [
-                        {
-                            label: `${symbolToUse} (${range})`,
-                            data: dataPoints,
-                            fill: true,
-                            borderWidth: 2.5,
-                            borderColor: '#2563eb',
-                            backgroundColor: (ctx) => gradientStroke(ctx.chart.ctx),
-                            pointRadius: 0,
-                            tension: 0.25,
-                        },
-                    ],
+                const dailyReferencePoints = range === '1M' ? chartResponse.data : dailyResponse.data;
+                const { chartData: nextChartData, metrics } = buildChartState({
+                    points: chartResponse.data,
+                    symbol: symbolToUse,
+                    range,
+                    dailyReferencePoints,
                 });
+                setChartData(nextChartData);
+                setChartMetrics(metrics);
             } else {
                 setChartData(null);
+                setChartMetrics(null);
                 setTradeMessage(`No chart data available for ${symbolToUse}`);
             }
         } catch (error) {
             console.error('Error fetching stock data:', error);
             setTradeMessage('Error fetching stock data.');
             setChartData(null);
+            setChartMetrics(null);
         } finally {
             setIsLoading(false);
         }
@@ -638,32 +724,32 @@ const Dashboard = () => {
                 setTradeMessage(`Current price for ${symbolInput}: $${res.data.price.toFixed(2)}`);
             }
 
-            const chartResponse = await axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`);
-            if (chartResponse.data && chartResponse.data.length > 0) {
-                const labels = chartResponse.data.map(p => p.date);
-                const dataPoints = chartResponse.data.map(p => p.close);
+            const [chartResponse, dailyResponse] = await Promise.all([
+                axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`),
+                chartRange === '1M'
+                    ? Promise.resolve({ data: [] })
+                    : axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=1M`),
+            ]);
 
-                setChartData({
-                    labels,
-                    datasets: [
-                        {
-                            label: `${symbolInput} (${chartRange})`,
-                            data: dataPoints,
-                            borderWidth: 2.5,
-                            borderColor: '#2563eb',
-                            backgroundColor: 'rgba(37,99,235,0.1)',
-                            pointRadius: 0,
-                            tension: 0.25,
-                        },
-                    ],
+            if (chartResponse.data && chartResponse.data.length > 0) {
+                const dailyReferencePoints = chartRange === '1M' ? chartResponse.data : dailyResponse.data;
+                const { chartData: nextChartData, metrics } = buildChartState({
+                    points: chartResponse.data,
+                    symbol: symbolInput,
+                    range: chartRange,
+                    dailyReferencePoints,
                 });
+                setChartData(nextChartData);
+                setChartMetrics(metrics);
             } else {
                 setChartData(null);
+                setChartMetrics(null);
                 setTradeMessage(`No chart data available for ${symbolInput}`);
             }
         } catch (error) {
             console.error('Error fetching stock data:', error);
             setTradeMessage('Error fetching stock data.');
+            setChartMetrics(null);
         } finally {
             setIsLoading(false);
         }
@@ -1127,6 +1213,8 @@ const Dashboard = () => {
                     <ChartPanel
                         chartData={chartData}
                         chartRange={chartRange}
+                        chartMetrics={chartMetrics}
+                        chartSymbol={chartSymbol}
                         onRangeChange={handleRangeChange}
                     />
                 </div>
