@@ -21,19 +21,57 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 const formatSignedMoney = (value) => `${Number(value) >= 0 ? '+' : '-'}$${Math.abs(Number(value || 0)).toFixed(2)}`;
 
+const toTimestamp = (value) => {
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+};
+
+const getPointTradingDay = (point) => {
+    const raw = String(point?.date || '').trim();
+    if (!raw) return '';
+    if (raw.includes('T')) return raw.split('T')[0];
+    if (raw.includes(' ')) return raw.split(' ')[0];
+    return raw;
+};
+
+const normalizePointsChronological = (points = []) => {
+    if (!Array.isArray(points)) return [];
+    return [...points].sort((a, b) => toTimestamp(a?.date) - toTimestamp(b?.date));
+};
+
+const derivePreviousCloseFromPoints = (points, fallbackPrice) => {
+    if (!Array.isArray(points) || points.length === 0) return fallbackPrice;
+
+    const latestDay = getPointTradingDay(points[points.length - 1]);
+    for (let i = points.length - 2; i >= 0; i -= 1) {
+        const candidate = Number(points[i]?.close);
+        if (!Number.isFinite(candidate)) continue;
+        const candidateDay = getPointTradingDay(points[i]);
+        if (!latestDay || candidateDay !== latestDay) {
+            return candidate;
+        }
+    }
+
+    const secondLast = Number(points[points.length - 2]?.close);
+    return Number.isFinite(secondLast) ? secondLast : fallbackPrice;
+};
+
 const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) => {
-    const labels = points.map((point) => point.date);
-    const dataPoints = points.map((point) => Number(point.close));
+    const normalizedPoints = normalizePointsChronological(points);
+    const labels = normalizedPoints.map((point) => point.date);
+    const dataPoints = normalizedPoints.map((point) => Number(point.close));
     const latestPrice = dataPoints[dataPoints.length - 1];
     const previousPrice = dataPoints[dataPoints.length - 2] ?? latestPrice;
     const firstPrice = dataPoints[0] ?? latestPrice;
 
-    const dailyPoints = dailyReferencePoints.map((point) => Number(point.close));
-    const dailyPreviousClose = dailyPoints[dailyPoints.length - 2] ?? previousPrice;
-    const dayChangeValue = latestPrice - dailyPreviousClose;
-    const dayChangePercent = dailyPreviousClose ? (dayChangeValue / dailyPreviousClose) * 100 : 0;
-    const rangeChangeValue = latestPrice - firstPrice;
-    const rangeChangePercent = firstPrice ? (rangeChangeValue / firstPrice) * 100 : 0;
+    const normalizedDailyReference = normalizePointsChronological(dailyReferencePoints);
+    const dailyPreviousClose = derivePreviousCloseFromPoints(normalizedDailyReference, previousPrice);
+    const rangeBaselinePrice = firstPrice;
+    const rangeChangeValue = latestPrice - rangeBaselinePrice;
+    const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
+    const dayBaseline = dailyPreviousClose;
+    const dayChangeValue = latestPrice - dayBaseline;
+    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
     const isPositive = dayChangeValue >= 0;
 
     return {
@@ -65,6 +103,57 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
             rangeChangePercent,
             previousClose: dailyPreviousClose,
             range,
+            rangeBaselinePrice,
+        },
+    };
+};
+
+const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
+    if (!Number.isFinite(liveQuotePrice) || !chartState?.chartData?.datasets?.[0]?.data?.length) {
+        return chartState;
+    }
+
+    const existingDataset = chartState.chartData.datasets[0];
+    const nextPoints = [...existingDataset.data];
+    nextPoints[nextPoints.length - 1] = liveQuotePrice;
+
+    const previousPoint = Number(nextPoints[nextPoints.length - 2] ?? liveQuotePrice);
+    const firstPoint = Number(nextPoints[0] ?? liveQuotePrice);
+    const previousClose = Number(chartState.metrics.previousClose ?? previousPoint);
+
+    const rangeBaselinePrice = Number(chartState.metrics.rangeBaselinePrice ?? firstPoint);
+    const rangeChangeValue = liveQuotePrice - rangeBaselinePrice;
+    const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
+    const dayBaseline = previousClose;
+    const dayChangeValue = liveQuotePrice - dayBaseline;
+    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
+    const isPositive = dayChangeValue >= 0;
+
+    return {
+        chartData: {
+            ...chartState.chartData,
+            datasets: [
+                {
+                    ...existingDataset,
+                    data: nextPoints,
+                    borderColor: isPositive ? '#10b981' : '#ef4444',
+                    backgroundColor: (ctx) => {
+                        const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 350);
+                        gradient.addColorStop(0, isPositive ? 'rgba(16,185,129,0.35)' : 'rgba(239,68,68,0.32)');
+                        gradient.addColorStop(1, 'rgba(255,255,255,0.02)');
+                        return gradient;
+                    },
+                },
+            ],
+        },
+        metrics: {
+            ...chartState.metrics,
+            latestPrice: liveQuotePrice,
+            dayChangeValue,
+            dayChangePercent,
+            rangeChangeValue,
+            rangeChangePercent,
+            rangeBaselinePrice,
         },
     };
 };
@@ -310,6 +399,10 @@ const Dashboard = () => {
     // API base
     // =========================================
     const BASE_URL = getApiBaseUrl();
+    const getPendingOrdersStorageKey = useCallback(
+        (user) => `pending_limit_orders:${String(user || '').trim().toLowerCase()}`,
+        [],
+    );
 
     // =========================================
     // Helpers
@@ -448,6 +541,36 @@ const Dashboard = () => {
             fetchFeaturedCompetitions();
         }
     }, [isLoggedIn, username, fetchUserData]);
+
+    useEffect(() => {
+        if (!isLoggedIn || !username) {
+            setPendingLimitOrders([]);
+            return;
+        }
+
+        const savedOrders = localStorage.getItem(getPendingOrdersStorageKey(username));
+        if (!savedOrders) {
+            setPendingLimitOrders([]);
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(savedOrders);
+            if (Array.isArray(parsed)) {
+                setPendingLimitOrders(parsed);
+            } else {
+                setPendingLimitOrders([]);
+            }
+        } catch (error) {
+            console.error('Failed to parse pending limit orders from storage:', error);
+            setPendingLimitOrders([]);
+        }
+    }, [getPendingOrdersStorageKey, isLoggedIn, username]);
+
+    useEffect(() => {
+        if (!isLoggedIn || !username) return;
+        localStorage.setItem(getPendingOrdersStorageKey(username), JSON.stringify(pendingLimitOrders));
+    }, [getPendingOrdersStorageKey, isLoggedIn, pendingLimitOrders, username]);
 
     useEffect(() => {
         const cleanTyped = stockSymbol.trim().toUpperCase();
@@ -676,11 +799,7 @@ const Dashboard = () => {
         try {
             console.log('Fetching data for:', symbolToUse);
             const response = await axios.get(`${BASE_URL}/stock/${symbolToUse}`);
-
-            if (response.data?.price) {
-                setStockPrice(response.data.price);
-                setTradeMessage(`Current price for ${symbolToUse}: $${response.data.price.toFixed(2)}`);
-            }
+            const liveQuotePrice = Number(response.data?.price);
 
             const [chartResponse, dailyResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolToUse}?range=${range}`),
@@ -691,18 +810,29 @@ const Dashboard = () => {
 
             if (chartResponse.data && chartResponse.data.length > 0) {
                 const dailyReferencePoints = range === '1W' ? chartResponse.data : dailyResponse.data;
-                const { chartData: nextChartData, metrics } = buildChartState({
+                const nextChartState = buildChartState({
                     points: chartResponse.data,
                     symbol: symbolToUse,
                     range,
                     dailyReferencePoints,
                 });
-                setChartData(nextChartData);
-                setChartMetrics(metrics);
+                const syncedChartState = syncChartStateWithLiveQuote(nextChartState, liveQuotePrice);
+                const syncedPrice = Number(syncedChartState.metrics.latestPrice);
+                setChartData(syncedChartState.chartData);
+                setChartMetrics(syncedChartState.metrics);
+                if (Number.isFinite(syncedPrice)) {
+                    setStockPrice(syncedPrice);
+                    setTradeMessage(`Current price for ${symbolToUse}: $${syncedPrice.toFixed(2)}`);
+                }
             } else {
                 setChartData(null);
                 setChartMetrics(null);
-                setTradeMessage(`No chart data available for ${symbolToUse}`);
+                if (Number.isFinite(liveQuotePrice)) {
+                    setStockPrice(liveQuotePrice);
+                    setTradeMessage(`Current price for ${symbolToUse}: $${liveQuotePrice.toFixed(2)} (chart unavailable)`);
+                } else {
+                    setTradeMessage(`No chart data available for ${symbolToUse}`);
+                }
             }
         } catch (error) {
             console.error('Error fetching stock data:', error);
@@ -730,10 +860,7 @@ const Dashboard = () => {
 
         try {
             const res = await axios.get(`${BASE_URL}/stock/${symbolInput}`);
-            if (res.data?.price) {
-                setStockPrice(res.data.price);
-                setTradeMessage(`Current price for ${symbolInput}: $${res.data.price.toFixed(2)}`);
-            }
+            const liveQuotePrice = Number(res.data?.price);
 
             const [chartResponse, dailyResponse] = await Promise.all([
                 axios.get(`${BASE_URL}/stock_chart/${symbolInput}?range=${chartRange}`),
@@ -744,18 +871,29 @@ const Dashboard = () => {
 
             if (chartResponse.data && chartResponse.data.length > 0) {
                 const dailyReferencePoints = chartRange === '1W' ? chartResponse.data : dailyResponse.data;
-                const { chartData: nextChartData, metrics } = buildChartState({
+                const nextChartState = buildChartState({
                     points: chartResponse.data,
                     symbol: symbolInput,
                     range: chartRange,
                     dailyReferencePoints,
                 });
-                setChartData(nextChartData);
-                setChartMetrics(metrics);
+                const syncedChartState = syncChartStateWithLiveQuote(nextChartState, liveQuotePrice);
+                const syncedPrice = Number(syncedChartState.metrics.latestPrice);
+                setChartData(syncedChartState.chartData);
+                setChartMetrics(syncedChartState.metrics);
+                if (Number.isFinite(syncedPrice)) {
+                    setStockPrice(syncedPrice);
+                    setTradeMessage(`Current price for ${symbolInput}: $${syncedPrice.toFixed(2)}`);
+                }
             } else {
                 setChartData(null);
                 setChartMetrics(null);
-                setTradeMessage(`No chart data available for ${symbolInput}`);
+                if (Number.isFinite(liveQuotePrice)) {
+                    setStockPrice(liveQuotePrice);
+                    setTradeMessage(`Current price for ${symbolInput}: $${liveQuotePrice.toFixed(2)} (chart unavailable)`);
+                } else {
+                    setTradeMessage(`No chart data available for ${symbolInput}`);
+                }
             }
         } catch (error) {
             console.error('Error fetching stock data:', error);
@@ -845,7 +983,7 @@ const Dashboard = () => {
     };
 
     useEffect(() => {
-        if (!pendingLimitOrders.length) return;
+        if (!isLoggedIn || !username || !pendingLimitOrders.length) return;
 
         const interval = setInterval(async () => {
             if (!isTradingHours()) return;
@@ -873,7 +1011,7 @@ const Dashboard = () => {
         }, 15000);
 
         return () => clearInterval(interval);
-    }, [BASE_URL, buildTradeRequest, fetchUserData, pendingLimitOrders]);
+    }, [BASE_URL, buildTradeRequest, fetchUserData, isLoggedIn, pendingLimitOrders, username]);
 
 
     // =========================================
