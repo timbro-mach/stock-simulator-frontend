@@ -186,32 +186,36 @@ const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQu
                 )}
             </div>
 
-            <div className="section" style={{ display: 'flex', gap: 8 }}>
-                <input
-                    type="number"
-                    placeholder="Quantity"
-                    value={tradeQuantity || ''}
-                    onChange={(e) => setTradeQuantity(e.target.value === '' ? 0 : Number(e.target.value))}
-                    min="0"
-                    autoComplete="off"
-                />
-                <select value={orderType} onChange={(e) => setOrderType(e.target.value)}>
-                    <option value="market">Market</option>
-                    <option value="limit">Limit</option>
-                </select>
-                {orderType === 'limit' && (
+            <div className="section" style={{ display: 'grid', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <input
                         type="number"
-                        placeholder="Limit Price"
-                        value={limitPrice}
-                        onChange={(e) => setLimitPrice(e.target.value)}
+                        placeholder="Quantity"
+                        value={tradeQuantity || ''}
+                        onChange={(e) => setTradeQuantity(e.target.value === '' ? 0 : Number(e.target.value))}
                         min="0"
-                        step="0.01"
                         autoComplete="off"
                     />
-                )}
-                <button onClick={onBuy}>Buy</button>
-                <button onClick={onSell}>Sell</button>
+                    <select value={orderType} onChange={(e) => setOrderType(e.target.value)}>
+                        <option value="market">Market</option>
+                        <option value="limit">Limit</option>
+                    </select>
+                    {orderType === 'limit' && (
+                        <input
+                            type="number"
+                            placeholder="Limit Price"
+                            value={limitPrice}
+                            onChange={(e) => setLimitPrice(e.target.value)}
+                            min="0"
+                            step="0.01"
+                            autoComplete="off"
+                        />
+                    )}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button onClick={onBuy}>Buy</button>
+                    <button onClick={onSell}>Sell</button>
+                </div>
             </div>
 
             {tradeMessage && <p className="note">{tradeMessage}</p>}
@@ -1261,8 +1265,8 @@ const Dashboard = () => {
                             : "Competition (Team)"}
                 </h3>
 
-                <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 340 }}>
+                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', alignItems: 'start' }}>
+                    <div style={{ minWidth: 0 }}>
                         <SharedInputs
                             onBuy={() => executeTrade('buy')}
                             onSell={() => executeTrade('sell')}
