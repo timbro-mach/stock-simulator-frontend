@@ -30,10 +30,11 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [] }) =
 
     const dailyPoints = dailyReferencePoints.map((point) => Number(point.close));
     const dailyPreviousClose = dailyPoints[dailyPoints.length - 2] ?? previousPrice;
-    const dayChangeValue = latestPrice - dailyPreviousClose;
-    const dayChangePercent = dailyPreviousClose ? (dayChangeValue / dailyPreviousClose) * 100 : 0;
     const rangeChangeValue = latestPrice - firstPrice;
     const rangeChangePercent = firstPrice ? (rangeChangeValue / firstPrice) * 100 : 0;
+    const dayBaseline = range === '1D' ? firstPrice : dailyPreviousClose;
+    const dayChangeValue = latestPrice - dayBaseline;
+    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
     const isPositive = dayChangeValue >= 0;
 
     return {
@@ -82,10 +83,11 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
     const firstPoint = Number(nextPoints[0] ?? liveQuotePrice);
     const previousClose = Number(chartState.metrics.previousClose ?? previousPoint);
 
-    const dayChangeValue = liveQuotePrice - previousClose;
-    const dayChangePercent = previousClose ? (dayChangeValue / previousClose) * 100 : 0;
     const rangeChangeValue = liveQuotePrice - firstPoint;
     const rangeChangePercent = firstPoint ? (rangeChangeValue / firstPoint) * 100 : 0;
+    const dayBaseline = chartState.metrics.range === '1D' ? firstPoint : previousClose;
+    const dayChangeValue = liveQuotePrice - dayBaseline;
+    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
     const isPositive = dayChangeValue >= 0;
 
     return {
