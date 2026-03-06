@@ -477,6 +477,8 @@ const Dashboard = () => {
     const [allCompetitions, setAllCompetitions] = useState([]); // NEW: For admin panel
     const [showModal, setShowModal] = useState(false);
     const [modalCompetition, setModalCompetition] = useState(null);
+    const [showTradeBlotterModal, setShowTradeBlotterModal] = useState(false);
+    const [tradeBlotterLink, setTradeBlotterLink] = useState('');
 
     // =========================================
     // Admin-only removal tools
@@ -491,6 +493,26 @@ const Dashboard = () => {
     // API base
     // =========================================
     const BASE_URL = getApiBaseUrl();
+    const resolveTradeBlotterLink = useCallback((userPayload = null) => {
+        const normalizedUsername = String(username || '').trim();
+        const encodedUsername = encodeURIComponent(normalizedUsername);
+        const query = normalizedUsername ? `?username=${encodedUsername}` : '';
+        const fallbackLink = `${BASE_URL}/trade_blotter${query}`;
+
+        if (!userPayload || typeof userPayload !== 'object') return fallbackLink;
+
+        const backendLink = userPayload.trade_blotter_url
+            || userPayload.trade_blotter_link
+            || userPayload.blotter_url
+            || userPayload.blotter_link;
+
+        if (!backendLink || typeof backendLink !== 'string') return fallbackLink;
+        if (/^https?:\/\//i.test(backendLink)) return backendLink;
+
+        const trimmedPath = backendLink.startsWith('/') ? backendLink : `/${backendLink}`;
+        return `${BASE_URL}${trimmedPath}`;
+    }, [BASE_URL, username]);
+
     const getPendingOrdersStorageKey = useCallback(
         (user) => `pending_limit_orders:${String(user || '').trim().toLowerCase()}`,
         [],
@@ -524,6 +546,7 @@ const Dashboard = () => {
             setTeamCompetitionAccounts(response.data.team_competitions || []);
             if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
             if (response.data.teams) setTeams(response.data.teams);
+            setTradeBlotterLink(resolveTradeBlotterLink(response.data));
         } catch (error) {
             if (error.response?.status === 404) {
                 console.error('User not found. Clearing session.');
@@ -535,7 +558,7 @@ const Dashboard = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [username]);
+    }, [BASE_URL, resolveTradeBlotterLink, username]);
 
     const [enteredCode, setEnteredCode] = useState('');
 
@@ -767,6 +790,8 @@ const Dashboard = () => {
         setChartData(null);
         setFeaturedCompetitions([]);
         setAllCompetitions([]);
+        setTradeBlotterLink('');
+        setShowTradeBlotterModal(false);
     };
 
     // =========================================
@@ -1238,6 +1263,10 @@ const Dashboard = () => {
     const closeModal = () => {
         setShowModal(false);
         setModalCompetition(null);
+    };
+
+    const closeTradeBlotterModal = () => {
+        setShowTradeBlotterModal(false);
     };
 
 
@@ -1791,6 +1820,15 @@ const Dashboard = () => {
                                         </button>
                                     ))}
                                 </div>
+                                <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    <button
+                                        className="primary"
+                                        onClick={() => setShowTradeBlotterModal(true)}
+                                        disabled={isLoading}
+                                    >
+                                        📒 Open Trade Blotter
+                                    </button>
+                                </div>
                                 <button className="logout-button" onClick={handleLogout} disabled={isLoading}>
                                     Logout
                                 </button>
@@ -2117,6 +2155,50 @@ const Dashboard = () => {
                             </button>
                             <button className="logout-button" onClick={closeModal} disabled={isLoading}>
                                 Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showTradeBlotterModal && (
+                <div
+                    className="modal-overlay"
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        paddingTop: '20px',
+                    }}
+                >
+                    <div className="card" style={{ maxWidth: 720, margin: 0, width: 'min(92vw, 720px)' }}>
+                        <h2>📒 Trade Blotter</h2>
+                        <p>
+                            Use the backend trade blotter to review all submitted orders, fills, and execution history.
+                        </p>
+                        <p className="note" style={{ wordBreak: 'break-all' }}>
+                            {tradeBlotterLink || resolveTradeBlotterLink()}
+                        </p>
+
+                        <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 0 }}>
+                            <a
+                                href={tradeBlotterLink || resolveTradeBlotterLink()}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="primary"
+                                style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', borderRadius: 10, padding: '8px 16px', color: '#fff', backgroundColor: '#2563eb' }}
+                            >
+                                Open Trade Blotter ↗
+                            </a>
+                            <button className="logout-button" type="button" onClick={closeTradeBlotterModal}>
+                                Close
                             </button>
                         </div>
                     </div>
