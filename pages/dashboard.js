@@ -126,9 +126,13 @@ const buildChartState = ({
     const rangeBaselinePrice = getRangeBaselinePrice(points, range, firstPrice);
     const rangeChangeValue = latestPrice - rangeBaselinePrice;
     const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
-    const dayBaselinePrice = getIntradayBaselinePrice(intradayReferencePoints, dailyPreviousClose);
-    const dayBaseline = Number.isFinite(dayBaselinePrice) ? dayBaselinePrice : dailyPreviousClose;
-    const hasApiDayChange = range === '1D' && Number.isFinite(Number(apiTodayChangeValue));
+    const intradayBaselinePrice = getIntradayBaselinePrice(intradayReferencePoints, dailyPreviousClose);
+    const dayBaseline = range === '1D'
+        ? dailyPreviousClose
+        : (Number.isFinite(intradayBaselinePrice) ? intradayBaselinePrice : dailyPreviousClose);
+    const hasApiDayChange = range === '1D'
+        && !Number.isFinite(dayBaseline)
+        && Number.isFinite(Number(apiTodayChangeValue));
     const derivedDayChangeValue = latestPrice - dayBaseline;
     const derivedDayChangePercent = dayBaseline ? (derivedDayChangeValue / dayBaseline) * 100 : 0;
     const dayChangeValue = hasApiDayChange ? Number(apiTodayChangeValue) : derivedDayChangeValue;
@@ -199,8 +203,11 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
     const rangeBaselinePrice = Number(chartState.metrics.rangeBaselinePrice ?? firstPoint);
     const rangeChangeValue = liveQuotePrice - rangeBaselinePrice;
     const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
-    const dayBaseline = Number(chartState.metrics.dayBaselinePrice ?? previousClose);
-    const useApiDayChange = chartRange === '1D' && chartState.metrics?.dayChangeSource === 'api';
+    const defaultDayBaseline = chartRange === '1D' ? previousClose : firstPoint;
+    const dayBaseline = Number(chartState.metrics.dayBaselinePrice ?? defaultDayBaseline);
+    const useApiDayChange = chartRange === '1D'
+        && chartState.metrics?.dayChangeSource === 'api'
+        && !Number.isFinite(dayBaseline);
     const derivedDayChangeValue = liveQuotePrice - dayBaseline;
     const derivedDayChangePercent = dayBaseline ? (derivedDayChangeValue / dayBaseline) * 100 : 0;
     const dayChangeValue = useApiDayChange ? Number(chartState.metrics.dayChangeValue) : derivedDayChangeValue;
