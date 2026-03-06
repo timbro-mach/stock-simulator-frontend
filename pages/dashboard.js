@@ -107,7 +107,15 @@ const getIntradayBaselinePrice = (points, fallbackPrice) => {
     return Number.isFinite(firstPoint) ? firstPoint : fallbackPrice;
 };
 
-const buildChartState = ({ points, symbol, range, dailyReferencePoints = [], intradayReferencePoints = [] }) => {
+const buildChartState = ({
+    points,
+    symbol,
+    range,
+    dailyReferencePoints = [],
+    intradayReferencePoints = [],
+    apiTodayChangeValue = null,
+    apiTodayChangePercent = null,
+}) => {
     const labels = points.map((point) => point.date);
     const dataPoints = points.map((point) => Number(point.close));
     const latestPrice = dataPoints[dataPoints.length - 1];
@@ -120,8 +128,13 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [], int
     const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
     const dayBaselinePrice = getIntradayBaselinePrice(intradayReferencePoints, dailyPreviousClose);
     const dayBaseline = Number.isFinite(dayBaselinePrice) ? dayBaselinePrice : dailyPreviousClose;
-    const dayChangeValue = latestPrice - dayBaseline;
-    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
+    const hasApiDayChange = range === '1D' && Number.isFinite(Number(apiTodayChangeValue));
+    const derivedDayChangeValue = latestPrice - dayBaseline;
+    const derivedDayChangePercent = dayBaseline ? (derivedDayChangeValue / dayBaseline) * 100 : 0;
+    const dayChangeValue = hasApiDayChange ? Number(apiTodayChangeValue) : derivedDayChangeValue;
+    const dayChangePercent = hasApiDayChange && Number.isFinite(Number(apiTodayChangePercent))
+        ? Number(apiTodayChangePercent)
+        : derivedDayChangePercent;
     const isPositive = dayChangeValue >= 0;
 
     return {
@@ -153,6 +166,7 @@ const buildChartState = ({ points, symbol, range, dailyReferencePoints = [], int
             rangeChangePercent,
             previousClose: dailyPreviousClose,
             dayBaselinePrice: dayBaseline,
+            dayChangeSource: hasApiDayChange ? 'api' : 'derived',
             range,
             rangeBaselinePrice,
         },
@@ -186,8 +200,11 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
     const rangeChangeValue = liveQuotePrice - rangeBaselinePrice;
     const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
     const dayBaseline = Number(chartState.metrics.dayBaselinePrice ?? previousClose);
-    const dayChangeValue = liveQuotePrice - dayBaseline;
-    const dayChangePercent = dayBaseline ? (dayChangeValue / dayBaseline) * 100 : 0;
+    const useApiDayChange = chartRange === '1D' && chartState.metrics?.dayChangeSource === 'api';
+    const derivedDayChangeValue = liveQuotePrice - dayBaseline;
+    const derivedDayChangePercent = dayBaseline ? (derivedDayChangeValue / dayBaseline) * 100 : 0;
+    const dayChangeValue = useApiDayChange ? Number(chartState.metrics.dayChangeValue) : derivedDayChangeValue;
+    const dayChangePercent = useApiDayChange ? Number(chartState.metrics.dayChangePercent) : derivedDayChangePercent;
     const isPositive = dayChangeValue >= 0;
 
     return {
@@ -873,6 +890,8 @@ const Dashboard = () => {
                 intradayReferencePoints,
                 liveQuotePrice,
                 shouldSyncLiveQuote,
+                apiTodayChangeValue,
+                apiTodayChangePercent,
             } = snapshotResponse.data;
 
             if (chartPoints && chartPoints.length > 0) {
@@ -882,6 +901,8 @@ const Dashboard = () => {
                     range,
                     dailyReferencePoints,
                     intradayReferencePoints,
+                    apiTodayChangeValue,
+                    apiTodayChangePercent,
                 });
                 const syncedChartState = shouldSyncLiveQuote
                     ? syncChartStateWithLiveQuote(nextChartState, Number(liveQuotePrice))
@@ -935,6 +956,8 @@ const Dashboard = () => {
                 intradayReferencePoints,
                 liveQuotePrice,
                 shouldSyncLiveQuote,
+                apiTodayChangeValue,
+                apiTodayChangePercent,
             } = snapshotResponse.data;
 
             if (chartPoints && chartPoints.length > 0) {
@@ -944,6 +967,8 @@ const Dashboard = () => {
                     range: chartRange,
                     dailyReferencePoints,
                     intradayReferencePoints,
+                    apiTodayChangeValue,
+                    apiTodayChangePercent,
                 });
                 const syncedChartState = shouldSyncLiveQuote
                     ? syncChartStateWithLiveQuote(nextChartState, Number(liveQuotePrice))
