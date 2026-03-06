@@ -1,6 +1,41 @@
 import axios from 'axios';
 import { getApiBaseUrl } from '../../../lib/api';
-import { normalizeChartPoints, shouldSyncIntradayLiveQuote } from '../../../lib/chartData';
+import {
+  filterChartPointsToLatestTradingDay,
+  normalizeChartPoints,
+  shouldSyncIntradayLiveQuote,
+} from '../../../lib/chartData';
+
+
+const asFiniteNumber = (...values) => {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const getTodaysChangeFromQuote = (quote) => {
+  const changeValue = asFiniteNumber(
+    quote?.todays_change,
+    quote?.today_change,
+    quote?.change,
+    quote?.change_amount,
+    quote?.day_change,
+  );
+  const changePercent = asFiniteNumber(
+    quote?.todays_change_percent,
+    quote?.today_change_percent,
+    quote?.change_percent,
+    quote?.percent_change,
+    quote?.day_change_percent,
+  );
+
+  return {
+    apiTodayChangeValue: changeValue,
+    apiTodayChangePercent: changePercent,
+  };
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -28,23 +63,29 @@ export default async function handler(req, res) {
         : axios.get(`${baseUrl}/stock_chart/${symbol}?range=1D`),
     ]);
 
-    const chartPoints = normalizeChartPoints(chartResponse.data);
+    const normalizedChartPoints = normalizeChartPoints(chartResponse.data);
+    const chartPoints = range === '1D'
+      ? filterChartPointsToLatestTradingDay(normalizedChartPoints)
+      : normalizedChartPoints;
     const dailyReferencePoints = range === '1W'
       ? chartPoints
       : normalizeChartPoints(dailyResponse.data);
     const intradayReferencePoints = range === '1D'
       ? chartPoints
-      : normalizeChartPoints(intradayResponse.data);
+      : filterChartPointsToLatestTradingDay(intradayResponse.data);
 
     const shouldSyncLiveQuote = range === '1D'
       ? shouldSyncIntradayLiveQuote(chartPoints)
       : true;
+    const { apiTodayChangeValue, apiTodayChangePercent } = getTodaysChangeFromQuote(stockResponse.data);
 
     return res.status(200).json({
       symbol,
       range,
       liveQuotePrice: Number(stockResponse.data?.price),
       shouldSyncLiveQuote,
+      apiTodayChangeValue,
+      apiTodayChangePercent,
       chartPoints,
       dailyReferencePoints,
       intradayReferencePoints,
