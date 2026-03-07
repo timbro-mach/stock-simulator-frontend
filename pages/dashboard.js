@@ -478,7 +478,9 @@ const Dashboard = () => {
     const [showModal, setShowModal] = useState(false);
     const [modalCompetition, setModalCompetition] = useState(null);
     const [showTradeBlotterModal, setShowTradeBlotterModal] = useState(false);
-    const [tradeBlotterLink, setTradeBlotterLink] = useState('');
+    const [tradeBlotterRows, setTradeBlotterRows] = useState([]);
+    const [tradeBlotterLoading, setTradeBlotterLoading] = useState(false);
+    const [tradeBlotterError, setTradeBlotterError] = useState('');
 
     // =========================================
     // Admin-only removal tools
@@ -493,25 +495,96 @@ const Dashboard = () => {
     // API base
     // =========================================
     const BASE_URL = getApiBaseUrl();
-    const resolveTradeBlotterLink = useCallback((userPayload = null) => {
-        const normalizedUsername = String(username || '').trim();
-        const encodedUsername = encodeURIComponent(normalizedUsername);
-        const query = normalizedUsername ? `?username=${encodedUsername}` : '';
-        const fallbackLink = `${BASE_URL}/trade_blotter${query}`;
+    const normalizeTradeBlotterRows = useCallback((payload) => {
+        if (!payload) return null;
 
-        if (!userPayload || typeof userPayload !== 'object') return fallbackLink;
+        const candidates = [
+            payload,
+            payload?.rows,
+            payload?.trades,
+            payload?.orders,
+            payload?.trade_history,
+            payload?.tradeHistory,
+            payload?.history,
+            payload?.trade_blotter,
+            payload?.tradeBlotter,
+            payload?.data,
+        ];
 
-        const backendLink = userPayload.trade_blotter_url
-            || userPayload.trade_blotter_link
-            || userPayload.blotter_url
-            || userPayload.blotter_link;
+        const source = candidates.find((candidate) => Array.isArray(candidate));
+        if (!source) return null;
 
-        if (!backendLink || typeof backendLink !== 'string') return fallbackLink;
-        if (/^https?:\/\//i.test(backendLink)) return backendLink;
+        return source.map((row, index) => {
+            const quantity = Number(row?.quantity ?? row?.qty ?? row?.shares ?? 0);
+            const price = Number(row?.price ?? row?.execution_price ?? row?.fill_price ?? row?.trade_price ?? 0);
+            const timestamp = row?.timestamp
+                || row?.executed_at
+                || row?.created_at
+                || row?.updated_at
+                || row?.date
+                || row?.time
+                || null;
 
-        const trimmedPath = backendLink.startsWith('/') ? backendLink : `/${backendLink}`;
-        return `${BASE_URL}${trimmedPath}`;
-    }, [BASE_URL, username]);
+            return {
+                id: row?.id ?? row?.trade_id ?? row?.order_id ?? `${row?.symbol || row?.ticker || 'trade'}-${index}`,
+                symbol: String(row?.symbol ?? row?.ticker ?? '-').toUpperCase(),
+                action: String(row?.action ?? row?.side ?? row?.type ?? '-').toUpperCase(),
+                quantity: Number.isFinite(quantity) ? quantity : 0,
+                price: Number.isFinite(price) ? price : null,
+                status: String(row?.status ?? row?.state ?? row?.result ?? 'FILLED').toUpperCase(),
+                timestamp,
+                account: row?.account_name || row?.account_type || row?.competition_code || row?.team_name || '',
+            };
+        });
+    }, []);
+
+    const fetchTradeBlotterRows = useCallback(async () => {
+        const trimmedUsername = String(username || '').trim();
+        if (!trimmedUsername) {
+            setTradeBlotterRows([]);
+            setTradeBlotterError('Missing username for trade history lookup.');
+            setTradeBlotterLoading(false);
+            return;
+        }
+
+        setTradeBlotterLoading(true);
+        setTradeBlotterError('');
+
+        const endpointCandidates = [
+            '/trade_history',
+            '/trade-history',
+            '/trades/history',
+            '/trades',
+            '/trade_blotter',
+        ];
+
+        let lastError = null;
+        for (const endpoint of endpointCandidates) {
+            try {
+                const response = await axios.get(`${BASE_URL}${endpoint}`, { params: { username: trimmedUsername } });
+                const rows = normalizeTradeBlotterRows(response?.data);
+
+                if (rows !== null) {
+                    setTradeBlotterRows(rows);
+                    setTradeBlotterError('');
+                    setTradeBlotterLoading(false);
+                    return;
+                }
+            } catch (error) {
+                lastError = error;
+                if (error?.response?.status === 404) continue;
+            }
+        }
+
+        setTradeBlotterRows([]);
+        setTradeBlotterError(lastError?.response?.data?.message || 'Could not load trade history right now.');
+        setTradeBlotterLoading(false);
+    }, [BASE_URL, normalizeTradeBlotterRows, username]);
+
+    const openTradeBlotterModal = useCallback(async () => {
+        setShowTradeBlotterModal(true);
+        await fetchTradeBlotterRows();
+    }, [fetchTradeBlotterRows]);
 
     const getPendingOrdersStorageKey = useCallback(
         (user) => `pending_limit_orders:${String(user || '').trim().toLowerCase()}`,
@@ -558,7 +631,7 @@ const Dashboard = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [BASE_URL, resolveTradeBlotterLink, username]);
+    }, [BASE_URL, username]);
 
     const [enteredCode, setEnteredCode] = useState('');
 
@@ -790,8 +863,10 @@ const Dashboard = () => {
         setChartData(null);
         setFeaturedCompetitions([]);
         setAllCompetitions([]);
-        setTradeBlotterLink('');
         setShowTradeBlotterModal(false);
+        setTradeBlotterRows([]);
+        setTradeBlotterError('');
+        setTradeBlotterLoading(false);
     };
 
     // =========================================
@@ -1267,6 +1342,7 @@ const Dashboard = () => {
 
     const closeTradeBlotterModal = () => {
         setShowTradeBlotterModal(false);
+        setTradeBlotterError('');
     };
 
 
@@ -1823,7 +1899,7 @@ const Dashboard = () => {
                                 <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                     <button
                                         className="primary"
-                                        onClick={() => setShowTradeBlotterModal(true)}
+                                        onClick={openTradeBlotterModal}
                                         disabled={isLoading}
                                     >
                                         📒 Open Trade Blotter
@@ -2178,25 +2254,53 @@ const Dashboard = () => {
                         paddingTop: '20px',
                     }}
                 >
-                    <div className="card" style={{ maxWidth: 720, margin: 0, width: 'min(92vw, 720px)' }}>
+                    <div className="card" style={{ maxWidth: 900, margin: 0, width: 'min(94vw, 900px)' }}>
                         <h2>📒 Trade Blotter</h2>
                         <p>
-                            Use the backend trade blotter to review all submitted orders, fills, and execution history.
-                        </p>
-                        <p className="note" style={{ wordBreak: 'break-all' }}>
-                            {tradeBlotterLink || resolveTradeBlotterLink()}
+                            Review your submitted orders, fills, and execution history directly in this modal.
                         </p>
 
-                        <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 0 }}>
-                            <a
-                                href={tradeBlotterLink || resolveTradeBlotterLink()}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="primary"
-                                style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', borderRadius: 10, padding: '8px 16px', color: '#fff', backgroundColor: '#2563eb' }}
-                            >
-                                Open Trade Blotter ↗
-                            </a>
+                        {tradeBlotterLoading ? (
+                            <p className="note">Loading trade history...</p>
+                        ) : tradeBlotterError ? (
+                            <p className="note" style={{ color: '#b91c1c' }}>{tradeBlotterError}</p>
+                        ) : tradeBlotterRows.length === 0 ? (
+                            <p className="note">No trades found yet.</p>
+                        ) : (
+                            <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Action</th>
+                                            <th>Symbol</th>
+                                            <th>Qty</th>
+                                            <th>Price</th>
+                                            <th>Status</th>
+                                            <th>Account</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {tradeBlotterRows.map((trade) => (
+                                            <tr key={trade.id}>
+                                                <td>{trade.timestamp ? new Date(trade.timestamp).toLocaleString() : '—'}</td>
+                                                <td>{trade.action}</td>
+                                                <td>{trade.symbol}</td>
+                                                <td>{trade.quantity}</td>
+                                                <td>{trade.price === null ? '—' : formatMoney(trade.price)}</td>
+                                                <td>{trade.status}</td>
+                                                <td>{trade.account || '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 0, marginTop: 12 }}>
+                            <button className="primary" type="button" onClick={fetchTradeBlotterRows} disabled={tradeBlotterLoading}>
+                                {tradeBlotterLoading ? 'Refreshing...' : 'Refresh'}
+                            </button>
                             <button className="logout-button" type="button" onClick={closeTradeBlotterModal}>
                                 Close
                             </button>
