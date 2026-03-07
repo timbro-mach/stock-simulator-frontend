@@ -23,9 +23,21 @@ const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 const formatSignedMoney = (value) => `${Number(value) >= 0 ? '+' : '-'}$${Math.abs(Number(value || 0)).toFixed(2)}`;
 
 const DATE_FORMATTERS = {
-    intraday: new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }),
-    shortDate: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }),
-    monthYear: new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit' }),
+    intraday: new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: 'America/New_York',
+    }),
+    shortDate: new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'America/New_York',
+    }),
+    monthYear: new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        year: '2-digit',
+        timeZone: 'America/New_York',
+    }),
 };
 
 const formatChartDateLabel = (value, range) => {
