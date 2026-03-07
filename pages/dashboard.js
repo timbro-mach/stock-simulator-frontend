@@ -619,6 +619,7 @@ const Dashboard = () => {
             setTeamCompetitionAccounts(response.data.team_competitions || []);
             if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
             if (response.data.teams) setTeams(response.data.teams);
+            setTradeBlotterLink(resolveTradeBlotterLink(response.data));
         } catch (error) {
             if (error.response?.status === 404) {
                 console.error('User not found. Clearing session.');
