@@ -99,7 +99,7 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="card" style={{ maxWidth: 460, margin: '40px auto' }}>
+    <div className="card auth-card" style={{ margin: '40px auto' }}>
       <h2>Reset Password</h2>
       {tokenMissing ? (
         <>
