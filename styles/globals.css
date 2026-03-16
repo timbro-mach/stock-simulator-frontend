@@ -38,6 +38,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 h1,
 h2,
 h3 {
@@ -78,7 +82,8 @@ button {
   color: var(--text-main);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 8px 16px;
+  padding: 10px 16px;
+  min-height: 44px;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
@@ -128,9 +133,15 @@ select {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   font-size: 15px;
-  width: 240px;
+  width: min(100%, 240px);
+  min-height: 44px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   background: #fff;
+}
+
+label {
+  display: inline-block;
+  margin-bottom: 4px;
 }
 
 input:focus,
@@ -207,6 +218,7 @@ select:focus {
 
 table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
   font-size: 15px;
 }
@@ -284,4 +296,90 @@ header {
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 20px;
+}
+
+.responsive-form {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 520px);
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-only {
+  display: none;
+}
+
+.auth-card {
+  width: min(100%, 460px);
+  margin: 0 auto;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px 12px;
+  overflow-y: auto;
+}
+
+.modal-card {
+  width: min(100%, 900px);
+  margin: 0;
+}
+
+@media (max-width: 1024px) {
+  .container,
+  .dashboard-container {
+    padding: 0 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  h1 {
+    font-size: 24px;
+  }
+
+  .container,
+  .dashboard-container {
+    margin: 20px auto;
+    padding: 0 14px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  input,
+  select,
+  button {
+    width: 100%;
+    max-width: none;
+  }
+
+  .mobile-only {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 480px) {
+  .container,
+  .dashboard-container {
+    padding: 0 10px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  table {
+    min-width: 560px;
+  }
 }
