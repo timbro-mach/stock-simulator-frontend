@@ -309,9 +309,6 @@ header {
   -webkit-overflow-scrolling: touch;
 }
 
-.mobile-only {
-  display: none;
-}
 
 .auth-card {
   width: min(100%, 460px);
@@ -364,9 +361,6 @@ header {
     max-width: none;
   }
 
-  .mobile-only {
-    display: inline-flex;
-  }
 }
 
 @media (max-width: 480px) {

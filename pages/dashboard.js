@@ -1435,6 +1435,14 @@ const Dashboard = () => {
             code = ''
         } = account || {};
 
+        const toFiniteNumber = (...values) => {
+            for (const value of values) {
+                const candidate = Number(value);
+                if (Number.isFinite(candidate)) return candidate;
+            }
+            return null;
+        };
+
         const format = (n) =>
             typeof n === 'number'
                 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1442,11 +1450,42 @@ const Dashboard = () => {
         const pct = (n) =>
             typeof n === 'number' ? n.toFixed(2) + '%' : '0.00%';
 
+        const todayPnlValue = toFiniteNumber(
+            account?.today_pnl,
+            account?.todayPnL,
+            account?.pnl_today,
+            account?.day_pnl,
+            account?.daily_pnl,
+            account?.todays_pnl,
+        ) ?? 0;
+
+        const todayPnlPercent = toFiniteNumber(
+            account?.today_pnl_pct,
+            account?.todayPnlPct,
+            account?.today_return_pct,
+            account?.day_return_pct,
+            account?.daily_return_pct,
+        ) ?? (() => {
+            const priorValue = Number(total_value) - Number(todayPnlValue);
+            if (!Number.isFinite(priorValue) || priorValue === 0) return 0;
+            return (todayPnlValue / priorValue) * 100;
+        })();
+
         return (
             <div className="card section" style={{ width: 'min(100%, 360px)' }}>
                 <h3>{isGlobal ? 'Global Account' : name + (code ? ` (${code})` : '')}</h3>
                 <p className="note">Cash: ${format(cash_balance)}</p>
                 <p className="note">Total Value: <strong>${format(total_value)}</strong></p>
+                <p className="note">
+                    P&L $ Today: <span style={{ color: todayPnlValue >= 0 ? 'green' : 'red', fontWeight: 600 }}>
+                        {todayPnlValue >= 0 ? '+' : '-'}${format(Math.abs(todayPnlValue))}
+                    </span>
+                </p>
+                <p className="note">
+                    P&L % Today: <span style={{ color: todayPnlPercent >= 0 ? 'green' : 'red', fontWeight: 600 }}>
+                        {todayPnlPercent >= 0 ? '+' : ''}{pct(todayPnlPercent)}
+                    </span>
+                </p>
 
                 <p className="note">
                     Realized P&L: <span style={{ color: realized_pnl >= 0 ? 'green' : 'red' }}>
@@ -1794,18 +1833,6 @@ const Dashboard = () => {
                     </button>
                 )}
             </header>
-
-            {isLoggedIn && mobileMenuOpen && (
-                <div className="card section" style={{ marginTop: 0 }}>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button onClick={() => { setShowTrading((prev) => !prev); setMobileMenuOpen(false); }}>
-                            {showTrading ? '⬅ Back to Dashboard' : '🚀 Start Trading'}
-                        </button>
-                        <button onClick={() => { setShowTradeBlotterModal(true); setMobileMenuOpen(false); }}>📒 Trade Blotter</button>
-                        <button className="logout-button" onClick={handleLogout}>Logout</button>
-                    </div>
-                </div>
-            )}
 
             {isLoggedIn ? (
                 <div>
