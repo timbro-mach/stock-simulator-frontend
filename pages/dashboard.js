@@ -479,6 +479,7 @@ const Dashboard = () => {
     const [showModal, setShowModal] = useState(false);
     const [modalCompetition, setModalCompetition] = useState(null);
     const [showTradeBlotterModal, setShowTradeBlotterModal] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [tradeBlotterRows, setTradeBlotterRows] = useState([]);
     const [tradeBlotterLoading, setTradeBlotterLoading] = useState(false);
     const [tradeBlotterError, setTradeBlotterError] = useState('');
@@ -1801,6 +1802,17 @@ const Dashboard = () => {
                         </p>
                     )}
                 </div>
+
+                {isLoggedIn && (
+                    <button
+                        className="mobile-only"
+                        type="button"
+                        onClick={() => setMobileMenuOpen((prev) => !prev)}
+                        style={{ width: 'auto', minWidth: 44 }}
+                    >
+                        ☰ Menu
+                    </button>
+                )}
 
                 {isLoggedIn && (
                     <button
