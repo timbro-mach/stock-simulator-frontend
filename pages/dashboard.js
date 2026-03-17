@@ -496,7 +496,7 @@ const Dashboard = () => {
     // API base
     // =========================================
     const BASE_URL = getApiBaseUrl();
-    const resolveTradeAccountLabel = useCallback((row) => {
+    const resolveTradeAccountDetails = useCallback((row) => {
         const accountContext = row?.account_context
             || row?.accountContext
             || row?.context
@@ -524,6 +524,16 @@ const Dashboard = () => {
             || accountContext?.team_id
             || accountContext?.teamId
             || '';
+
+        const matchedCompetitionAccount = competitionAccounts.find((account) => String(account?.code) === String(competitionCode));
+        const matchedTeamAccount = teamCompetitionAccounts.find(
+            (account) => String(account?.team_id) === String(teamId) || String(account?.code) === String(competitionCode),
+        );
+
+        const fallbackAccountName = row?.account_name
+            || row?.accountName
+            || row?.account?.name
+            || row?.account;
 
         const matchedCompetitionAccount = competitionAccounts.find((account) => String(account?.code) === String(competitionCode));
         const matchedTeamAccount = teamCompetitionAccounts.find(
@@ -630,7 +640,7 @@ const Dashboard = () => {
                 account: accountLabel,
             };
         });
-    }, [resolveTradeAccountLabel]);
+    }, [resolveTradeAccountDetails]);
 
     const fetchTradeBlotterRows = useCallback(async () => {
         const trimmedUsername = String(username || '').trim();
@@ -2504,6 +2514,7 @@ const Dashboard = () => {
                                                 <td>{trade.price === null ? '—' : formatMoney(trade.price)}</td>
                                                 <td>{trade.status}</td>
                                                 <td>{trade.account || '—'}</td>
+                                                <td>{trade.competitionAccountType || '—'}</td>
                                             </tr>
                                         ))}
                                     </tbody>
