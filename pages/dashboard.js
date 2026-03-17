@@ -1442,6 +1442,8 @@ const Dashboard = () => {
             return null;
         };
 
+        const portfolioHoldings = Array.isArray(account?.portfolio) ? account.portfolio : [];
+
         const format = (n) =>
             typeof n === 'number'
                 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1449,14 +1451,65 @@ const Dashboard = () => {
         const pct = (n) =>
             typeof n === 'number' ? n.toFixed(2) + '%' : '0.00%';
 
-        const todayPnlValue = toFiniteNumber(
+        const todayPnlValueFromAccount = toFiniteNumber(
             account?.today_pnl,
             account?.todayPnL,
             account?.pnl_today,
             account?.day_pnl,
+            account?.dayPnl,
+            account?.day_pnl_value,
+            account?.dailyPnL,
             account?.daily_pnl,
             account?.todays_pnl,
-        ) ?? 0;
+            account?.todaysPnL,
+            account?.today_pl,
+            account?.today_profit_loss,
+        );
+
+        const derivedTodayPnlFromPortfolio = portfolioHoldings.reduce((runningTotal, holding) => {
+            const quantity = toFiniteNumber(holding?.quantity, holding?.qty, holding?.shares) ?? 0;
+            if (!quantity) return runningTotal;
+
+            const directHoldingDayPnl = toFiniteNumber(
+                holding?.today_pnl,
+                holding?.todayPnL,
+                holding?.day_pnl,
+                holding?.daily_pnl,
+                holding?.todays_pnl,
+                holding?.day_change_value,
+            );
+
+            if (Number.isFinite(directHoldingDayPnl)) {
+                return runningTotal + directHoldingDayPnl;
+            }
+
+            const currentPrice = toFiniteNumber(
+                holding?.current_price,
+                holding?.currentPrice,
+                holding?.price,
+                holding?.last_price,
+                holding?.lastPrice,
+            );
+
+            const priorPrice = toFiniteNumber(
+                holding?.previous_close,
+                holding?.previousClose,
+                holding?.prev_close,
+                holding?.prior_close,
+                holding?.last_close,
+                holding?.close,
+            );
+
+            if (Number.isFinite(currentPrice) && Number.isFinite(priorPrice)) {
+                return runningTotal + (currentPrice - priorPrice) * quantity;
+            }
+
+            return runningTotal;
+        }, 0);
+
+        const todayPnlValue = Number.isFinite(todayPnlValueFromAccount)
+            ? todayPnlValueFromAccount
+            : (Number.isFinite(derivedTodayPnlFromPortfolio) ? derivedTodayPnlFromPortfolio : 0);
 
         const todayPnlPercent = toFiniteNumber(
             account?.today_pnl_pct,
@@ -1464,6 +1517,8 @@ const Dashboard = () => {
             account?.today_return_pct,
             account?.day_return_pct,
             account?.daily_return_pct,
+            account?.todays_return_pct,
+            account?.today_pl_pct,
         ) ?? (() => {
             const priorValue = Number(total_value) - Number(todayPnlValue);
             if (!Number.isFinite(priorValue) || priorValue === 0) return 0;
