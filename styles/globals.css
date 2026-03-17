@@ -125,6 +125,17 @@ button:disabled {
   cursor: not-allowed;
 }
 
+
+.account-chip {
+  background-color: #edf1f4;
+}
+
+.account-chip-active {
+  background-color: #d7e6ff;
+  border-color: #4c7ecf;
+  box-shadow: inset 0 0 0 1px rgba(0, 39, 94, 0.12);
+}
+
 /* =====================================================
    Inputs — Clean and Confident
    ===================================================== */
