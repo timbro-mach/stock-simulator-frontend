@@ -1377,23 +1377,53 @@ const Dashboard = () => {
 
 
     const joinCompetitionAsTeam = async () => {
-        if (!joinTeamCompetitionTeamCode || !joinTeamCompetitionCode) {
+        const trimmedTeamCode = joinTeamCompetitionTeamCode.trim();
+        const trimmedCompetitionCode = joinTeamCompetitionCode.trim();
+
+        if (!trimmedTeamCode || !trimmedCompetitionCode) {
             return setTeamCompetitionMessage('Please enter both team code and competition code.');
         }
+
+        const payload = {
+            username,
+            team_code: trimmedTeamCode,
+            competition_code: trimmedCompetitionCode,
+        };
+
+        const endpointCandidates = [
+            '/competition/team/join',
+            '/competition/join_team',
+            '/team/competition/join',
+        ];
+
         setIsLoading(true);
         try {
-            const res = await axios.post(`${BASE_URL}/competition/team/join`, {
-                username,
-                team_code: joinTeamCompetitionTeamCode,
-                competition_code: joinTeamCompetitionCode,
-            });
+            let res = null;
+            let lastError = null;
+
+            for (const endpoint of endpointCandidates) {
+                try {
+                    res = await axios.post(`${BASE_URL}${endpoint}`, payload);
+                    break;
+                } catch (error) {
+                    lastError = error;
+                    if (error?.response?.status !== 404 && error?.response?.status !== 405) {
+                        throw error;
+                    }
+                }
+            }
+
+            if (!res) {
+                throw lastError || new Error('No team competition join endpoint available.');
+            }
+
             setTeamCompetitionMessage(res.data.message);
             setJoinTeamCompetitionTeamCode('');
             setJoinTeamCompetitionCode('');
-            fetchUserData();
+            await fetchUserData();
         } catch (error) {
             console.error('Error joining competition as team:', error);
-            setTeamCompetitionMessage('Error joining competition as team.');
+            setTeamCompetitionMessage(error.response?.data?.message || 'Error joining competition as team.');
         } finally {
             setIsLoading(false);
         }
@@ -1623,7 +1653,7 @@ const Dashboard = () => {
             );
         }
 
-        if (selectedAccount.type === 'team') {
+        if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
             const teamAcc = teamCompetitionAccounts.find(
                 (a) => a.team_id === selectedAccount.team_id && a.code === selectedAccount.competition_code
             );
@@ -1723,7 +1753,7 @@ const Dashboard = () => {
             );
         }
 
-        if (selectedAccount.type === 'team') {
+        if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
             const teamAcc = teamCompetitionAccounts.find(
                 (a) => a.team_id === selectedAccount.team_id && a.code === selectedAccount.competition_code
             );
@@ -2041,31 +2071,49 @@ const Dashboard = () => {
                             <div className="card section">
                                 <h2>Accounts</h2>
                                 <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-                                    <button onClick={() => setSelectedAccount({ type: 'global', id: null })} disabled={isLoading}>Global Account</button>
-                                    {competitionAccounts.map((acc) => (
-                                        <button
-                                            key={acc.code}
-                                            onClick={() => setSelectedAccount({ type: 'competition', id: acc.code })}
-                                            disabled={isLoading}
-                                        >
-                                            {acc.name} ({acc.code})
-                                        </button>
-                                    ))}
-                                    {teamCompetitionAccounts.map((acc) => (
-                                        <button
-                                            key={`${acc.team_id}-${acc.code}`}
-                                            onClick={() =>
-                                                setSelectedAccount({
-                                                    type: 'team',
-                                                    team_id: acc.team_id,
-                                                    competition_code: acc.code,
-                                                })
-                                            }
-                                            disabled={isLoading}
-                                        >
-                                            {acc.name} (Team • {acc.code})
-                                        </button>
-                                    ))}
+                                    <button
+                                        className={selectedAccount.type === 'global' ? 'account-chip account-chip-active' : 'account-chip'}
+                                        onClick={() => setSelectedAccount({ type: 'global', id: null })}
+                                        disabled={isLoading}
+                                    >
+                                        Global Account
+                                    </button>
+                                    {competitionAccounts.map((acc) => {
+                                        const isActive = selectedAccount.type === 'competition' && selectedAccount.id === acc.code;
+                                        return (
+                                            <button
+                                                key={acc.code}
+                                                className={isActive ? 'account-chip account-chip-active' : 'account-chip'}
+                                                onClick={() => setSelectedAccount({ type: 'competition', id: acc.code })}
+                                                disabled={isLoading}
+                                            >
+                                                {acc.name} ({acc.code})
+                                            </button>
+                                        );
+                                    })}
+                                    {teamCompetitionAccounts.map((acc) => {
+                                        const isActive =
+                                            (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition')
+                                            && selectedAccount.team_id === acc.team_id
+                                            && selectedAccount.competition_code === acc.code;
+
+                                        return (
+                                            <button
+                                                key={`${acc.team_id}-${acc.code}`}
+                                                className={isActive ? 'account-chip account-chip-active' : 'account-chip'}
+                                                onClick={() =>
+                                                    setSelectedAccount({
+                                                        type: 'team',
+                                                        team_id: acc.team_id,
+                                                        competition_code: acc.code,
+                                                    })
+                                                }
+                                                disabled={isLoading}
+                                            >
+                                                {acc.name} (Team • {acc.code})
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                                 <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                                     <button
