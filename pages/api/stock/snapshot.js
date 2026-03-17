@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { getApiBaseUrl } from '../../../lib/api';
 import {
-  filterChartPointsToLatestTradingDay,
+  filterChartPointsToPastHours,
   normalizeChartPoints,
   shouldSyncIntradayLiveQuote,
 } from '../../../lib/chartData';
@@ -65,14 +65,14 @@ export default async function handler(req, res) {
 
     const normalizedChartPoints = normalizeChartPoints(chartResponse.data);
     const chartPoints = range === '1D'
-      ? filterChartPointsToLatestTradingDay(normalizedChartPoints)
+      ? filterChartPointsToPastHours(normalizedChartPoints, 24)
       : normalizedChartPoints;
     const dailyReferencePoints = range === '1W'
       ? chartPoints
       : normalizeChartPoints(dailyResponse.data);
     const intradayReferencePoints = range === '1D'
       ? chartPoints
-      : filterChartPointsToLatestTradingDay(intradayResponse.data);
+      : filterChartPointsToPastHours(intradayResponse.data, 24);
 
     const shouldSyncLiveQuote = range === '1D'
       ? shouldSyncIntradayLiveQuote(chartPoints)
