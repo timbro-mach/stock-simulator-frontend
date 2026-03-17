@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
+import Image from 'next/image';
 import { getApiBaseUrl } from '../lib/api';
 import { normalizeChartPoints, toTimestamp } from '../lib/chartData';
 import Leaderboard from '../components/Leaderboard';
@@ -1787,6 +1788,17 @@ const Dashboard = () => {
     // =========================================
     return (
         <div className="dashboard-container">
+            <div className="top-banner-wrap">
+                <Image
+                    src="/Stock Market Simulation Banner.webp"
+                    alt="Stock Market SIM banner"
+                    className="top-banner-image"
+                    width={1600}
+                    height={1000}
+                    priority
+                />
+            </div>
+
             <header style={{
                 display: 'flex',
                 justifyContent: 'space-between',

@@ -298,6 +298,20 @@ header {
   margin-bottom: 20px;
 }
 
+.top-banner-wrap {
+  margin-bottom: 14px;
+}
+
+.top-banner-image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
 .responsive-form {
   display: grid;
   gap: 10px;
@@ -354,6 +368,10 @@ header {
     padding: 16px;
   }
 
+  .top-banner-wrap {
+    margin-bottom: 12px;
+  }
+
   input,
   select,
   button {
@@ -371,6 +389,10 @@ header {
 
   .card {
     padding: 14px;
+  }
+
+  .top-banner-wrap {
+    margin-bottom: 10px;
   }
 
   table {
