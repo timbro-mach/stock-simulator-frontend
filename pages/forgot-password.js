@@ -26,7 +26,7 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="card" style={{ maxWidth: 420, margin: '40px auto' }}>
+    <div className="card auth-card" style={{ margin: '40px auto' }}>
       <h2>Forgot Password</h2>
       <p className="note">
         Enter your email address and we&apos;ll send a reset link if an account exists.

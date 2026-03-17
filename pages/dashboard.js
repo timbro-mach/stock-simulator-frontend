@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
+import Image from 'next/image';
 import { getApiBaseUrl } from '../lib/api';
 import { normalizeChartPoints, toTimestamp } from '../lib/chartData';
 import Leaderboard from '../components/Leaderboard';
@@ -245,7 +246,7 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
 
 // Memoized ChartPanel component
 const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol }) => (
-    <div style={{ flex: 1, minHeight: 320, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(17,24,39,0.05)' }}>
+    <div style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(17,24,39,0.05)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             <div>
                 <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>{chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Stock Overview'}</h3>
@@ -256,7 +257,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                 )}
             </div>
             {chartMetrics && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(130px, auto))', gap: 6 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 6, width: '100%' }}>
                     <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>Current: <strong style={{ color: '#111827' }}>{formatMoney(chartMetrics.latestPrice)}</strong></p>
                     <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>Prev close: <strong style={{ color: '#111827' }}>{formatMoney(chartMetrics.previousClose)}</strong></p>
                     <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>{chartMetrics.range} change: <strong style={{ color: chartMetrics.rangeChangeValue >= 0 ? '#047857' : '#b91c1c' }}>{formatSignedMoney(chartMetrics.rangeChangeValue)}</strong></p>
@@ -265,13 +266,13 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
             )}
         </div>
 
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
             {['1D', '1W', '1M', '6M', '1Y'].map((r) => (
                 <button
                     key={r}
                     onClick={() => onRangeChange(r)}
                     style={{
-                        padding: '5px 12px',
+                        padding: '8px 12px',
                         borderRadius: 6,
                         background: chartRange === r ? '#1d4ed8' : '#f3f4f6',
                         color: chartRange === r ? '#fff' : '#374151',
@@ -287,7 +288,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
         </div>
 
         {chartData ? (
-            <div style={{ height: '300px', width: '100%' }}>
+            <div style={{ height: 'clamp(220px, 40vw, 300px)', width: '100%' }}>
                 <Line
                     data={chartData}
                     options={{
@@ -345,13 +346,14 @@ const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQu
 
     return (
         <>
-            <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                 <form
+                    className="responsive-form"
                     onSubmit={(e) => {
                         e.preventDefault();
                         handleSearch(e);
                     }}
-                    style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
+                    style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}
                 >
                     <input
                         type="text"
@@ -393,7 +395,7 @@ const SharedInputs = memo(({ onBuy, onSell, stockSymbol, setStockSymbol, tradeQu
                         />
                     )}
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                     <button onClick={onBuy}>Buy</button>
                     <button onClick={onSell}>Sell</button>
                 </div>
@@ -1433,6 +1435,14 @@ const Dashboard = () => {
             code = ''
         } = account || {};
 
+        const toFiniteNumber = (...values) => {
+            for (const value of values) {
+                const candidate = Number(value);
+                if (Number.isFinite(candidate)) return candidate;
+            }
+            return null;
+        };
+
         const format = (n) =>
             typeof n === 'number'
                 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1440,11 +1450,42 @@ const Dashboard = () => {
         const pct = (n) =>
             typeof n === 'number' ? n.toFixed(2) + '%' : '0.00%';
 
+        const todayPnlValue = toFiniteNumber(
+            account?.today_pnl,
+            account?.todayPnL,
+            account?.pnl_today,
+            account?.day_pnl,
+            account?.daily_pnl,
+            account?.todays_pnl,
+        ) ?? 0;
+
+        const todayPnlPercent = toFiniteNumber(
+            account?.today_pnl_pct,
+            account?.todayPnlPct,
+            account?.today_return_pct,
+            account?.day_return_pct,
+            account?.daily_return_pct,
+        ) ?? (() => {
+            const priorValue = Number(total_value) - Number(todayPnlValue);
+            if (!Number.isFinite(priorValue) || priorValue === 0) return 0;
+            return (todayPnlValue / priorValue) * 100;
+        })();
+
         return (
-            <div className="card section" style={{ minWidth: 280, maxWidth: 360 }}>
+            <div className="card section" style={{ width: 'min(100%, 360px)' }}>
                 <h3>{isGlobal ? 'Global Account' : name + (code ? ` (${code})` : '')}</h3>
                 <p className="note">Cash: ${format(cash_balance)}</p>
                 <p className="note">Total Value: <strong>${format(total_value)}</strong></p>
+                <p className="note">
+                    P&L $ Today: <span style={{ color: todayPnlValue >= 0 ? 'green' : 'red', fontWeight: 600 }}>
+                        {todayPnlValue >= 0 ? '+' : '-'}${format(Math.abs(todayPnlValue))}
+                    </span>
+                </p>
+                <p className="note">
+                    P&L % Today: <span style={{ color: todayPnlPercent >= 0 ? 'green' : 'red', fontWeight: 600 }}>
+                        {todayPnlPercent >= 0 ? '+' : ''}{pct(todayPnlPercent)}
+                    </span>
+                </p>
 
                 <p className="note">
                     Realized P&L: <span style={{ color: realized_pnl >= 0 ? 'green' : 'red' }}>
@@ -1550,7 +1591,8 @@ const Dashboard = () => {
                 <div className="card section">
                     <h3>Your Global Portfolio</h3>
                     {globalAccount.portfolio && globalAccount.portfolio.length > 0 ? (
-                        <table>
+                        <div className="table-scroll">
+                            <table>
                             <thead>
                                 <tr>
                                     <th>Stock</th>
@@ -1576,7 +1618,8 @@ const Dashboard = () => {
                                     );
                                 })}
                             </tbody>
-                        </table>
+                            </table>
+                        </div>
                     ) : (
                         <p className="note">No holdings in your global portfolio.</p>
                     )}
@@ -1590,7 +1633,8 @@ const Dashboard = () => {
                 <div className="card section">
                     <h3>Your Competition Portfolio (Individual)</h3>
                     {compAcc && compAcc.portfolio && compAcc.portfolio.length > 0 ? (
-                        <table>
+                        <div className="table-scroll">
+                            <table>
                             <thead>
                                 <tr>
                                     <th>Stock</th>
@@ -1616,7 +1660,8 @@ const Dashboard = () => {
                                     );
                                 })}
                             </tbody>
-                        </table>
+                            </table>
+                        </div>
                     ) : (
                         <p className="note">No holdings in your individual competition portfolio.</p>
                     )}
@@ -1632,7 +1677,8 @@ const Dashboard = () => {
                 <div className="card section">
                     <h3>Your Competition Portfolio (Team)</h3>
                     {teamAcc && teamAcc.portfolio && teamAcc.portfolio.length > 0 ? (
-                        <table>
+                        <div className="table-scroll">
+                            <table>
                             <thead>
                                 <tr>
                                     <th>Stock</th>
@@ -1658,7 +1704,8 @@ const Dashboard = () => {
                                     );
                                 })}
                             </tbody>
-                        </table>
+                            </table>
+                        </div>
                     ) : (
                         <p className="note">No holdings in your team competition portfolio.</p>
                     )}
@@ -1681,7 +1728,7 @@ const Dashboard = () => {
                             : "Competition (Team)"}
                 </h3>
 
-                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', alignItems: 'start' }}>
                     <div style={{ minWidth: 0 }}>
                         <SharedInputs
                             onBuy={() => executeTrade('buy')}
@@ -1740,6 +1787,17 @@ const Dashboard = () => {
     // =========================================
     return (
         <div className="dashboard-container">
+            <div className="top-banner-wrap">
+                <Image
+                    src="/Stock Market Simulation Banner.webp"
+                    alt="Stock Market SIM banner"
+                    className="top-banner-image"
+                    width={1600}
+                    height={1000}
+                    priority
+                />
+            </div>
+
             <header style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -1763,7 +1821,7 @@ const Dashboard = () => {
                         style={{
                             background: showTrading ? '#1d4ed8' : '#2563eb',
                             color: 'white',
-                            padding: '8px 16px',
+                            padding: '10px 16px',
                             border: 'none',
                             borderRadius: 8,
                             fontWeight: 500,
@@ -1775,7 +1833,6 @@ const Dashboard = () => {
                     </button>
                 )}
             </header>
-
 
             {isLoggedIn ? (
                 <div>
@@ -1940,7 +1997,7 @@ const Dashboard = () => {
                         <>
                             <div className="card section">
                                 <h2>Accounts</h2>
-                                <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                                     <button onClick={() => setSelectedAccount({ type: 'global', id: null })} disabled={isLoading}>Global Account</button>
                                     {competitionAccounts.map((acc) => (
                                         <button
@@ -1967,7 +2024,7 @@ const Dashboard = () => {
                                         </button>
                                     ))}
                                 </div>
-                                <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                                     <button
                                         className="primary"
                                         onClick={openTradeBlotterModal}
@@ -2091,7 +2148,7 @@ const Dashboard = () => {
 
                                 <div className="section">
                                     <h3>Join Competition</h3>
-                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                                         <input
                                             type="text"
                                             placeholder="Enter Competition Code"
@@ -2139,7 +2196,7 @@ const Dashboard = () => {
                     )}
                 </div>
             ) : (
-                <div className="card" style={{ maxWidth: 420, margin: '0 auto' }}>
+                <div className="card auth-card">
                     {isRegistering ? (
                         <form onSubmit={handleRegister}>
                             <h2>Create Account</h2>
@@ -2261,21 +2318,8 @@ const Dashboard = () => {
             {showModal && modalCompetition && (
                 <div
                     className="modal-overlay"
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0,0,0,0.5)',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                        paddingTop: '20px',
-                    }}
                 >
-                    <div className="card" style={{ maxWidth: 540, margin: 0 }}>
+                    <div className="card modal-card" style={{ maxWidth: 540 }}>
                         <h2>🔒 Restricted Competition</h2>
                         <p>
                             Enter the access code to join <strong>{modalCompetition.name}</strong>.
@@ -2296,7 +2340,7 @@ const Dashboard = () => {
                             />
                         </div>
 
-                        <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                             <button onClick={() => joinFeaturedCompetition()} disabled={isLoading}>
                                 Join
                             </button>
@@ -2311,21 +2355,8 @@ const Dashboard = () => {
             {showTradeBlotterModal && (
                 <div
                     className="modal-overlay"
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0,0,0,0.5)',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                        paddingTop: '20px',
-                    }}
                 >
-                    <div className="card" style={{ maxWidth: 900, margin: 0, width: 'min(94vw, 900px)' }}>
+                    <div className="card modal-card">
                         <h2>📒 Trade Blotter</h2>
                         <p>
                             Review your submitted orders, fills, and execution history directly in this modal.
@@ -2338,7 +2369,7 @@ const Dashboard = () => {
                         ) : tradeBlotterRows.length === 0 ? (
                             <p className="note">No trades found yet.</p>
                         ) : (
-                            <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                            <div className="table-scroll" style={{ border: '1px solid #e5e7eb', borderRadius: 10 }}>
                                 <table>
                                     <thead>
                                         <tr>

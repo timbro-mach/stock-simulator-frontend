@@ -75,7 +75,7 @@ const Competition = () => {
   return (
     <div className="dashboard-container">
       <h1>🏁 Group Competitions</h1>
-      <p className="note" style={{ maxWidth: 700 }}>
+      <p className="note" style={{ maxWidth: 700, width: '100%' }}>
         Create or join competitions to test your trading strategies against others.
       </p>
 
@@ -84,7 +84,7 @@ const Competition = () => {
         <h2>🧭 Create Competition (Admin)</h2>
         <p className="note">Admins can create and optionally feature competitions.</p>
 
-        <div className="section" style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: 500 }}>
+        <div className="section responsive-form" style={{ maxWidth: 500 }}>
           <input
             type="text"
             placeholder="Competition Name"
@@ -126,7 +126,7 @@ const Competition = () => {
         <h2>👤 Join Competition (Individual)</h2>
         <p className="note">Enter the competition code shared by an admin.</p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: 400 }}>
+        <div className="responsive-form" style={{ maxWidth: 400 }}>
           <input
             type="text"
             placeholder="Enter Competition Code"
@@ -142,7 +142,7 @@ const Competition = () => {
         <h2>👥 Join Competition (Team)</h2>
         <p className="note">Join as a team using your unique team code.</p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: 400 }}>
+        <div className="responsive-form" style={{ maxWidth: 400 }}>
           <input
             type="text"
             placeholder="Enter Competition Code"
