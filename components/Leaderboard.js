@@ -52,7 +52,7 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
             onClick={() => setDisplayLimit(10)}
             style={{
               marginRight: 6,
-              background: displayLimit === 10 ? 'var(--brand-blue)' : '#eef3f2',
+              background: displayLimit === 10 ? 'var(--brand-blue)' : '#edf1f4',
               color: displayLimit === 10 ? '#fff' : 'var(--text-main)',
               border: 'none',
               padding: '4px 10px',
@@ -67,7 +67,7 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
             onClick={() => setDisplayLimit(25)}
             style={{
               marginRight: 6,
-              background: displayLimit === 25 ? 'var(--brand-blue)' : '#eef3f2',
+              background: displayLimit === 25 ? 'var(--brand-blue)' : '#edf1f4',
               color: displayLimit === 25 ? '#fff' : 'var(--text-main)',
               border: 'none',
               padding: '4px 10px',
@@ -81,7 +81,7 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
           <button
             onClick={() => setDisplayLimit('all')}
             style={{
-              background: displayLimit === 'all' ? 'var(--brand-blue)' : '#eef3f2',
+              background: displayLimit === 'all' ? 'var(--brand-blue)' : '#edf1f4',
               color: displayLimit === 'all' ? '#fff' : 'var(--text-main)',
               border: 'none',
               padding: '4px 10px',
@@ -97,7 +97,7 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
 
       {/* ✅ Loading animation */}
       {loading && (
-        <p style={{ color: '#6b7280', fontStyle: 'italic' }}>
+        <p style={{ color: 'var(--text-light)', fontStyle: 'italic' }}>
           <span className="blink">Loading leaderboard...</span>
           <style>{`
             .blink {

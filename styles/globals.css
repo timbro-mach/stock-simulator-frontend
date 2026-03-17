@@ -4,23 +4,25 @@
 
 :root {
   /* --- Core Colors --- */
-  --brand-blue: #0f766e;
-  --brand-blue-dark: #0b5f59;
-  --brand-navy: #0f172a;
-  --neutral-bg: #f4f7f6;
+  --brand-blue: #00275E;
+  --brand-blue-dark: #001b42;
+  --brand-secondary: #6D98AB;
+  --brand-accent: #FEB729;
+  --brand-navy: #00275E;
+  --neutral-bg: #f4f6f8;
   --card-bg: #ffffff;
-  --border-color: #d9e1df;
-  --table-border: #e8eeec;
-  --text-main: #111827;
-  --text-subtle: #334155;
-  --text-light: #64748b;
+  --border-color: #A8B1B8;
+  --table-border: #d7dde2;
+  --text-main: #000000;
+  --text-subtle: #213140;
+  --text-light: #5f707c;
 
   /* --- Effects --- */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 3px 8px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 1px 3px rgba(0, 39, 94, 0.08);
+  --shadow-md: 0 3px 8px rgba(0, 39, 94, 0.14);
   --transition-fast: all 0.2s ease-in-out;
 }
 
@@ -78,7 +80,7 @@ h3 {
    ===================================================== */
 
 button {
-  background-color: #eef3f2;
+  background-color: #edf1f4;
   color: var(--text-main);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -91,7 +93,7 @@ button {
 }
 
 button:hover {
-  background-color: #dce7e5;
+  background-color: #dde5eb;
 }
 
 /* Primary CTA (Join, Start Trading, etc.) */
@@ -103,7 +105,7 @@ button.primary {
 
 button.primary:hover {
   background-color: var(--brand-blue-dark);
-  box-shadow: 0 2px 6px rgba(15, 118, 110, 0.3);
+  box-shadow: 0 2px 6px rgba(0, 39, 94, 0.25);
 }
 
 /* Danger (Logout, Delete) */
@@ -148,7 +150,7 @@ input:focus,
 select:focus {
   outline: none;
   border-color: var(--brand-blue);
-  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.15);
+  box-shadow: 0 0 0 2px rgba(0, 39, 94, 0.16);
 }
 
 /* =====================================================
@@ -191,8 +193,8 @@ select:focus {
   font-size: 12px;
   padding: 3px 8px;
   border-radius: 999px;
-  background: #dff5f2;
-  color: #0f766e;
+  background: #dbe5eb;
+  color: #00275E;
   margin-left: 8px;
   vertical-align: middle;
 }
@@ -201,7 +203,7 @@ select:focus {
   font-size: 12px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: #eef3f2;
+  background: #e6edf1;
   color: var(--text-main);
   display: inline-block;
   margin-right: 6px;
@@ -224,7 +226,7 @@ table {
 }
 
 th {
-  background-color: #f1f5f4;
+  background-color: #e9eef2;
   text-align: left;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
@@ -239,11 +241,11 @@ td {
 }
 
 tr:nth-child(even) {
-  background: #f6faf9;
+  background: #f8fafc;
 }
 
 tr:hover {
-  background-color: #ebf4f2;
+  background-color: #edf3f8;
 }
 
 /* =====================================================
@@ -251,12 +253,12 @@ tr:hover {
    ===================================================== */
 
 .banner {
-  background: #fff7ed;
-  color: #92400e;
+  background: #fff6df;
+  color: #6f4a00;
   font-size: 13px;
   padding: 8px 12px;
   border-radius: var(--radius-md);
-  border: 1px solid #fed7aa;
+  border: 1px solid var(--brand-accent);
   margin-bottom: 20px;
 }
 

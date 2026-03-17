@@ -245,7 +245,7 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
 
 // Memoized ChartPanel component
 const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol }) => (
-    <div style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(17,24,39,0.05)' }}>
+    <div style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             <div>
                 <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>{chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Stock Overview'}</h3>
@@ -273,7 +273,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                     style={{
                         padding: '8px 12px',
                         borderRadius: 6,
-                        background: chartRange === r ? 'var(--brand-blue-dark)' : '#eef3f2',
+                        background: chartRange === r ? 'var(--brand-blue-dark)' : '#edf1f4',
                         color: chartRange === r ? '#fff' : 'var(--text-subtle)',
                         border: chartRange === r ? '1px solid var(--brand-blue-dark)' : '1px solid var(--border-color)',
                         fontSize: 13,
@@ -305,7 +305,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                                 },
                             },
                             y: {
-                                grid: { color: 'rgba(15, 23, 42, 0.08)' },
+                                grid: { color: 'rgba(0, 39, 94, 0.12)' },
                                 ticks: { color: 'var(--text-light)', callback: (v) => formatMoney(v) },
                             },
                         },
@@ -1552,7 +1552,7 @@ const Dashboard = () => {
                         ${format(pnl)}
                     </span>
                 </p>
-                <p className="note" style={{ fontSize: 12, color: "#6b7280", marginTop: -6 }}>
+                <p className="note" style={{ fontSize: 12, color: "var(--text-light)", marginTop: -6 }}>
                     (Includes realized + unrealized gains)
                 </p>
                 <p className="note">
@@ -2290,8 +2290,8 @@ const Dashboard = () => {
                             <div
                                 className="section"
                                 style={{
-                                    background: '#ebf4f2',
-                                    border: '1px solid #d9e1df',
+                                    background: '#edf3f8',
+                                    border: '1px solid var(--border-color)',
                                     borderRadius: 10,
                                     padding: 14,
                                     marginBottom: 14,
@@ -2412,7 +2412,7 @@ const Dashboard = () => {
                         ) : tradeBlotterRows.length === 0 ? (
                             <p className="note">No trades found yet.</p>
                         ) : (
-                            <div className="table-scroll" style={{ border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                            <div className="table-scroll" style={{ border: '1px solid var(--border-color)', borderRadius: 10 }}>
                                 <table>
                                     <thead>
                                         <tr>
