@@ -52,8 +52,8 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
             onClick={() => setDisplayLimit(10)}
             style={{
               marginRight: 6,
-              background: displayLimit === 10 ? '#2563eb' : '#f3f4f6',
-              color: displayLimit === 10 ? '#fff' : '#111827',
+              background: displayLimit === 10 ? 'var(--brand-blue)' : '#edf1f4',
+              color: displayLimit === 10 ? '#fff' : 'var(--text-main)',
               border: 'none',
               padding: '4px 10px',
               borderRadius: 6,
@@ -67,8 +67,8 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
             onClick={() => setDisplayLimit(25)}
             style={{
               marginRight: 6,
-              background: displayLimit === 25 ? '#2563eb' : '#f3f4f6',
-              color: displayLimit === 25 ? '#fff' : '#111827',
+              background: displayLimit === 25 ? 'var(--brand-blue)' : '#edf1f4',
+              color: displayLimit === 25 ? '#fff' : 'var(--text-main)',
               border: 'none',
               padding: '4px 10px',
               borderRadius: 6,
@@ -81,8 +81,8 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
           <button
             onClick={() => setDisplayLimit('all')}
             style={{
-              background: displayLimit === 'all' ? '#2563eb' : '#f3f4f6',
-              color: displayLimit === 'all' ? '#fff' : '#111827',
+              background: displayLimit === 'all' ? 'var(--brand-blue)' : '#edf1f4',
+              color: displayLimit === 'all' ? '#fff' : 'var(--text-main)',
               border: 'none',
               padding: '4px 10px',
               borderRadius: 6,
@@ -97,7 +97,7 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
 
       {/* ✅ Loading animation */}
       {loading && (
-        <p style={{ color: '#6b7280', fontStyle: 'italic' }}>
+        <p style={{ color: 'var(--text-light)', fontStyle: 'italic' }}>
           <span className="blink">Loading leaderboard...</span>
           <style>{`
             .blink {
@@ -111,7 +111,7 @@ export default function Leaderboard({ competitionCode, variant = 'competition' }
         </p>
       )}
 
-      {!loading && error && <p style={{ color: 'red' }}>{error}</p>}
+      {!loading && error && <p style={{ color: '#b91c1c' }}>{error}</p>}
 
       {!loading && !error && visibleLeaderboard.length > 0 && (
         <ul>

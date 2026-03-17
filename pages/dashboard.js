@@ -245,10 +245,10 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
 
 // Memoized ChartPanel component
 const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol }) => (
-    <div style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(17,24,39,0.05)' }}>
+    <div style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             <div>
-                <h3 style={{ margin: 0, fontSize: 18, color: '#111827' }}>{chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Stock Overview'}</h3>
+                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>{chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Stock Overview'}</h3>
                 {chartMetrics && (
                     <p style={{ margin: '5px 0 0', color: chartMetrics.dayChangeValue >= 0 ? '#047857' : '#b91c1c', fontWeight: 600 }}>
                         {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) today
@@ -257,10 +257,10 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
             </div>
             {chartMetrics && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 6, width: '100%' }}>
-                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>Current: <strong style={{ color: '#111827' }}>{formatMoney(chartMetrics.latestPrice)}</strong></p>
-                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>Prev close: <strong style={{ color: '#111827' }}>{formatMoney(chartMetrics.previousClose)}</strong></p>
-                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>{chartMetrics.range} change: <strong style={{ color: chartMetrics.rangeChangeValue >= 0 ? '#047857' : '#b91c1c' }}>{formatSignedMoney(chartMetrics.rangeChangeValue)}</strong></p>
-                    <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>{chartMetrics.range} %: <strong style={{ color: chartMetrics.rangeChangePercent >= 0 ? '#047857' : '#b91c1c' }}>{chartMetrics.rangeChangePercent >= 0 ? '+' : ''}{chartMetrics.rangeChangePercent.toFixed(2)}%</strong></p>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>Current: <strong style={{ color: 'var(--text-main)' }}>{formatMoney(chartMetrics.latestPrice)}</strong></p>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>Prev close: <strong style={{ color: 'var(--text-main)' }}>{formatMoney(chartMetrics.previousClose)}</strong></p>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>{chartMetrics.range} change: <strong style={{ color: chartMetrics.rangeChangeValue >= 0 ? '#047857' : '#b91c1c' }}>{formatSignedMoney(chartMetrics.rangeChangeValue)}</strong></p>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>{chartMetrics.range} %: <strong style={{ color: chartMetrics.rangeChangePercent >= 0 ? '#047857' : '#b91c1c' }}>{chartMetrics.rangeChangePercent >= 0 ? '+' : ''}{chartMetrics.rangeChangePercent.toFixed(2)}%</strong></p>
                 </div>
             )}
         </div>
@@ -273,9 +273,9 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                     style={{
                         padding: '8px 12px',
                         borderRadius: 6,
-                        background: chartRange === r ? '#1d4ed8' : '#f3f4f6',
-                        color: chartRange === r ? '#fff' : '#374151',
-                        border: chartRange === r ? '1px solid #1d4ed8' : '1px solid #d1d5db',
+                        background: chartRange === r ? 'var(--brand-blue-dark)' : '#edf1f4',
+                        color: chartRange === r ? '#fff' : 'var(--text-subtle)',
+                        border: chartRange === r ? '1px solid var(--brand-blue-dark)' : '1px solid var(--border-color)',
                         fontSize: 13,
                         fontWeight: chartRange === r ? 600 : 500,
                         cursor: 'pointer',
@@ -297,7 +297,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                             x: {
                                 grid: { display: false },
                                 ticks: {
-                                    color: '#6b7280',
+                                    color: 'var(--text-light)',
                                     maxTicksLimit: 6,
                                     callback(value) {
                                         return formatChartDateLabel(this.getLabelForValue(value), chartRange);
@@ -305,8 +305,8 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                                 },
                             },
                             y: {
-                                grid: { color: 'rgba(0,0,0,0.05)' },
-                                ticks: { color: '#6b7280', callback: (v) => formatMoney(v) },
+                                grid: { color: 'rgba(0, 39, 94, 0.12)' },
+                                ticks: { color: 'var(--text-light)', callback: (v) => formatMoney(v) },
                             },
                         },
                         plugins: {
@@ -1552,7 +1552,7 @@ const Dashboard = () => {
                         ${format(pnl)}
                     </span>
                 </p>
-                <p className="note" style={{ fontSize: 12, color: "#6b7280", marginTop: -6 }}>
+                <p className="note" style={{ fontSize: 12, color: "var(--text-light)", marginTop: -6 }}>
                     (Includes realized + unrealized gains)
                 </p>
                 <p className="note">
@@ -1862,7 +1862,7 @@ const Dashboard = () => {
                         onClick={() => setShowTrading(!showTrading)}
                         disabled={isLoading}
                         style={{
-                            background: showTrading ? '#1d4ed8' : '#2563eb',
+                            background: showTrading ? 'var(--brand-blue-dark)' : 'var(--brand-blue)',
                             color: 'white',
                             padding: '10px 16px',
                             border: 'none',
@@ -2290,19 +2290,19 @@ const Dashboard = () => {
                             <div
                                 className="section"
                                 style={{
-                                    background: '#f1f5f9',
-                                    border: '1px solid #e2e8f0',
+                                    background: '#edf3f8',
+                                    border: '1px solid var(--border-color)',
                                     borderRadius: 10,
                                     padding: 14,
                                     marginBottom: 14,
                                     lineHeight: 1.6,
                                 }}
                             >
-                                <p className="note" style={{ margin: 0, color: '#1e293b' }}>
+                                <p className="note" style={{ margin: 0, color: 'var(--brand-navy)' }}>
                                     👋 <strong>Welcome to the free Stock Market Simulator!</strong><br />
                                     Here’s how it works:
                                 </p>
-                                <ul style={{ marginTop: 10, paddingLeft: 18, color: '#334155' }}>
+                                <ul style={{ marginTop: 10, paddingLeft: 18, color: 'var(--text-subtle)' }}>
                                     <li>
                                         💰 <strong>Global Account</strong> — Everyone starts with a personal practice account loaded with
                                         <em> $100,000 virtual cash</em>. Trade anytime to build your investing skills and reset your balance whenever you want.
@@ -2412,7 +2412,7 @@ const Dashboard = () => {
                         ) : tradeBlotterRows.length === 0 ? (
                             <p className="note">No trades found yet.</p>
                         ) : (
-                            <div className="table-scroll" style={{ border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                            <div className="table-scroll" style={{ border: '1px solid var(--border-color)', borderRadius: 10 }}>
                                 <table>
                                     <thead>
                                         <tr>
