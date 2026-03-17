@@ -496,7 +496,7 @@ const Dashboard = () => {
     // API base
     // =========================================
     const BASE_URL = getApiBaseUrl();
-    const resolveTradeAccountLabel = useCallback((row) => {
+    const resolveTradeAccountDetails = useCallback((row) => {
         const accountContext = row?.account_context
             || row?.accountContext
             || row?.context
@@ -530,41 +530,127 @@ const Dashboard = () => {
             || teamCompetitionAccounts.find((account) => String(account?.team_id) === String(teamId))?.name
             || '';
 
-        if (accountType === 'global') {
-            return 'Global';
-        }
+        const matchedCompetitionAccount = competitionAccounts.find((account) => String(account?.code) === String(competitionCode));
+        const matchedTeamAccount = teamCompetitionAccounts.find(
+            (account) => String(account?.team_id) === String(teamId) || String(account?.code) === String(competitionCode),
+        );
 
-        if (accountType === 'competition') {
-            return competitionCode ? `Competition (${competitionCode})` : 'Competition';
-        }
-
-        if (accountType === 'team' || accountType === 'team_competition') {
-            if (teamName && competitionCode) return `Team ${teamName} (${competitionCode})`;
-            if (teamName) return `Team ${teamName}`;
-            if (teamId && competitionCode) return `Team #${teamId} (${competitionCode})`;
-            if (teamId) return `Team #${teamId}`;
-            if (competitionCode) return `Team (${competitionCode})`;
-            return 'Team';
-        }
-
-        const accountName = row?.account_name
+        const fallbackAccountName = row?.account_name
             || row?.accountName
             || row?.account?.name
             || row?.account;
 
-        if (typeof accountName === 'string' && accountName.trim()) {
-            return accountName.trim();
+        if (accountType === 'global') {
+            return {
+                accountLabel: 'Global Account',
+                competitionAccountType: 'N/A',
+            };
+        }
+
+        if (accountType === 'competition') {
+            if (matchedCompetitionAccount?.name) {
+                return {
+                    accountLabel: `${matchedCompetitionAccount.name} (${competitionCode})`,
+                    competitionAccountType: 'Individual',
+                };
+            }
+
+            return {
+                accountLabel: typeof fallbackAccountName === 'string' && fallbackAccountName.trim()
+                    ? fallbackAccountName.trim()
+                    : (competitionCode ? `Competition (${competitionCode})` : 'Competition'),
+                competitionAccountType: 'Individual',
+            };
+        }
+
+        if (accountType === 'team' || accountType === 'team_competition') {
+            if (teamName && competitionCode) {
+                return {
+                    accountLabel: `${teamName} (${competitionCode})`,
+                    competitionAccountType: 'Team',
+                };
+            }
+
+            if (teamName) {
+                return {
+                    accountLabel: teamName,
+                    competitionAccountType: 'Team',
+                };
+            }
+
+            if (teamId && competitionCode) {
+                return {
+                    accountLabel: `Team #${teamId} (${competitionCode})`,
+                    competitionAccountType: 'Team',
+                };
+            }
+
+            if (teamId) {
+                return {
+                    accountLabel: `Team #${teamId}`,
+                    competitionAccountType: 'Team',
+                };
+            }
+
+            if (competitionCode) {
+                return {
+                    accountLabel: `Team (${competitionCode})`,
+                    competitionAccountType: 'Team',
+                };
+            }
+
+            return {
+                accountLabel: matchedTeamAccount?.name || 'Team',
+                competitionAccountType: 'Team',
+            };
         }
 
         if (competitionCode) {
-            const competitionName = competitionAccounts.find((account) => String(account?.code) === String(competitionCode))?.name;
-            return competitionName ? `Competition ${competitionName} (${competitionCode})` : `Competition (${competitionCode})`;
+            if (matchedCompetitionAccount?.name) {
+                return {
+                    accountLabel: `${matchedCompetitionAccount.name} (${competitionCode})`,
+                    competitionAccountType: 'Individual',
+                };
+            }
+
+            if (matchedTeamAccount?.name) {
+                return {
+                    accountLabel: `${matchedTeamAccount.name} (${competitionCode})`,
+                    competitionAccountType: 'Team',
+                };
+            }
+
+            return {
+                accountLabel: `Competition (${competitionCode})`,
+                competitionAccountType: 'Individual',
+            };
         }
 
-        if (teamName) return `Team ${teamName}`;
-        if (teamId) return `Team #${teamId}`;
+        if (teamName) {
+            return {
+                accountLabel: teamName,
+                competitionAccountType: 'Team',
+            };
+        }
 
-        return '';
+        if (teamId) {
+            return {
+                accountLabel: `Team #${teamId}`,
+                competitionAccountType: 'Team',
+            };
+        }
+
+        if (typeof fallbackAccountName === 'string' && fallbackAccountName.trim()) {
+            return {
+                accountLabel: fallbackAccountName.trim(),
+                competitionAccountType: 'Unknown',
+            };
+        }
+
+        return {
+            accountLabel: '',
+            competitionAccountType: 'Unknown',
+        };
     }, [competitionAccounts, teamCompetitionAccounts]);
 
     const normalizeTradeBlotterRows = useCallback((payload) => {
@@ -597,6 +683,8 @@ const Dashboard = () => {
                 || row?.time
                 || null;
 
+            const accountDetails = resolveTradeAccountDetails(row);
+
             return {
                 id: row?.id ?? row?.trade_id ?? row?.order_id ?? `${row?.symbol || row?.ticker || 'trade'}-${index}`,
                 symbol: String(row?.symbol ?? row?.ticker ?? '-').toUpperCase(),
@@ -605,10 +693,11 @@ const Dashboard = () => {
                 price: Number.isFinite(price) ? price : null,
                 status: String(row?.status ?? row?.state ?? row?.result ?? 'FILLED').toUpperCase(),
                 timestamp,
-                account: resolveTradeAccountLabel(row),
+                account: accountDetails.accountLabel,
+                competitionAccountType: accountDetails.competitionAccountType,
             };
         });
-    }, [resolveTradeAccountLabel]);
+    }, [resolveTradeAccountDetails]);
 
     const fetchTradeBlotterRows = useCallback(async () => {
         const trimmedUsername = String(username || '').trim();
@@ -2469,7 +2558,8 @@ const Dashboard = () => {
                                             <th>Qty</th>
                                             <th>Price</th>
                                             <th>Status</th>
-                                            <th>Account</th>
+                                            <th>Account Name</th>
+                                            <th>Competition Account Type</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -2482,6 +2572,7 @@ const Dashboard = () => {
                                                 <td>{trade.price === null ? '—' : formatMoney(trade.price)}</td>
                                                 <td>{trade.status}</td>
                                                 <td>{trade.account || '—'}</td>
+                                                <td>{trade.competitionAccountType || '—'}</td>
                                             </tr>
                                         ))}
                                     </tbody>
