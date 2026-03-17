@@ -1,19 +1,19 @@
 /* =====================================================
-   GLOBAL STYLES — Stock Simulator x Options Pro (Light Theme)
+   GLOBAL STYLES — Stock Simulator x Stock Pro (Light Theme)
    ===================================================== */
 
 :root {
   /* --- Core Colors --- */
-  --brand-blue: #2563eb;
-  --brand-blue-dark: #1d4ed8;
+  --brand-blue: #0f766e;
+  --brand-blue-dark: #0b5f59;
   --brand-navy: #0f172a;
-  --neutral-bg: #f8fafc;
+  --neutral-bg: #f4f7f6;
   --card-bg: #ffffff;
-  --border-color: #e5e7eb;
-  --table-border: #f1f5f9;
+  --border-color: #d9e1df;
+  --table-border: #e8eeec;
   --text-main: #111827;
-  --text-subtle: #374151;
-  --text-light: #6b7280;
+  --text-subtle: #334155;
+  --text-light: #64748b;
 
   /* --- Effects --- */
   --radius-sm: 6px;
@@ -78,7 +78,7 @@ h3 {
    ===================================================== */
 
 button {
-  background-color: #f3f4f6;
+  background-color: #eef3f2;
   color: var(--text-main);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -91,7 +91,7 @@ button {
 }
 
 button:hover {
-  background-color: #e5e7eb;
+  background-color: #dce7e5;
 }
 
 /* Primary CTA (Join, Start Trading, etc.) */
@@ -103,7 +103,7 @@ button.primary {
 
 button.primary:hover {
   background-color: var(--brand-blue-dark);
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 2px 6px rgba(15, 118, 110, 0.3);
 }
 
 /* Danger (Logout, Delete) */
@@ -148,7 +148,7 @@ input:focus,
 select:focus {
   outline: none;
   border-color: var(--brand-blue);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.15);
 }
 
 /* =====================================================
@@ -191,8 +191,8 @@ select:focus {
   font-size: 12px;
   padding: 3px 8px;
   border-radius: 999px;
-  background: #eef2ff;
-  color: #3730a3;
+  background: #dff5f2;
+  color: #0f766e;
   margin-left: 8px;
   vertical-align: middle;
 }
@@ -201,7 +201,7 @@ select:focus {
   font-size: 12px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: #f3f4f6;
+  background: #eef3f2;
   color: var(--text-main);
   display: inline-block;
   margin-right: 6px;
@@ -224,7 +224,7 @@ table {
 }
 
 th {
-  background-color: #f9fafb;
+  background-color: #f1f5f4;
   text-align: left;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
@@ -239,11 +239,11 @@ td {
 }
 
 tr:nth-child(even) {
-  background: #f9fafb;
+  background: #f6faf9;
 }
 
 tr:hover {
-  background-color: #f1f5f9;
+  background-color: #ebf4f2;
 }
 
 /* =====================================================
