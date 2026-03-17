@@ -2178,7 +2178,31 @@ const Dashboard = () => {
                                     </button>
                                 </div>
 
+                                <div className="section">
+                                    <h3>🤝 Team Competitions</h3>
+                                    <div className="section" style={{ display: 'grid', gap: 8, maxWidth: 520 }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Enter Team Code"
+                                            value={joinTeamCompetitionTeamCode}
+                                            onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
+                                            disabled={isLoading}
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Enter Competition Code"
+                                            value={joinTeamCompetitionCode}
+                                            onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
+                                            disabled={isLoading}
+                                        />
+                                        <button className="competition-button" onClick={joinCompetitionAsTeam} disabled={isLoading}>
+                                            Join Competition as Team
+                                        </button>
+                                    </div>
+                                </div>
+
                                 {teamMessage && <p className="note">{teamMessage}</p>}
+                                {teamCompetitionMessage && <p className="note">{teamCompetitionMessage}</p>}
                             </div>
 
                             <div className="card section">
@@ -2255,31 +2279,6 @@ const Dashboard = () => {
 
                                 {competitionMessage && <p className="note">{competitionMessage}</p>}
                             </div>
-
-                            <div className="card section">
-                                <h2>🤝 Team Competitions</h2>
-                                <div className="section" style={{ display: 'grid', gap: 8, maxWidth: 520 }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Enter Team Code"
-                                        value={joinTeamCompetitionTeamCode}
-                                        onChange={(e) => setJoinTeamCompetitionTeamCode(e.target.value)}
-                                        disabled={isLoading}
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="Enter Competition Code"
-                                        value={joinTeamCompetitionCode}
-                                        onChange={(e) => setJoinTeamCompetitionCode(e.target.value)}
-                                        disabled={isLoading}
-                                    />
-                                    <button className="competition-button" onClick={joinCompetitionAsTeam} disabled={isLoading}>
-                                        Join Competition as Team
-                                    </button>
-                                </div>
-                                {teamCompetitionMessage && <p className="note">{teamCompetitionMessage}</p>}
-                            </div>
-
                             <button className="logout-button" onClick={handleLogout} disabled={isLoading}>
                                 Logout
                             </button>
