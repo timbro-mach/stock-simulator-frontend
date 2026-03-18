@@ -6,7 +6,6 @@ import {
   shouldSyncIntradayLiveQuote,
 } from '../../../lib/chartData';
 
-
 const asFiniteNumber = (...values) => {
   for (const value of values) {
     const parsed = Number(value);
@@ -37,6 +36,41 @@ const getTodaysChangeFromQuote = (quote) => {
   };
 };
 
+const getPrimaryRangeCandidates = (range) => {
+  if (range === '2D') return ['2D', '1W', '1D'];
+  if (range === '5D') return ['5D', '1W'];
+  if (range === '3Y') return ['3Y', '5Y', '1Y'];
+  return [range];
+};
+
+const fetchChartRange = (baseUrl, symbol, range) => (
+  axios.get(`${baseUrl}/stock_chart/${symbol}?range=${range}`)
+);
+
+const fetchChartRangeWithFallback = async (baseUrl, symbol, ranges) => {
+  let lastError = null;
+
+  for (const candidateRange of ranges) {
+    try {
+      const response = await fetchChartRange(baseUrl, symbol, candidateRange);
+      return response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Failed to fetch chart range');
+};
+
+const fetchChartRangeSafe = async (baseUrl, symbol, range) => {
+  try {
+    const response = await fetchChartRange(baseUrl, symbol, range);
+    return response.data;
+  } catch {
+    return [];
+  }
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -52,15 +86,12 @@ export default async function handler(req, res) {
   const baseUrl = getApiBaseUrl();
 
   try {
-    const [stockResponse, chartResponse, dailyResponse, intradayResponse] = await Promise.all([
+    const primaryRangeCandidates = getPrimaryRangeCandidates(range);
+    const [stockResponse, chartResponse, dailyReferenceRaw, intradayReferenceRaw] = await Promise.all([
       axios.get(`${baseUrl}/stock/${symbol}`),
-      axios.get(`${baseUrl}/stock_chart/${symbol}?range=${range}`),
-      range === '5D'
-        ? Promise.resolve({ data: [] })
-        : axios.get(`${baseUrl}/stock_chart/${symbol}?range=5D`),
-      range === '2D'
-        ? Promise.resolve({ data: [] })
-        : axios.get(`${baseUrl}/stock_chart/${symbol}?range=2D`),
+      fetchChartRangeWithFallback(baseUrl, symbol, primaryRangeCandidates),
+      fetchChartRangeSafe(baseUrl, symbol, '1W'),
+      fetchChartRangeSafe(baseUrl, symbol, '1D'),
     ]);
 
     const normalizedChartPoints = normalizeChartPoints(chartResponse.data);
@@ -69,10 +100,10 @@ export default async function handler(req, res) {
       : normalizedChartPoints;
     const dailyReferencePoints = range === '5D'
       ? chartPoints
-      : normalizeChartPoints(dailyResponse.data);
+      : normalizeChartPoints(dailyReferenceRaw);
     const intradayReferencePoints = range === '2D'
       ? chartPoints
-      : filterChartPointsToPastHours(intradayResponse.data, 48);
+      : filterChartPointsToPastHours(intradayReferenceRaw, 48);
 
     const shouldSyncLiveQuote = range === '2D'
       ? shouldSyncIntradayLiveQuote(chartPoints)
