@@ -1297,7 +1297,10 @@ const Dashboard = () => {
             console.log('🔹 Sending trade:', endpoint, payload);
             const res = await axios.post(`${BASE_URL}${endpoint}`, payload);
             setTradeMessage(res.data.message || 'Trade successful.');
-            fetchUserData();
+            await fetchUserData();
+            if (showTradeBlotterModal) {
+                await fetchTradeBlotterRows();
+            }
         } catch (err) {
             console.error('Trade error:', err.response?.data || err.message);
             setTradeMessage(err.response?.data?.message || 'Trade failed.');
@@ -1325,7 +1328,10 @@ const Dashboard = () => {
 
                     setPendingLimitOrders((prev) => prev.filter((pending) => pending.id !== order.id));
                     setTradeMessage(tradeResponse.data.message || `Limit ${order.action} filled for ${order.symbol} at ${formatMoney(currentPrice)}.`);
-                    fetchUserData();
+                    await fetchUserData();
+                    if (showTradeBlotterModal) {
+                        await fetchTradeBlotterRows();
+                    }
                 } catch (error) {
                     console.error('Limit order processing error:', error.response?.data || error.message);
                 }
@@ -1333,7 +1339,7 @@ const Dashboard = () => {
         }, 15000);
 
         return () => clearInterval(interval);
-    }, [BASE_URL, buildTradeRequest, fetchUserData, isLoggedIn, pendingLimitOrders, username]);
+    }, [BASE_URL, buildTradeRequest, fetchTradeBlotterRows, fetchUserData, isLoggedIn, pendingLimitOrders, showTradeBlotterModal, username]);
 
 
     // =========================================
@@ -2151,7 +2157,7 @@ const Dashboard = () => {
                                                 className={isActive ? 'account-chip account-chip-active' : 'account-chip'}
                                                 onClick={() =>
                                                     setSelectedAccount({
-                                                        type: 'team',
+                                                        type: 'team_competition',
                                                         team_id: acc.team_id,
                                                         competition_code: acc.code,
                                                     })
@@ -2187,7 +2193,7 @@ const Dashboard = () => {
                                     <Leaderboard competitionCode={selectedAccount.id} variant="competition" />
                                 </div>
                             )}
-                            {selectedAccount.type === 'team' && (
+                            {(selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') && (
                                 <div className="card section">
                                     <h3>Leaderboard — {selectedAccount.competition_code} (Team)</h3>
                                     <Leaderboard competitionCode={selectedAccount.competition_code} variant="team" />
