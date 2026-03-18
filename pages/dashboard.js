@@ -51,6 +51,60 @@ const pickFirstNonEmptyArray = (...candidates) => {
     return [];
 };
 
+const toAccountCode = (account) => String(
+    account?.code
+    || account?.competition_code
+    || account?.competitionCode
+    || account?.id
+    || account?.account_id
+    || account?.accountId
+    || '',
+).trim();
+
+const toCompetitionName = (account, fallbackCode = '') => {
+    const name = account?.name
+        || account?.competition_name
+        || account?.competitionName
+        || account?.competition?.name
+        || account?.display_name
+        || account?.displayName
+        || '';
+    if (String(name || '').trim()) return String(name).trim();
+    return fallbackCode ? `Competition ${fallbackCode}` : '';
+};
+
+const normalizeCompetitionAccount = (account) => {
+    const code = toAccountCode(account);
+    if (!code) return null;
+    return {
+        ...account,
+        code,
+        name: toCompetitionName(account, code),
+    };
+};
+
+const normalizeTeamCompetitionAccount = (account) => {
+    const code = toAccountCode(account);
+    const teamId = account?.team_id ?? account?.teamId ?? account?.team?.id ?? account?.team?.team_id;
+    if (!code && (teamId === undefined || teamId === null || String(teamId).trim() === '')) return null;
+    const teamName = account?.team_name
+        || account?.teamName
+        || account?.team_display_name
+        || account?.teamDisplayName
+        || account?.team?.name
+        || account?.team?.team_name
+        || account?.name
+        || account?.display_name
+        || account?.displayName
+        || '';
+    return {
+        ...account,
+        code,
+        team_id: teamId,
+        team_name: String(teamName || '').trim(),
+    };
+};
+
 const getPointTradingDay = (point) => {
     const raw = String(point?.date || '').trim();
     if (!raw) return '';
@@ -516,7 +570,11 @@ const Dashboard = () => {
 
         teams.forEach((team) => {
             const id = team?.id ?? team?.team_id ?? team?.teamId;
-            const name = team?.name ?? team?.team_name ?? team?.teamName;
+            const name = team?.name
+                ?? team?.team_name
+                ?? team?.teamName
+                ?? team?.display_name
+                ?? team?.displayName;
             if (id !== undefined && id !== null && String(name || '').trim()) {
                 map.set(String(id), String(name).trim());
             }
@@ -828,7 +886,15 @@ const Dashboard = () => {
         try {
             const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
             const data = response?.data || {};
-            const competitionAccountRows = pickFirstNonEmptyArray(
+            const accountsCollection = pickFirstNonEmptyArray(
+                data?.accounts,
+                data?.user_accounts,
+                data?.userAccounts,
+                data?.portfolios,
+                data?.account_list,
+                data?.accountList,
+            );
+            const directCompetitionRows = pickFirstNonEmptyArray(
                 data?.competition_accounts,
                 data?.competitionAccounts,
                 data?.competition_account,
@@ -837,7 +903,7 @@ const Dashboard = () => {
                 data?.accounts?.competition,
                 data?.competitions,
             );
-            const teamCompetitionRows = pickFirstNonEmptyArray(
+            const directTeamCompetitionRows = pickFirstNonEmptyArray(
                 data?.team_competitions,
                 data?.teamCompetitions,
                 data?.team_competition_accounts,
@@ -848,12 +914,45 @@ const Dashboard = () => {
                 data?.accounts?.team_competition_accounts,
                 data?.accounts?.team,
             );
+            const competitionRowsFromAccounts = accountsCollection.filter((account) => {
+                const type = String(account?.type || account?.account_type || '').toLowerCase();
+                return type === 'competition';
+            });
+            const teamRowsFromAccounts = accountsCollection.filter((account) => {
+                const type = String(account?.type || account?.account_type || '').toLowerCase();
+                return type === 'team' || type === 'team_competition';
+            });
+
+            const competitionAccountRows = pickFirstNonEmptyArray(
+                directCompetitionRows,
+                competitionRowsFromAccounts,
+            )
+                .map(normalizeCompetitionAccount)
+                .filter(Boolean);
+
+            const teamCompetitionRows = pickFirstNonEmptyArray(
+                directTeamCompetitionRows,
+                teamRowsFromAccounts,
+            )
+                .map(normalizeTeamCompetitionAccount)
+                .filter(Boolean);
+
             const teamRows = pickFirstNonEmptyArray(
                 data?.teams,
                 data?.user_teams,
                 data?.team_memberships,
                 data?.accounts?.teams,
-            );
+                teamCompetitionRows.map((account) => ({
+                    id: account?.team_id,
+                    team_id: account?.team_id,
+                    name: account?.team_name,
+                    team_name: account?.team_name,
+                })),
+            ).filter((team) => {
+                const id = team?.id ?? team?.team_id ?? team?.teamId;
+                const name = team?.name ?? team?.team_name ?? team?.teamName;
+                return id !== undefined && id !== null && String(name || '').trim();
+            });
 
             setGlobalAccount(data.global_account || { cash_balance: 0, portfolio: [], total_value: 0 });
             setCompetitionAccounts(competitionAccountRows);
