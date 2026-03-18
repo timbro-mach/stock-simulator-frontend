@@ -1880,6 +1880,21 @@ const Dashboard = () => {
             }
             return null;
         };
+        const toFinitePercent = (...values) => {
+            for (const value of values) {
+                if (value === undefined || value === null) continue;
+                if (typeof value === 'string') {
+                    const normalized = value.trim().replace('%', '');
+                    if (!normalized) continue;
+                    const parsed = Number(normalized);
+                    if (Number.isFinite(parsed)) return parsed;
+                    continue;
+                }
+                const parsed = Number(value);
+                if (Number.isFinite(parsed)) return parsed;
+            }
+            return null;
+        };
 
         const format = (n) =>
             typeof n === 'number'
@@ -1889,32 +1904,17 @@ const Dashboard = () => {
             typeof n === 'number' ? n.toFixed(2) + '%' : '0.00%';
 
         const todayPnlValueFromAccount = toFiniteNumber(
-            account?.today_pnl,
-            account?.todayPnL,
             account?.pnl_today,
-            account?.day_pnl,
-            account?.dayPnl,
-            account?.day_pnl_value,
-            account?.dailyPnL,
-            account?.daily_pnl,
-            account?.todays_pnl,
-            account?.todaysPnL,
-            account?.today_pl,
-            account?.today_profit_loss,
+            account?.today_pnl,
         );
 
         const todayPnlValue = Number.isFinite(todayPnlValueFromAccount)
             ? todayPnlValueFromAccount
             : 0;
 
-        const todayPnlPercent = toFiniteNumber(
+        const todayPnlPercent = toFinitePercent(
+            account?.pnl_pct_today,
             account?.today_pnl_pct,
-            account?.todayPnlPct,
-            account?.today_return_pct,
-            account?.day_return_pct,
-            account?.daily_return_pct,
-            account?.todays_return_pct,
-            account?.today_pl_pct,
         ) ?? 0;
 
         return (
