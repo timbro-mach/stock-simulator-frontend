@@ -1881,8 +1881,6 @@ const Dashboard = () => {
             return null;
         };
 
-        const portfolioHoldings = Array.isArray(account?.portfolio) ? account.portfolio : [];
-
         const format = (n) =>
             typeof n === 'number'
                 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -1905,50 +1903,9 @@ const Dashboard = () => {
             account?.today_profit_loss,
         );
 
-        const derivedTodayPnlFromPortfolio = portfolioHoldings.reduce((runningTotal, holding) => {
-            const quantity = toFiniteNumber(holding?.quantity, holding?.qty, holding?.shares) ?? 0;
-            if (!quantity) return runningTotal;
-
-            const directHoldingDayPnl = toFiniteNumber(
-                holding?.today_pnl,
-                holding?.todayPnL,
-                holding?.day_pnl,
-                holding?.daily_pnl,
-                holding?.todays_pnl,
-                holding?.day_change_value,
-            );
-
-            if (Number.isFinite(directHoldingDayPnl)) {
-                return runningTotal + directHoldingDayPnl;
-            }
-
-            const currentPrice = toFiniteNumber(
-                holding?.current_price,
-                holding?.currentPrice,
-                holding?.price,
-                holding?.last_price,
-                holding?.lastPrice,
-            );
-
-            const priorPrice = toFiniteNumber(
-                holding?.previous_close,
-                holding?.previousClose,
-                holding?.prev_close,
-                holding?.prior_close,
-                holding?.last_close,
-                holding?.close,
-            );
-
-            if (Number.isFinite(currentPrice) && Number.isFinite(priorPrice)) {
-                return runningTotal + (currentPrice - priorPrice) * quantity;
-            }
-
-            return runningTotal;
-        }, 0);
-
         const todayPnlValue = Number.isFinite(todayPnlValueFromAccount)
             ? todayPnlValueFromAccount
-            : (Number.isFinite(derivedTodayPnlFromPortfolio) ? derivedTodayPnlFromPortfolio : 0);
+            : 0;
 
         const todayPnlPercent = toFiniteNumber(
             account?.today_pnl_pct,
@@ -1958,11 +1915,7 @@ const Dashboard = () => {
             account?.daily_return_pct,
             account?.todays_return_pct,
             account?.today_pl_pct,
-        ) ?? (() => {
-            const priorValue = Number(total_value) - Number(todayPnlValue);
-            if (!Number.isFinite(priorValue) || priorValue === 0) return 0;
-            return (todayPnlValue / priorValue) * 100;
-        })();
+        ) ?? 0;
 
         return (
             <div className="card section" style={{ width: 'min(100%, 360px)' }}>
@@ -2041,6 +1994,19 @@ const Dashboard = () => {
     };
 
 
+    const getSelectedCompetitionAccount = useCallback(() => {
+        if (selectedAccount.type !== 'competition') return null;
+        return competitionAccounts.find((a) => String(a?.code) === String(selectedAccount.id)) || null;
+    }, [competitionAccounts, selectedAccount.id, selectedAccount.type]);
+
+    const getSelectedTeamCompetitionAccount = useCallback(() => {
+        if (selectedAccount.type !== 'team' && selectedAccount.type !== 'team_competition') return null;
+        return teamCompetitionAccounts.find(
+            (a) => String(a?.team_id) === String(selectedAccount.team_id)
+                && String(a?.code) === String(selectedAccount.competition_code),
+        ) || null;
+    }, [selectedAccount.competition_code, selectedAccount.team_id, selectedAccount.type, teamCompetitionAccounts]);
+
     const renderAccountDetails = () => {
         if (selectedAccount.type === 'global') {
             return (
@@ -2052,7 +2018,7 @@ const Dashboard = () => {
         }
 
         if (selectedAccount.type === 'competition') {
-            const compAcc = competitionAccounts.find((a) => a.code === selectedAccount.id);
+            const compAcc = getSelectedCompetitionAccount();
             if (!compAcc) return null;
             return (
                 <div className="card section">
@@ -2063,9 +2029,7 @@ const Dashboard = () => {
         }
 
         if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
-            const teamAcc = teamCompetitionAccounts.find(
-                (a) => a.team_id === selectedAccount.team_id && a.code === selectedAccount.competition_code
-            );
+            const teamAcc = getSelectedTeamCompetitionAccount();
             if (!teamAcc) return null;
             return (
                 <div className="card section">
@@ -2121,7 +2085,7 @@ const Dashboard = () => {
         }
 
         if (selectedAccount.type === 'competition') {
-            const compAcc = competitionAccounts.find((a) => a.code === selectedAccount.id);
+            const compAcc = getSelectedCompetitionAccount();
             return (
                 <div className="card section">
                     <h3>Your Competition Portfolio (Individual)</h3>
@@ -2163,9 +2127,7 @@ const Dashboard = () => {
         }
 
         if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
-            const teamAcc = teamCompetitionAccounts.find(
-                (a) => a.team_id === selectedAccount.team_id && a.code === selectedAccount.competition_code
-            );
+            const teamAcc = getSelectedTeamCompetitionAccount();
             return (
                 <div className="card section">
                     <h3>Your Competition Portfolio (Team)</h3>
