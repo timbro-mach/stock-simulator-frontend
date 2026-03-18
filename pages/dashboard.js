@@ -51,6 +51,15 @@ const pickFirstNonEmptyArray = (...candidates) => {
     return [];
 };
 
+const normalizeCompetitionCollection = (payload) => pickFirstNonEmptyArray(
+    payload,
+    payload?.competitions,
+    payload?.featured_competitions,
+    payload?.featuredCompetitions,
+    payload?.data,
+    payload?.results,
+);
+
 const toAccountCode = (account) => String(
     account?.code
     || account?.competition_code
@@ -567,25 +576,47 @@ const Dashboard = () => {
     const BASE_URL = getApiBaseUrl();
     const teamNameById = useMemo(() => {
         const map = new Map();
+        const appendTeamName = (identifiers, rawName) => {
+            const name = String(rawName || '').trim();
+            if (!name) return;
+            identifiers.forEach((identifier) => {
+                if (identifier === undefined || identifier === null) return;
+                const key = String(identifier).trim();
+                if (!key || map.has(key)) return;
+                map.set(key, name);
+            });
+        };
 
         teams.forEach((team) => {
-            const id = team?.id ?? team?.team_id ?? team?.teamId;
             const name = team?.name
                 ?? team?.team_name
                 ?? team?.teamName
                 ?? team?.display_name
                 ?? team?.displayName;
-            if (id !== undefined && id !== null && String(name || '').trim()) {
-                map.set(String(id), String(name).trim());
-            }
+            appendTeamName([
+                team?.id,
+                team?.team_id,
+                team?.teamId,
+                team?.team_number,
+                team?.teamNumber,
+                team?.number,
+                team?.team?.id,
+                team?.team?.team_id,
+                team?.team?.team_number,
+            ], name);
         });
 
         teamCompetitionAccounts.forEach((account) => {
-            const id = account?.team_id ?? account?.teamId;
             const name = account?.team_name ?? account?.teamName ?? account?.team?.name;
-            if (id !== undefined && id !== null && String(name || '').trim() && !map.has(String(id))) {
-                map.set(String(id), String(name).trim());
-            }
+            appendTeamName([
+                account?.team_id,
+                account?.teamId,
+                account?.team_number,
+                account?.teamNumber,
+                account?.team?.id,
+                account?.team?.team_id,
+                account?.team?.team_number,
+            ], name);
         });
 
         return map;
@@ -594,8 +625,12 @@ const Dashboard = () => {
     const resolveCompetitionTeamId = useCallback((row, accountContext, fallbackAccountName) => {
         const explicitTeamId = row?.team_id
             || row?.teamId
+            || row?.team_number
+            || row?.teamNumber
             || accountContext?.team_id
-            || accountContext?.teamId;
+            || accountContext?.teamId
+            || accountContext?.team_number
+            || accountContext?.teamNumber;
         if (explicitTeamId !== undefined && explicitTeamId !== null && String(explicitTeamId).trim()) {
             return String(explicitTeamId).trim();
         }
@@ -656,13 +691,15 @@ const Dashboard = () => {
         const matchedTeamAccount = teamCompetitionAccounts.find(
             (account) => {
                 const accountTeamId = String(account?.team_id ?? account?.teamId ?? '').trim();
+                const accountTeamNumber = String(account?.team_number ?? account?.teamNumber ?? '').trim();
                 const accountCode = String(account?.code ?? account?.competition_code ?? account?.competitionCode ?? '').trim();
 
                 if (teamId && competitionCode) {
-                    return accountTeamId === String(teamId) && accountCode === String(competitionCode);
+                    return (accountTeamId === String(teamId) || accountTeamNumber === String(teamId))
+                        && accountCode === String(competitionCode);
                 }
                 if (teamId) {
-                    return accountTeamId === String(teamId);
+                    return accountTeamId === String(teamId) || accountTeamNumber === String(teamId);
                 }
                 if (isTeamTradeRow && competitionCode) {
                     return accountCode === String(competitionCode);
@@ -731,7 +768,10 @@ const Dashboard = () => {
 
             if (normalizedFallback.toLowerCase().startsWith('team:')) {
                 const fallbackTeamId = normalizedFallback.split(':').slice(1).join(':').trim();
-                const byFallbackTeamId = teamCompetitionAccounts.find((account) => String(account?.team_id) === String(fallbackTeamId));
+                const byFallbackTeamId = teamCompetitionAccounts.find(
+                    (account) => String(account?.team_id) === String(fallbackTeamId)
+                        || String(account?.team_number) === String(fallbackTeamId),
+                );
                 const byFallbackTeamName = teamNameById.get(String(fallbackTeamId))
                     || byFallbackTeamId?.team_name
                     || byFallbackTeamId?.teamName
@@ -894,13 +934,27 @@ const Dashboard = () => {
                 data?.account_list,
                 data?.accountList,
             );
+            const accountRowsWithCompetitionCode = accountsCollection.filter((account) => {
+                const possibleCode = account?.competition_code
+                    ?? account?.competitionCode
+                    ?? account?.code
+                    ?? account?.competition?.code;
+                return String(possibleCode || '').trim().length > 0;
+            });
             const directCompetitionRows = pickFirstNonEmptyArray(
                 data?.competition_accounts,
                 data?.competitionAccounts,
                 data?.competition_account,
+                data?.competition_portfolios,
+                data?.competitionPortfolio,
+                data?.individual_competition_accounts,
+                data?.individualCompetitionAccounts,
+                data?.individual_accounts,
                 data?.accounts?.competition_accounts,
                 data?.accounts?.competitionAccounts,
                 data?.accounts?.competition,
+                data?.accounts?.competitions,
+                data?.accounts?.individual,
                 data?.competitions,
             );
             const directTeamCompetitionRows = pickFirstNonEmptyArray(
@@ -909,9 +963,14 @@ const Dashboard = () => {
                 data?.team_competition_accounts,
                 data?.teamCompetitionAccounts,
                 data?.competition_team_accounts,
+                data?.team_accounts,
+                data?.teamAccounts,
+                data?.team_portfolios,
                 data?.accounts?.team_competitions,
                 data?.accounts?.teamCompetitions,
                 data?.accounts?.team_competition_accounts,
+                data?.accounts?.team_accounts,
+                data?.accounts?.competition_team_accounts,
                 data?.accounts?.team,
             );
             const competitionRowsFromAccounts = accountsCollection.filter((account) => {
@@ -926,6 +985,10 @@ const Dashboard = () => {
             const competitionAccountRows = pickFirstNonEmptyArray(
                 directCompetitionRows,
                 competitionRowsFromAccounts,
+                accountRowsWithCompetitionCode.filter((account) => {
+                    const type = String(account?.type || account?.account_type || '').toLowerCase();
+                    return type !== 'team' && type !== 'team_competition';
+                }),
             )
                 .map(normalizeCompetitionAccount)
                 .filter(Boolean);
@@ -941,10 +1004,12 @@ const Dashboard = () => {
                 data?.teams,
                 data?.user_teams,
                 data?.team_memberships,
+                data?.team_accounts,
                 data?.accounts?.teams,
                 teamCompetitionRows.map((account) => ({
                     id: account?.team_id,
                     team_id: account?.team_id,
+                    team_number: account?.team_number,
                     name: account?.team_name,
                     team_name: account?.team_name,
                 })),
@@ -1013,7 +1078,7 @@ const Dashboard = () => {
 
 
 
-    const fetchFeaturedCompetitions = async () => {
+    const fetchFeaturedCompetitions = useCallback(async () => {
         setIsLoading(true);
         try {
             const url = isAdmin
@@ -1021,7 +1086,7 @@ const Dashboard = () => {
                 : `${BASE_URL}/featured_competitions`;
 
             const response = await axios.get(url);
-            const comps = response.data || [];
+            const comps = normalizeCompetitionCollection(response?.data);
             const currentDate = new Date();
 
             const isActive = (comp) => {
@@ -1047,7 +1112,7 @@ const Dashboard = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [BASE_URL, isAdmin, username]);
 
 
     // =========================================
@@ -1068,7 +1133,7 @@ const Dashboard = () => {
             fetchUserData();
             fetchFeaturedCompetitions();
         }
-    }, [isLoggedIn, username, fetchUserData]);
+    }, [isAdmin, isLoggedIn, username, fetchFeaturedCompetitions, fetchUserData]);
 
     useEffect(() => {
         if (!isLoggedIn || !username) {
