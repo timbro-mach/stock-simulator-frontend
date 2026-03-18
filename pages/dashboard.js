@@ -370,11 +370,13 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
 };
 
 // Memoized ChartPanel component
-const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol }) => (
-    <div style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
+const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol, title = null, containerClassName = '', showRangeControls = true }) => (
+    <div className={containerClassName} style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             <div>
-                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>{chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Stock Overview'}</h3>
+                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>
+                    {title || (chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Account Performance')}
+                </h3>
                 {chartMetrics && (
                     <p style={{ margin: '5px 0 0', color: chartMetrics.dayChangeValue >= 0 ? '#047857' : '#b91c1c', fontWeight: 600 }}>
                         {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) today
@@ -391,26 +393,28 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
             )}
         </div>
 
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-            {['2D', '5D', '1M', '6M', '1Y', '3Y'].map((r) => (
-                <button
-                    key={r}
-                    onClick={() => onRangeChange(r)}
-                    style={{
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        background: chartRange === r ? 'var(--brand-blue-dark)' : '#edf1f4',
-                        color: chartRange === r ? '#fff' : 'var(--text-subtle)',
-                        border: chartRange === r ? '1px solid var(--brand-blue-dark)' : '1px solid var(--border-color)',
-                        fontSize: 13,
-                        fontWeight: chartRange === r ? 600 : 500,
-                        cursor: 'pointer',
-                    }}
-                >
-                    {r}
-                </button>
-            ))}
-        </div>
+        {showRangeControls && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                {['2D', '5D', '1M', '6M', '1Y', '3Y'].map((r) => (
+                    <button
+                        key={r}
+                        onClick={() => onRangeChange(r)}
+                        style={{
+                            padding: '8px 12px',
+                            borderRadius: 6,
+                            background: chartRange === r ? 'var(--brand-blue-dark)' : '#edf1f4',
+                            color: chartRange === r ? '#fff' : 'var(--text-subtle)',
+                            border: chartRange === r ? '1px solid var(--brand-blue-dark)' : '1px solid var(--border-color)',
+                            fontSize: 13,
+                            fontWeight: chartRange === r ? 600 : 500,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {r}
+                    </button>
+                ))}
+            </div>
+        )}
 
         {chartData ? (
             <div style={{ height: 'clamp(220px, 40vw, 300px)', width: '100%' }}>
@@ -577,6 +581,7 @@ const Dashboard = () => {
     const [chartData, setChartData] = useState(null);
     const [chartMetrics, setChartMetrics] = useState(null);
     const [chartRange, setChartRange] = useState('1M');
+    const [accountPerformanceHistory, setAccountPerformanceHistory] = useState([]);
 
     // =========================================
     // Teams & Competitions state
@@ -1076,6 +1081,53 @@ const Dashboard = () => {
             if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
             if (teamRows.length > 0) setTeams(teamRows);
             setTradeBlotterLink(resolveTradeBlotterLink(response.data));
+
+            const snapshotPayloads = [
+                {
+                    username,
+                    account_id: 'global',
+                    account_type: 'global',
+                    total_value: Number(data?.global_account?.total_value ?? 0),
+                    cash: Number(data?.global_account?.cash_balance ?? 0),
+                    total_pnl: Number(data?.global_account?.pnl ?? 0),
+                },
+                ...competitionAccountRows.map((account) => ({
+                    username,
+                    account_id: String(account?.code ?? ''),
+                    account_type: 'competition',
+                    total_value: Number(account?.total_value ?? 0),
+                    cash: Number(account?.cash_balance ?? 0),
+                    total_pnl: Number(account?.pnl ?? 0),
+                })),
+                ...teamCompetitionRows.map((account) => ({
+                    username,
+                    account_id: `${String(account?.code ?? '')}:${String(account?.team_id ?? '')}`,
+                    account_type: 'team',
+                    total_value: Number(account?.total_value ?? 0),
+                    cash: Number(account?.cash_balance ?? 0),
+                    total_pnl: Number(account?.pnl ?? 0),
+                })),
+            ].filter((entry) => entry.account_id);
+
+            await Promise.all(
+                snapshotPayloads.map(async (payload) => {
+                    const snapshotEndpoints = [
+                        `${BASE_URL}/account/performance/snapshot`,
+                        `${BASE_URL}/account/performance`,
+                    ];
+
+                    for (const endpoint of snapshotEndpoints) {
+                        try {
+                            await axios.post(endpoint, payload);
+                            return;
+                        } catch (error) {
+                            if (error?.response?.status === 404) continue;
+                            console.error('Failed to snapshot account performance:', error);
+                            return;
+                        }
+                    }
+                }),
+            );
         } catch (error) {
             if (error.response?.status === 404) {
                 console.error('User not found. Clearing session.');
@@ -1918,7 +1970,7 @@ const Dashboard = () => {
         ) ?? 0;
 
         return (
-            <div className="card section" style={{ width: 'min(100%, 360px)' }}>
+            <div className="card section" style={{ width: 'min(100%, 360px)', height: '100%' }}>
                 <h3>{isGlobal ? 'Global Account' : name + (code ? ` (${code})` : '')}</h3>
                 <p className="note">Cash: ${format(cash_balance)}</p>
                 <p className="note">Total Value: <strong>${format(total_value)}</strong></p>
@@ -2007,36 +2059,199 @@ const Dashboard = () => {
         ) || null;
     }, [selectedAccount.competition_code, selectedAccount.team_id, selectedAccount.type, teamCompetitionAccounts]);
 
-    const renderAccountDetails = () => {
+    const getPerformanceAccountContext = useCallback(() => {
+        if (!username) return null;
+
         if (selectedAccount.type === 'global') {
-            return (
-                <div className="card section">
-                    <h2>Account Summary — Global</h2>
-                    <AccountSummaryBox account={globalAccount} isGlobal={true} onReset={resetGlobalAccount} />
-                </div>
-            );
+            return {
+                username,
+                account_id: 'global',
+                account_type: 'global',
+                total_value: Number(globalAccount?.total_value ?? 0),
+                cash: Number(globalAccount?.cash_balance ?? 0),
+                total_pnl: Number(globalAccount?.pnl ?? 0),
+            };
         }
 
         if (selectedAccount.type === 'competition') {
             const compAcc = getSelectedCompetitionAccount();
             if (!compAcc) return null;
-            return (
-                <div className="card section">
-                    <h2>Account Summary — Competition (Individual)</h2>
-                    <AccountSummaryBox account={compAcc} isGlobal={false} />
-                </div>
-            );
+            return {
+                username,
+                account_id: String(compAcc?.code ?? selectedAccount.id ?? ''),
+                account_type: 'competition',
+                total_value: Number(compAcc?.total_value ?? 0),
+                cash: Number(compAcc?.cash_balance ?? 0),
+                total_pnl: Number(compAcc?.pnl ?? 0),
+            };
         }
 
         if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
             const teamAcc = getSelectedTeamCompetitionAccount();
             if (!teamAcc) return null;
+            return {
+                username,
+                account_id: `${String(teamAcc?.code ?? selectedAccount.competition_code ?? '')}:${String(teamAcc?.team_id ?? selectedAccount.team_id ?? '')}`,
+                account_type: 'team',
+                total_value: Number(teamAcc?.total_value ?? 0),
+                cash: Number(teamAcc?.cash_balance ?? 0),
+                total_pnl: Number(teamAcc?.pnl ?? 0),
+            };
+        }
+
+        return null;
+    }, [
+        getSelectedCompetitionAccount,
+        getSelectedTeamCompetitionAccount,
+        globalAccount?.cash_balance,
+        globalAccount?.pnl,
+        globalAccount?.total_value,
+        selectedAccount.competition_code,
+        selectedAccount.id,
+        selectedAccount.team_id,
+        selectedAccount.type,
+        username,
+    ]);
+
+    useEffect(() => {
+        if (!isLoggedIn) {
+            setAccountPerformanceHistory([]);
+            return;
+        }
+
+        const context = getPerformanceAccountContext();
+        if (!context || !context.account_id || !context.account_type) {
+            setAccountPerformanceHistory([]);
+            return;
+        }
+
+        let cancelled = false;
+        const syncAndFetchHistory = async () => {
+            try {
+                const historyEndpoints = [
+                    `${BASE_URL}/account/performance/history`,
+                    `${BASE_URL}/account/performance`,
+                ];
+
+                for (const endpoint of historyEndpoints) {
+                    try {
+                        const response = await axios.get(endpoint, { params: context });
+                        if (!cancelled) {
+                            const rows = Array.isArray(response?.data?.history) ? response.data.history : [];
+                            setAccountPerformanceHistory(rows);
+                        }
+                        return;
+                    } catch (error) {
+                        if (error?.response?.status === 404) continue;
+                        throw error;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load account performance history:', error);
+                if (!cancelled) setAccountPerformanceHistory([]);
+            }
+        };
+
+        syncAndFetchHistory();
+        return () => {
+            cancelled = true;
+        };
+    }, [BASE_URL, getPerformanceAccountContext, isLoggedIn]);
+
+    const buildAccountHistoryChart = useCallback((historyRows = []) => {
+        const parsed = historyRows
+            .map((row) => {
+                const value = Number(row?.total_value);
+                const cash = Number(row?.cash);
+                const pnl = row?.total_pnl === null || row?.total_pnl === undefined ? null : Number(row?.total_pnl);
+                const date = row?.date ? new Date(row.date) : null;
+                return {
+                    date: date && !Number.isNaN(date.getTime()) ? date : null,
+                    value: Number.isFinite(value) ? value : null,
+                    cash: Number.isFinite(cash) ? cash : 0,
+                    pnl: Number.isFinite(pnl) ? pnl : null,
+                };
+            })
+            .filter((row) => row.date && Number.isFinite(row.value))
+            .sort((a, b) => a.date - b.date);
+
+        if (!parsed.length) return { chart: null, metrics: null };
+
+        const labels = parsed.map((row) => row.date.toLocaleDateString());
+        const values = parsed.map((row) => row.value);
+        const firstValue = values[0];
+        const lastValue = values[values.length - 1];
+        const netChange = lastValue - firstValue;
+        const netPercent = firstValue ? (netChange / firstValue) * 100 : 0;
+        const previousValue = values.length > 1 ? values[values.length - 2] : firstValue;
+        const dayChangeValue = lastValue - previousValue;
+        const dayChangePercent = previousValue ? (dayChangeValue / previousValue) * 100 : 0;
+
+        return {
+            chart: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Account value',
+                        data: values,
+                        borderColor: '#0b63b6',
+                        borderWidth: 2,
+                        pointRadius: parsed.length > 45 ? 1 : 2,
+                        fill: false,
+                        tension: 0.25,
+                    },
+                ],
+            },
+            metrics: {
+                latestPrice: lastValue,
+                previousClose: previousValue,
+                range: 'Since inception',
+                rangeChangeValue: netChange,
+                rangeChangePercent: netPercent,
+                dayChangeValue,
+                dayChangePercent,
+            },
+        };
+    }, []);
+
+    const renderAccountDetails = () => {
+        const renderSummaryAndChart = (account, heading, isGlobal = false) => {
+            const historyChart = buildAccountHistoryChart(accountPerformanceHistory);
+
             return (
                 <div className="card section">
-                    <h2>Account Summary — Team</h2>
-                    <AccountSummaryBox account={teamAcc} isGlobal={false} />
+                    <h2>{heading}</h2>
+                    <div className="account-summary-layout">
+                        <AccountSummaryBox account={account} isGlobal={isGlobal} onReset={isGlobal ? resetGlobalAccount : undefined} />
+                        <ChartPanel
+                            chartData={historyChart.chart}
+                            chartRange="ALL"
+                            chartMetrics={historyChart.metrics}
+                            chartSymbol=""
+                            onRangeChange={() => {}}
+                            title="Account Performance"
+                            containerClassName="card section account-performance-card"
+                            showRangeControls={false}
+                        />
+                    </div>
                 </div>
             );
+        };
+
+        if (selectedAccount.type === 'global') {
+            return renderSummaryAndChart(globalAccount, 'Account Summary — Global', true);
+        }
+
+        if (selectedAccount.type === 'competition') {
+            const compAcc = getSelectedCompetitionAccount();
+            if (!compAcc) return null;
+            return renderSummaryAndChart(compAcc, 'Account Summary — Competition (Individual)');
+        }
+
+        if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
+            const teamAcc = getSelectedTeamCompetitionAccount();
+            if (!teamAcc) return null;
+            return renderSummaryAndChart(teamAcc, 'Account Summary — Team');
         }
         return null;
     };
@@ -2183,7 +2398,7 @@ const Dashboard = () => {
                             : "Competition (Team)"}
                 </h3>
 
-                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(260px, 1fr)', alignItems: 'start' }}>
                     <div style={{ minWidth: 0 }}>
                         <SharedInputs
                             onBuy={() => executeTrade('buy')}
@@ -2202,15 +2417,6 @@ const Dashboard = () => {
                             setLimitPrice={setLimitPrice}
                         />
                     </div>
-
-
-                    <ChartPanel
-                        chartData={chartData}
-                        chartRange={chartRange}
-                        chartMetrics={chartMetrics}
-                        chartSymbol={chartSymbol}
-                        onRangeChange={handleRangeChange}
-                    />
                 </div>
 
                 {pendingLimitOrders.length > 0 && (
