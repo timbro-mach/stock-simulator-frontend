@@ -2239,7 +2239,7 @@ const Dashboard = () => {
                             : "Competition (Team)"}
                 </h3>
 
-                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(260px, 1fr)', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', alignItems: 'start' }}>
                     <div style={{ minWidth: 0 }}>
                         <SharedInputs
                             onBuy={() => executeTrade('buy')}
@@ -2258,6 +2258,14 @@ const Dashboard = () => {
                             setLimitPrice={setLimitPrice}
                         />
                     </div>
+                    <ChartPanel
+                        chartData={chartData}
+                        chartRange={chartRange}
+                        chartMetrics={chartMetrics}
+                        chartSymbol={chartSymbol}
+                        onRangeChange={handleRangeChange}
+                        title={chartSymbol ? `${chartSymbol.toUpperCase()} Stock Chart` : 'Stock Price Chart'}
+                    />
                 </div>
 
                 {pendingLimitOrders.length > 0 && (
