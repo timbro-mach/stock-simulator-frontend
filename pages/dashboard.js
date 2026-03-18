@@ -60,10 +60,46 @@ const normalizeCompetitionCollection = (payload) => pickFirstNonEmptyArray(
     payload?.results,
 );
 
+const normalizeCompetitionEntry = (competition) => {
+    const code = String(
+        competition?.code
+        || competition?.competition_code
+        || competition?.competitionCode
+        || competition?.id
+        || '',
+    ).trim();
+    if (!code) return null;
+
+    const name = String(
+        competition?.name
+        || competition?.competition_name
+        || competition?.competitionName
+        || competition?.title
+        || `Competition ${code}`
+        || '',
+    ).trim();
+
+    const featuredRaw = competition?.featured ?? competition?.is_featured ?? competition?.isFeatured;
+    const isOpenRaw = competition?.is_open ?? competition?.isOpen ?? competition?.open;
+
+    return {
+        ...competition,
+        code,
+        name,
+        featured: Boolean(featuredRaw),
+        is_open: isOpenRaw === undefined || isOpenRaw === null ? true : Boolean(isOpenRaw),
+        start_date: competition?.start_date || competition?.startDate || competition?.starts_at || null,
+        end_date: competition?.end_date || competition?.endDate || competition?.ends_at || null,
+    };
+};
+
 const toAccountCode = (account) => String(
     account?.code
     || account?.competition_code
     || account?.competitionCode
+    || account?.competition?.code
+    || account?.competition?.competition_code
+    || account?.competition?.competitionCode
     || account?.id
     || account?.account_id
     || account?.accountId
@@ -75,6 +111,9 @@ const toCompetitionName = (account, fallbackCode = '') => {
         || account?.competition_name
         || account?.competitionName
         || account?.competition?.name
+        || account?.competition?.competition_name
+        || account?.competition?.competitionName
+        || account?.title
         || account?.display_name
         || account?.displayName
         || '';
@@ -94,7 +133,13 @@ const normalizeCompetitionAccount = (account) => {
 
 const normalizeTeamCompetitionAccount = (account) => {
     const code = toAccountCode(account);
-    const teamId = account?.team_id ?? account?.teamId ?? account?.team?.id ?? account?.team?.team_id;
+    const teamId = account?.team_id
+        ?? account?.teamId
+        ?? account?.team_number
+        ?? account?.teamNumber
+        ?? account?.team?.id
+        ?? account?.team?.team_id
+        ?? account?.team?.team_number;
     if (!code && (teamId === undefined || teamId === null || String(teamId).trim() === '')) return null;
     const teamName = account?.team_name
         || account?.teamName
@@ -102,13 +147,16 @@ const normalizeTeamCompetitionAccount = (account) => {
         || account?.teamDisplayName
         || account?.team?.name
         || account?.team?.team_name
+        || account?.team?.display_name
         || account?.name
         || account?.display_name
         || account?.displayName
         || '';
+    const competitionName = toCompetitionName(account, code);
     return {
         ...account,
         code,
+        name: competitionName,
         team_id: teamId,
         team_name: String(teamName || '').trim(),
     };
@@ -708,6 +756,9 @@ const Dashboard = () => {
             },
         );
         const teamName = teamNameById.get(String(teamId))
+            || row?.team_name
+            || row?.teamName
+            || row?.team?.name
             || matchedTeamAccount?.team_name
             || matchedTeamAccount?.teamName
             || matchedTeamAccount?.team?.name
@@ -1014,7 +1065,7 @@ const Dashboard = () => {
                     team_name: account?.team_name,
                 })),
             ).filter((team) => {
-                const id = team?.id ?? team?.team_id ?? team?.teamId;
+                const id = team?.id ?? team?.team_id ?? team?.teamId ?? team?.team_number ?? team?.teamNumber;
                 const name = team?.name ?? team?.team_name ?? team?.teamName;
                 return id !== undefined && id !== null && String(name || '').trim();
             });
@@ -1081,12 +1132,31 @@ const Dashboard = () => {
     const fetchFeaturedCompetitions = useCallback(async () => {
         setIsLoading(true);
         try {
-            const url = isAdmin
-                ? `${BASE_URL}/admin/competitions?admin_username=${username}`
-                : `${BASE_URL}/featured_competitions`;
+            const endpointCandidates = isAdmin
+                ? [`${BASE_URL}/admin/competitions?admin_username=${username}`]
+                : [
+                    `${BASE_URL}/featured_competitions`,
+                    `${BASE_URL}/competitions`,
+                ];
 
-            const response = await axios.get(url);
-            const comps = normalizeCompetitionCollection(response?.data);
+            let response = null;
+            let lastError = null;
+            for (const endpoint of endpointCandidates) {
+                try {
+                    response = await axios.get(endpoint);
+                    break;
+                } catch (error) {
+                    lastError = error;
+                    if (error?.response?.status === 404) continue;
+                    throw error;
+                }
+            }
+
+            if (!response) throw lastError || new Error('No competition endpoint returned data.');
+
+            const comps = normalizeCompetitionCollection(response?.data)
+                .map(normalizeCompetitionEntry)
+                .filter(Boolean);
             const currentDate = new Date();
 
             const isActive = (comp) => {
@@ -1102,7 +1172,7 @@ const Dashboard = () => {
                 );
             } else {
                 setFeaturedCompetitions(
-                    comps.filter((comp) => isActive(comp)).slice(0, 10) // ✅ show only active featured comps
+                    comps.filter((comp) => comp.featured && isActive(comp)).slice(0, 10)
                 );
             }
         } catch (error) {
