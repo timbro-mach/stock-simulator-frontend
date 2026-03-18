@@ -2008,11 +2008,27 @@ const Dashboard = () => {
     }, [selectedAccount.competition_code, selectedAccount.team_id, selectedAccount.type, teamCompetitionAccounts]);
 
     const renderAccountDetails = () => {
+        const chartCard = (
+            <div className="card section account-performance-card">
+                <h3>Account Performance</h3>
+                <ChartPanel
+                    chartData={chartData}
+                    chartRange={chartRange}
+                    chartMetrics={chartMetrics}
+                    chartSymbol={chartSymbol}
+                    onRangeChange={handleRangeChange}
+                />
+            </div>
+        );
+
         if (selectedAccount.type === 'global') {
             return (
                 <div className="card section">
                     <h2>Account Summary — Global</h2>
-                    <AccountSummaryBox account={globalAccount} isGlobal={true} onReset={resetGlobalAccount} />
+                    <div className="account-summary-layout">
+                        <AccountSummaryBox account={globalAccount} isGlobal={true} onReset={resetGlobalAccount} />
+                        {chartCard}
+                    </div>
                 </div>
             );
         }
@@ -2023,7 +2039,10 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h2>Account Summary — Competition (Individual)</h2>
-                    <AccountSummaryBox account={compAcc} isGlobal={false} />
+                    <div className="account-summary-layout">
+                        <AccountSummaryBox account={compAcc} isGlobal={false} />
+                        {chartCard}
+                    </div>
                 </div>
             );
         }
@@ -2034,7 +2053,10 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h2>Account Summary — Team</h2>
-                    <AccountSummaryBox account={teamAcc} isGlobal={false} />
+                    <div className="account-summary-layout">
+                        <AccountSummaryBox account={teamAcc} isGlobal={false} />
+                        {chartCard}
+                    </div>
                 </div>
             );
         }
@@ -2183,7 +2205,7 @@ const Dashboard = () => {
                             : "Competition (Team)"}
                 </h3>
 
-                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(260px, 1fr)', alignItems: 'start' }}>
                     <div style={{ minWidth: 0 }}>
                         <SharedInputs
                             onBuy={() => executeTrade('buy')}
@@ -2202,15 +2224,6 @@ const Dashboard = () => {
                             setLimitPrice={setLimitPrice}
                         />
                     </div>
-
-
-                    <ChartPanel
-                        chartData={chartData}
-                        chartRange={chartRange}
-                        chartMetrics={chartMetrics}
-                        chartSymbol={chartSymbol}
-                        onRangeChange={handleRangeChange}
-                    />
                 </div>
 
                 {pendingLimitOrders.length > 0 && (
