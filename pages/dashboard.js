@@ -32,8 +32,8 @@ const formatChartDateLabel = (value, range) => {
     const date = new Date(value);
     if (!value || Number.isNaN(date.getTime())) return String(value || '');
 
-    if (range === '1D') return DATE_FORMATTERS.intraday.format(date);
-    if (range === '1W' || range === '1M') return DATE_FORMATTERS.shortDate.format(date);
+    if (range === '2D') return DATE_FORMATTERS.intraday.format(date);
+    if (range === '5D' || range === '1M') return DATE_FORMATTERS.shortDate.format(date);
     return DATE_FORMATTERS.monthYear.format(date);
 };
 
@@ -46,10 +46,11 @@ const getPointTradingDay = (point) => {
 };
 
 const RANGE_LOOKBACK_DAYS = {
-    '1W': 7,
+    '5D': 5,
     '1M': 30,
     '6M': 182,
     '1Y': 365,
+    '3Y': 365 * 3,
 };
 
 const getRangeBaselinePrice = (points, range, fallbackPrice) => {
@@ -127,10 +128,10 @@ const buildChartState = ({
     const rangeChangeValue = latestPrice - rangeBaselinePrice;
     const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
     const intradayBaselinePrice = getIntradayBaselinePrice(intradayReferencePoints, dailyPreviousClose);
-    const dayBaseline = range === '1D'
+    const dayBaseline = range === '2D'
         ? dailyPreviousClose
         : (Number.isFinite(intradayBaselinePrice) ? intradayBaselinePrice : dailyPreviousClose);
-    const hasApiDayChange = range === '1D'
+    const hasApiDayChange = range === '2D'
         && !Number.isFinite(dayBaseline)
         && Number.isFinite(Number(apiTodayChangeValue));
     const derivedDayChangeValue = latestPrice - dayBaseline;
@@ -158,7 +159,7 @@ const buildChartState = ({
                         return gradient;
                     },
                     pointRadius: 0,
-                    tension: range === '1D' ? 0.08 : 0.24,
+                    tension: range === '2D' ? 0.08 : 0.24,
                 },
             ],
         },
@@ -185,7 +186,7 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
     const chartRange = chartState.metrics?.range;
     const labels = chartState.chartData?.labels || [];
     const lastLabel = labels[labels.length - 1];
-    if (chartRange === '1D') {
+    if (chartRange === '2D') {
         const lastTs = toTimestamp(lastLabel);
         if (!Number.isFinite(lastTs) || Date.now() - lastTs > 2 * 60 * 1000) {
             return chartState;
@@ -203,9 +204,9 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
     const rangeBaselinePrice = Number(chartState.metrics.rangeBaselinePrice ?? firstPoint);
     const rangeChangeValue = liveQuotePrice - rangeBaselinePrice;
     const rangeChangePercent = rangeBaselinePrice ? (rangeChangeValue / rangeBaselinePrice) * 100 : 0;
-    const defaultDayBaseline = chartRange === '1D' ? previousClose : firstPoint;
+    const defaultDayBaseline = chartRange === '2D' ? previousClose : firstPoint;
     const dayBaseline = Number(chartState.metrics.dayBaselinePrice ?? defaultDayBaseline);
-    const useApiDayChange = chartRange === '1D'
+    const useApiDayChange = chartRange === '2D'
         && chartState.metrics?.dayChangeSource === 'api'
         && !Number.isFinite(dayBaseline);
     const derivedDayChangeValue = liveQuotePrice - dayBaseline;
@@ -266,7 +267,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
         </div>
 
         <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-            {['1D', '1W', '1M', '6M', '1Y'].map((r) => (
+            {['2D', '5D', '1M', '6M', '1Y', '3Y'].map((r) => (
                 <button
                     key={r}
                     onClick={() => onRangeChange(r)}
