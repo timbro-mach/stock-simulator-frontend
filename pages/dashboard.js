@@ -607,7 +607,7 @@ const Dashboard = () => {
 
         if (accountType === 'team' || accountType === 'team_competition') {
             return teamName
-                ? `${teamName} • Competition`
+                ? `${teamName} • Team Competition`
                 : (teamId ? `Competition Team (ID: ${teamId})` : 'Competition Team');
         }
 
@@ -620,7 +620,7 @@ const Dashboard = () => {
         }
 
         if (matchedTeamAccount?.name) {
-            return `${matchedTeamAccount.name} • Competition`;
+            return `${matchedTeamAccount.name} • Team Competition`;
         }
 
         if (typeof fallbackAccountName === 'string' && fallbackAccountName.trim()) {
@@ -641,7 +641,7 @@ const Dashboard = () => {
                 const fallbackTeamId = normalizedFallback.split(':').slice(1).join(':').trim();
                 const byFallbackTeamId = teamCompetitionAccounts.find((account) => String(account?.team_id) === String(fallbackTeamId));
                 if (byFallbackTeamId?.name) {
-                    return `${byFallbackTeamId.name} • Competition`;
+                    return `${byFallbackTeamId.name} • Team Competition`;
                 }
             }
 
@@ -649,7 +649,7 @@ const Dashboard = () => {
                 const parsedTeamId = normalizedFallback.split(':').slice(-1)[0]?.trim();
                 if (parsedTeamId) {
                     const mappedTeamName = teamNameById.get(String(parsedTeamId));
-                    if (mappedTeamName) return `${mappedTeamName} • Competition`;
+                    if (mappedTeamName) return `${mappedTeamName} • Team Competition`;
                     return `Competition Team (ID: ${parsedTeamId})`;
                 }
                 return 'Competition Team';
