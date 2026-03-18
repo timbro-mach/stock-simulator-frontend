@@ -370,7 +370,7 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
 };
 
 // Memoized ChartPanel component
-const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol, title = null, containerClassName = '' }) => (
+const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol, title = null, containerClassName = '', showRangeControls = true }) => (
     <div className={containerClassName} style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             <div>
@@ -393,26 +393,28 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
             )}
         </div>
 
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-            {['2D', '5D', '1M', '6M', '1Y', '3Y'].map((r) => (
-                <button
-                    key={r}
-                    onClick={() => onRangeChange(r)}
-                    style={{
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        background: chartRange === r ? 'var(--brand-blue-dark)' : '#edf1f4',
-                        color: chartRange === r ? '#fff' : 'var(--text-subtle)',
-                        border: chartRange === r ? '1px solid var(--brand-blue-dark)' : '1px solid var(--border-color)',
-                        fontSize: 13,
-                        fontWeight: chartRange === r ? 600 : 500,
-                        cursor: 'pointer',
-                    }}
-                >
-                    {r}
-                </button>
-            ))}
-        </div>
+        {showRangeControls && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                {['2D', '5D', '1M', '6M', '1Y', '3Y'].map((r) => (
+                    <button
+                        key={r}
+                        onClick={() => onRangeChange(r)}
+                        style={{
+                            padding: '8px 12px',
+                            borderRadius: 6,
+                            background: chartRange === r ? 'var(--brand-blue-dark)' : '#edf1f4',
+                            color: chartRange === r ? '#fff' : 'var(--text-subtle)',
+                            border: chartRange === r ? '1px solid var(--brand-blue-dark)' : '1px solid var(--border-color)',
+                            fontSize: 13,
+                            fontWeight: chartRange === r ? 600 : 500,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {r}
+                    </button>
+                ))}
+            </div>
+        )}
 
         {chartData ? (
             <div style={{ height: 'clamp(220px, 40vw, 300px)', width: '100%' }}>
@@ -1920,7 +1922,7 @@ const Dashboard = () => {
         ) ?? 0;
 
         return (
-            <div className="card section" style={{ width: 'min(100%, 360px)' }}>
+            <div className="card section" style={{ width: 'min(100%, 360px)', height: '100%' }}>
                 <h3>{isGlobal ? 'Global Account' : name + (code ? ` (${code})` : '')}</h3>
                 <p className="note">Cash: ${format(cash_balance)}</p>
                 <p className="note">Total Value: <strong>${format(total_value)}</strong></p>
@@ -2009,57 +2011,88 @@ const Dashboard = () => {
         ) || null;
     }, [selectedAccount.competition_code, selectedAccount.team_id, selectedAccount.type, teamCompetitionAccounts]);
 
-    const renderAccountDetails = () => {
-        const chartCard = (
-            <ChartPanel
-                chartData={chartData}
-                chartRange={chartRange}
-                chartMetrics={chartMetrics}
-                chartSymbol={chartSymbol}
-                onRangeChange={handleRangeChange}
-                title="Account Performance"
-                containerClassName="card section account-performance-card"
-            />
-        );
+    const buildInceptionPerformanceChart = (account) => {
+        if (!account) return { chart: null, metrics: null };
 
-        if (selectedAccount.type === 'global') {
+        const parseNum = (...values) => {
+            for (const value of values) {
+                const n = Number(value);
+                if (Number.isFinite(n)) return n;
+            }
+            return null;
+        };
+
+        const totalValue = parseNum(account?.total_value, account?.totalValue) ?? 0;
+        const totalPnl = parseNum(account?.pnl, account?.total_pnl, account?.totalPnl) ?? 0;
+        const inceptionValue = Math.max(0, totalValue - totalPnl);
+        const startDate = account?.created_at || account?.createdAt || account?.start_date || account?.startDate;
+        const startLabel = startDate ? new Date(startDate).toLocaleDateString() : 'Inception';
+
+        return {
+            chart: {
+                labels: [startLabel, 'Today'],
+                datasets: [
+                    {
+                        label: 'Account value',
+                        data: [inceptionValue, totalValue],
+                        borderColor: '#0b63b6',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        fill: false,
+                        tension: 0.25,
+                    },
+                ],
+            },
+            metrics: {
+                latestPrice: totalValue,
+                previousClose: inceptionValue,
+                range: 'Since inception',
+                rangeChangeValue: totalValue - inceptionValue,
+                rangeChangePercent: inceptionValue ? ((totalValue - inceptionValue) / inceptionValue) * 100 : 0,
+                dayChangeValue: totalValue - inceptionValue,
+                dayChangePercent: inceptionValue ? ((totalValue - inceptionValue) / inceptionValue) * 100 : 0,
+            },
+        };
+    };
+
+    const renderAccountDetails = () => {
+        const renderSummaryAndChart = (account, heading, isGlobal = false) => {
+            const inceptionChart = buildInceptionPerformanceChart(account);
+
             return (
                 <div className="card section">
-                    <h2>Account Summary — Global</h2>
+                    <h2>{heading}</h2>
                     <div className="account-summary-layout">
-                        <AccountSummaryBox account={globalAccount} isGlobal={true} onReset={resetGlobalAccount} />
-                        {chartCard}
+                        <AccountSummaryBox account={account} isGlobal={isGlobal} onReset={isGlobal ? resetGlobalAccount : undefined} />
+                        <ChartPanel
+                            chartData={inceptionChart.chart}
+                            chartRange="ALL"
+                            chartMetrics={inceptionChart.metrics}
+                            chartSymbol=""
+                            onRangeChange={() => {}}
+                            title="Account Performance"
+                            containerClassName="card section account-performance-card"
+                            showRangeControls={false}
+                        />
                     </div>
                 </div>
             );
+        };
+
+        if (selectedAccount.type === 'global') {
+            return renderSummaryAndChart(globalAccount, 'Account Summary — Global', true);
         }
 
         if (selectedAccount.type === 'competition') {
             const compAcc = getSelectedCompetitionAccount();
             if (!compAcc) return null;
-            return (
-                <div className="card section">
-                    <h2>Account Summary — Competition (Individual)</h2>
-                    <div className="account-summary-layout">
-                        <AccountSummaryBox account={compAcc} isGlobal={false} />
-                        {chartCard}
-                    </div>
-                </div>
-            );
+            return renderSummaryAndChart(compAcc, 'Account Summary — Competition (Individual)');
         }
 
         if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
             const teamAcc = getSelectedTeamCompetitionAccount();
             if (!teamAcc) return null;
-            return (
-                <div className="card section">
-                    <h2>Account Summary — Team</h2>
-                    <div className="account-summary-layout">
-                        <AccountSummaryBox account={teamAcc} isGlobal={false} />
-                        {chartCard}
-                    </div>
-                </div>
-            );
+            return renderSummaryAndChart(teamAcc, 'Account Summary — Team');
         }
         return null;
     };
