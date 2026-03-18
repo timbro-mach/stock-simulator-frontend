@@ -370,11 +370,13 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
 };
 
 // Memoized ChartPanel component
-const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol }) => (
-    <div style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
+const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol, title = null, containerClassName = '' }) => (
+    <div className={containerClassName} style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             <div>
-                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>{chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Stock Overview'}</h3>
+                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>
+                    {title || (chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Account Performance')}
+                </h3>
                 {chartMetrics && (
                     <p style={{ margin: '5px 0 0', color: chartMetrics.dayChangeValue >= 0 ? '#047857' : '#b91c1c', fontWeight: 600 }}>
                         {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) today
@@ -2009,16 +2011,15 @@ const Dashboard = () => {
 
     const renderAccountDetails = () => {
         const chartCard = (
-            <div className="card section account-performance-card">
-                <h3>Account Performance</h3>
-                <ChartPanel
-                    chartData={chartData}
-                    chartRange={chartRange}
-                    chartMetrics={chartMetrics}
-                    chartSymbol={chartSymbol}
-                    onRangeChange={handleRangeChange}
-                />
-            </div>
+            <ChartPanel
+                chartData={chartData}
+                chartRange={chartRange}
+                chartMetrics={chartMetrics}
+                chartSymbol={chartSymbol}
+                onRangeChange={handleRangeChange}
+                title="Account Performance"
+                containerClassName="card section account-performance-card"
+            />
         );
 
         if (selectedAccount.type === 'global') {
