@@ -740,6 +740,7 @@ const Dashboard = () => {
                 if (byFallbackTeamName) {
                     return `${byFallbackTeamName} • Team Competition`;
                 }
+                return 'Competition Team';
             }
 
             if (normalizedFallback.toLowerCase().startsWith('competition_team:')) {
