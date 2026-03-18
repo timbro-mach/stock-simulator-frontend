@@ -370,11 +370,13 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
 };
 
 // Memoized ChartPanel component
-const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol }) => (
-    <div style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
+const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol, title = null, containerClassName = '' }) => (
+    <div className={containerClassName} style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
             <div>
-                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>{chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Stock Overview'}</h3>
+                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>
+                    {title || (chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Account Performance')}
+                </h3>
                 {chartMetrics && (
                     <p style={{ margin: '5px 0 0', color: chartMetrics.dayChangeValue >= 0 ? '#047857' : '#b91c1c', fontWeight: 600 }}>
                         {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) today
@@ -2008,11 +2010,26 @@ const Dashboard = () => {
     }, [selectedAccount.competition_code, selectedAccount.team_id, selectedAccount.type, teamCompetitionAccounts]);
 
     const renderAccountDetails = () => {
+        const chartCard = (
+            <ChartPanel
+                chartData={chartData}
+                chartRange={chartRange}
+                chartMetrics={chartMetrics}
+                chartSymbol={chartSymbol}
+                onRangeChange={handleRangeChange}
+                title="Account Performance"
+                containerClassName="card section account-performance-card"
+            />
+        );
+
         if (selectedAccount.type === 'global') {
             return (
                 <div className="card section">
                     <h2>Account Summary — Global</h2>
-                    <AccountSummaryBox account={globalAccount} isGlobal={true} onReset={resetGlobalAccount} />
+                    <div className="account-summary-layout">
+                        <AccountSummaryBox account={globalAccount} isGlobal={true} onReset={resetGlobalAccount} />
+                        {chartCard}
+                    </div>
                 </div>
             );
         }
@@ -2023,7 +2040,10 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h2>Account Summary — Competition (Individual)</h2>
-                    <AccountSummaryBox account={compAcc} isGlobal={false} />
+                    <div className="account-summary-layout">
+                        <AccountSummaryBox account={compAcc} isGlobal={false} />
+                        {chartCard}
+                    </div>
                 </div>
             );
         }
@@ -2034,7 +2054,10 @@ const Dashboard = () => {
             return (
                 <div className="card section">
                     <h2>Account Summary — Team</h2>
-                    <AccountSummaryBox account={teamAcc} isGlobal={false} />
+                    <div className="account-summary-layout">
+                        <AccountSummaryBox account={teamAcc} isGlobal={false} />
+                        {chartCard}
+                    </div>
                 </div>
             );
         }
@@ -2183,7 +2206,7 @@ const Dashboard = () => {
                             : "Competition (Team)"}
                 </h3>
 
-                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(260px, 1fr)', alignItems: 'start' }}>
                     <div style={{ minWidth: 0 }}>
                         <SharedInputs
                             onBuy={() => executeTrade('buy')}
@@ -2202,15 +2225,6 @@ const Dashboard = () => {
                             setLimitPrice={setLimitPrice}
                         />
                     </div>
-
-
-                    <ChartPanel
-                        chartData={chartData}
-                        chartRange={chartRange}
-                        chartMetrics={chartMetrics}
-                        chartSymbol={chartSymbol}
-                        onRangeChange={handleRangeChange}
-                    />
                 </div>
 
                 {pendingLimitOrders.length > 0 && (
