@@ -55,26 +55,26 @@ export default async function handler(req, res) {
     const [stockResponse, chartResponse, dailyResponse, intradayResponse] = await Promise.all([
       axios.get(`${baseUrl}/stock/${symbol}`),
       axios.get(`${baseUrl}/stock_chart/${symbol}?range=${range}`),
-      range === '1W'
+      range === '5D'
         ? Promise.resolve({ data: [] })
-        : axios.get(`${baseUrl}/stock_chart/${symbol}?range=1W`),
-      range === '1D'
+        : axios.get(`${baseUrl}/stock_chart/${symbol}?range=5D`),
+      range === '2D'
         ? Promise.resolve({ data: [] })
-        : axios.get(`${baseUrl}/stock_chart/${symbol}?range=1D`),
+        : axios.get(`${baseUrl}/stock_chart/${symbol}?range=2D`),
     ]);
 
     const normalizedChartPoints = normalizeChartPoints(chartResponse.data);
-    const chartPoints = range === '1D'
-      ? filterChartPointsToPastHours(normalizedChartPoints, 24)
+    const chartPoints = range === '2D'
+      ? filterChartPointsToPastHours(normalizedChartPoints, 48)
       : normalizedChartPoints;
-    const dailyReferencePoints = range === '1W'
+    const dailyReferencePoints = range === '5D'
       ? chartPoints
       : normalizeChartPoints(dailyResponse.data);
-    const intradayReferencePoints = range === '1D'
+    const intradayReferencePoints = range === '2D'
       ? chartPoints
-      : filterChartPointsToPastHours(intradayResponse.data, 24);
+      : filterChartPointsToPastHours(intradayResponse.data, 48);
 
-    const shouldSyncLiveQuote = range === '1D'
+    const shouldSyncLiveQuote = range === '2D'
       ? shouldSyncIntradayLiveQuote(chartPoints)
       : true;
     const { apiTodayChangeValue, apiTodayChangePercent } = getTodaysChangeFromQuote(stockResponse.data);
