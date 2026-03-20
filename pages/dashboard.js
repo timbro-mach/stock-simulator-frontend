@@ -409,102 +409,112 @@ const syncChartStateWithLiveQuote = (chartState, liveQuotePrice) => {
 };
 
 // Memoized ChartPanel component
-const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol, title = null, containerClassName = '', showRangeControls = true }) => (
-    <div className={containerClassName} style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-            <div>
-                <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>
-                    {title || (chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Account Performance')}
-                </h3>
+const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, chartSymbol, title = null, containerClassName = '', showRangeControls = true, emptyStateLabel = 'No chart data available' }) => {
+    const singlePointHint = chartData?._meta?.singlePointHint;
+    const resolvedEmptyStateLabel = chartData?._meta?.emptyStateLabel || emptyStateLabel;
+
+    return (
+        <div className={containerClassName} style={{ flex: 1, minHeight: 320, minWidth: 0, background: '#fff', border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, boxShadow: '0 8px 16px rgba(0,39,94,0.08)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                <div>
+                    <h3 style={{ margin: 0, fontSize: 18, color: 'var(--text-main)' }}>
+                        {title || (chartSymbol ? `${chartSymbol.toUpperCase()} Overview` : 'Account Performance')}
+                    </h3>
+                    {chartMetrics && (
+                        <p style={{ margin: '5px 0 0', color: chartMetrics.dayChangeValue >= 0 ? '#047857' : '#b91c1c', fontWeight: 600 }}>
+                            {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) {chartMetrics.dayChangeLabel || 'today'}
+                        </p>
+                    )}
+                </div>
                 {chartMetrics && (
-                    <p style={{ margin: '5px 0 0', color: chartMetrics.dayChangeValue >= 0 ? '#047857' : '#b91c1c', fontWeight: 600 }}>
-                        {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) {chartMetrics.dayChangeLabel || 'today'}
-                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 6, width: '100%' }}>
+                        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>Current: <strong style={{ color: 'var(--text-main)' }}>{formatMoney(chartMetrics.latestPrice)}</strong></p>
+                        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>Prev close: <strong style={{ color: 'var(--text-main)' }}>{formatMoney(chartMetrics.previousClose)}</strong></p>
+                        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>{chartMetrics.range} change: <strong style={{ color: chartMetrics.rangeChangeValue >= 0 ? '#047857' : '#b91c1c' }}>{formatSignedMoney(chartMetrics.rangeChangeValue)}</strong></p>
+                        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>{chartMetrics.range} %: <strong style={{ color: chartMetrics.rangeChangePercent >= 0 ? '#047857' : '#b91c1c' }}>{chartMetrics.rangeChangePercent >= 0 ? '+' : ''}{chartMetrics.rangeChangePercent.toFixed(2)}%</strong></p>
+                    </div>
                 )}
             </div>
-            {chartMetrics && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 6, width: '100%' }}>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>Current: <strong style={{ color: 'var(--text-main)' }}>{formatMoney(chartMetrics.latestPrice)}</strong></p>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>Prev close: <strong style={{ color: 'var(--text-main)' }}>{formatMoney(chartMetrics.previousClose)}</strong></p>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>{chartMetrics.range} change: <strong style={{ color: chartMetrics.rangeChangeValue >= 0 ? '#047857' : '#b91c1c' }}>{formatSignedMoney(chartMetrics.rangeChangeValue)}</strong></p>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subtle)' }}>{chartMetrics.range} %: <strong style={{ color: chartMetrics.rangeChangePercent >= 0 ? '#047857' : '#b91c1c' }}>{chartMetrics.rangeChangePercent >= 0 ? '+' : ''}{chartMetrics.rangeChangePercent.toFixed(2)}%</strong></p>
+
+            {showRangeControls && (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                    {['2D', '5D', '1M', '6M', '1Y', '3Y'].map((r) => (
+                        <button
+                            key={r}
+                            onClick={() => onRangeChange(r)}
+                            style={{
+                                padding: '8px 12px',
+                                borderRadius: 6,
+                                background: chartRange === r ? 'var(--brand-blue-dark)' : '#edf1f4',
+                                color: chartRange === r ? '#fff' : 'var(--text-subtle)',
+                                border: chartRange === r ? '1px solid var(--brand-blue-dark)' : '1px solid var(--border-color)',
+                                fontSize: 13,
+                                fontWeight: chartRange === r ? 600 : 500,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            {r}
+                        </button>
+                    ))}
                 </div>
             )}
+
+            {chartData ? (
+                <>
+                    <div style={{ height: 'clamp(220px, 40vw, 300px)', width: '100%' }}>
+                        <Line
+                            data={chartData}
+                            options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    x: {
+                                        grid: { display: false },
+                                        ticks: {
+                                            color: 'var(--text-light)',
+                                            maxTicksLimit: 6,
+                                            callback(value) {
+                                                return formatChartDateLabel(this.getLabelForValue(value), chartRange);
+                                            },
+                                        },
+                                    },
+                                    y: {
+                                        grid: { color: 'rgba(0, 39, 94, 0.12)' },
+                                        ticks: { color: 'var(--text-light)', callback: (v) => formatMoney(v) },
+                                    },
+                                },
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        mode: 'index',
+                                        intersect: false,
+                                        callbacks: {
+                                            title: (items) => formatChartDateLabel(items[0]?.label, chartRange),
+                                            label: (context) => {
+                                                const points = context.dataset.data;
+                                                const currentPrice = Number(context.parsed.y);
+                                                const previousPrice = context.dataIndex > 0 ? Number(points[context.dataIndex - 1]) : currentPrice;
+                                                const dollarChange = currentPrice - previousPrice;
+                                                const percentChange = previousPrice ? (dollarChange / previousPrice) * 100 : 0;
+                                                return `${formatMoney(currentPrice)} (${formatSignedMoney(dollarChange)} / ${dollarChange >= 0 ? '+' : ''}${percentChange.toFixed(2)}%)`;
+                                            },
+                                        },
+                                    },
+                                },
+                                interaction: { intersect: false, mode: 'nearest' },
+                            }}
+                        />
+                    </div>
+                    {singlePointHint && (
+                        <p className="note" style={{ marginTop: 8 }}>{singlePointHint}</p>
+                    )}
+                </>
+            ) : (
+                <p className="note">{resolvedEmptyStateLabel}</p>
+            )}
         </div>
-
-        {showRangeControls && (
-            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-                {['2D', '5D', '1M', '6M', '1Y', '3Y'].map((r) => (
-                    <button
-                        key={r}
-                        onClick={() => onRangeChange(r)}
-                        style={{
-                            padding: '8px 12px',
-                            borderRadius: 6,
-                            background: chartRange === r ? 'var(--brand-blue-dark)' : '#edf1f4',
-                            color: chartRange === r ? '#fff' : 'var(--text-subtle)',
-                            border: chartRange === r ? '1px solid var(--brand-blue-dark)' : '1px solid var(--border-color)',
-                            fontSize: 13,
-                            fontWeight: chartRange === r ? 600 : 500,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        {r}
-                    </button>
-                ))}
-            </div>
-        )}
-
-        {chartData ? (
-            <div style={{ height: 'clamp(220px, 40vw, 300px)', width: '100%' }}>
-                <Line
-                    data={chartData}
-                    options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    color: 'var(--text-light)',
-                                    maxTicksLimit: 6,
-                                    callback(value) {
-                                        return formatChartDateLabel(this.getLabelForValue(value), chartRange);
-                                    },
-                                },
-                            },
-                            y: {
-                                grid: { color: 'rgba(0, 39, 94, 0.12)' },
-                                ticks: { color: 'var(--text-light)', callback: (v) => formatMoney(v) },
-                            },
-                        },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                mode: 'index',
-                                intersect: false,
-                                callbacks: {
-                                    title: (items) => formatChartDateLabel(items[0]?.label, chartRange),
-                                    label: (context) => {
-                                        const points = context.dataset.data;
-                                        const currentPrice = Number(context.parsed.y);
-                                        const previousPrice = context.dataIndex > 0 ? Number(points[context.dataIndex - 1]) : currentPrice;
-                                        const dollarChange = currentPrice - previousPrice;
-                                        const percentChange = previousPrice ? (dollarChange / previousPrice) * 100 : 0;
-                                        return `${formatMoney(currentPrice)} (${formatSignedMoney(dollarChange)} / ${dollarChange >= 0 ? '+' : ''}${percentChange.toFixed(2)}%)`;
-                                    },
-                                },
-                            },
-                        },
-                        interaction: { intersect: false, mode: 'nearest' },
-                    }}
-                />
-            </div>
-        ) : (
-            <p className="note">No chart data available</p>
-        )}
-    </div>
-));
+    );
+});
 
 ChartPanel.displayName = 'ChartPanel';
 
@@ -2091,7 +2101,14 @@ const Dashboard = () => {
                 account_type: accountType,
             },
         };
-    }, [getSelectedAccountForPerformance, selectedAccount?.id, selectedAccount?.type, username]);
+    }, [
+        getSelectedAccountForPerformance,
+        selectedAccount?.id,
+        selectedAccount?.type,
+        selectedAccount?.team_id,
+        selectedAccount?.competition_code,
+        username,
+    ]);
 
     useEffect(() => {
         const trimmedUsername = String(username || '').trim();
@@ -2109,13 +2126,30 @@ const Dashboard = () => {
         let cancelled = false;
         const fetchPerformanceHistory = async () => {
             const endpointCandidates = ['/account/performance/history', '/account/performance'];
+            if (process.env.NODE_ENV === 'development') {
+                console.debug('[AccountPerformance] Request params', requestConfig.params);
+            }
             for (const endpoint of endpointCandidates) {
                 try {
                     const response = await axios.get(`${BASE_URL}${endpoint}`, {
                         params: requestConfig.params,
                     });
                     if (cancelled) return;
-                    setAccountPerformanceHistory(normalizePerformanceHistoryRows(response?.data));
+                    const normalizedHistory = normalizePerformanceHistoryRows(response?.data);
+                    if (process.env.NODE_ENV === 'development') {
+                        const firstDate = normalizedHistory[0]?.date ?? normalizedHistory[0]?.day ?? normalizedHistory[0]?.timestamp ?? normalizedHistory[0]?.time ?? null;
+                        const lastDate = normalizedHistory[normalizedHistory.length - 1]?.date
+                            ?? normalizedHistory[normalizedHistory.length - 1]?.day
+                            ?? normalizedHistory[normalizedHistory.length - 1]?.timestamp
+                            ?? normalizedHistory[normalizedHistory.length - 1]?.time
+                            ?? null;
+                        console.debug('[AccountPerformance] History summary', {
+                            historyLength: normalizedHistory.length,
+                            firstDate,
+                            lastDate,
+                        });
+                    }
+                    setAccountPerformanceHistory(normalizedHistory);
                     return;
                 } catch (error) {
                     if (error?.response?.status === 404) continue;
@@ -2153,9 +2187,11 @@ const Dashboard = () => {
         const firstValue = chartValues[0] ?? latestValue;
         const rangeChangeValue = latestValue - firstValue;
         const rangeChangePercent = firstValue ? (rangeChangeValue / firstValue) * 100 : 0;
+        const hasHistory = chartLabels.length > 0;
+        const singlePointMode = chartLabels.length === 1;
 
         return {
-            chart: chartLabels.length > 0 ? {
+            chart: hasHistory ? {
                 labels: chartLabels,
                 datasets: [
                     {
@@ -2163,11 +2199,15 @@ const Dashboard = () => {
                         data: chartValues,
                         borderColor: '#0b63b6',
                         borderWidth: 2,
-                        pointRadius: chartValues.length > 1 ? 3 : 4,
+                        pointRadius: singlePointMode ? 5 : 3,
                         fill: false,
                         tension: 0.25,
                     },
                 ],
+                _meta: {
+                    singlePointHint: singlePointMode ? 'Need at least 2 days for trend line.' : null,
+                    emptyStateLabel: null,
+                },
             } : null,
             metrics: {
                 latestPrice: latestValue,
@@ -2200,6 +2240,7 @@ const Dashboard = () => {
                             title="Account Performance"
                             containerClassName="card section account-performance-card"
                             showRangeControls={false}
+                            emptyStateLabel="No account performance history available yet."
                         />
                     </div>
                 </div>
