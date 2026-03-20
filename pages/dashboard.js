@@ -233,69 +233,43 @@ const getIntradayBaselinePrice = (points, fallbackPrice) => {
     return Number.isFinite(firstPoint) ? firstPoint : fallbackPrice;
 };
 
-const normalizeAccountPerformancePoints = (account) => {
+const normalizePerformanceHistoryRows = (payload) => {
     const candidates = [
-        account?.daily_performance,
-        account?.dailyPerformance,
-        account?.performance_history,
-        account?.performanceHistory,
-        account?.account_performance_history,
-        account?.accountPerformanceHistory,
-        account?.equity_history,
-        account?.equityHistory,
-        account?.total_value_history,
-        account?.totalValueHistory,
-        account?.chart_points,
-        account?.chartPoints,
-        account?.history,
+        payload,
+        payload?.history,
+        payload?.performance_history,
+        payload?.performanceHistory,
+        payload?.rows,
+        payload?.data,
     ];
+    const rows = candidates.find((candidate) => Array.isArray(candidate));
+    if (!Array.isArray(rows)) return [];
+    return rows.filter((row) => row && typeof row === 'object');
+};
 
-    const rawPoints = candidates.find((value) => Array.isArray(value) && value.length > 0);
-    if (!Array.isArray(rawPoints) || rawPoints.length === 0) return [];
+const buildDailyPerformancePoints = (rows, metricMode = 'value') => {
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    const normalizedMode = String(metricMode || '').toLowerCase();
+    const valueKey = normalizedMode === 'pnl' ? 'total_pnl' : 'total_value';
+    const fallbackKey = valueKey === 'total_value' ? 'total_pnl' : 'total_value';
 
-    const toPoint = (point) => {
-        if (!point || typeof point !== 'object') return null;
-        const date = point?.date
-            ?? point?.day
-            ?? point?.timestamp
-            ?? point?.time
-            ?? point?.label
-            ?? null;
-        const value = Number(
-            point?.total_value
-            ?? point?.totalValue
-            ?? point?.portfolio_value
-            ?? point?.portfolioValue
-            ?? point?.equity
-            ?? point?.value
-            ?? point?.close,
-        );
-        const ts = toTimestamp(date);
-        if (!Number.isFinite(value) || !Number.isFinite(ts)) return null;
-        return {
-            date: new Date(ts).toISOString().split('T')[0],
-            value,
-            ts,
-        };
-    };
+    return rows
+        .map((row) => {
+            const rawDate = row?.date ?? row?.day ?? row?.timestamp ?? row?.time;
+            const date = String(rawDate || '').trim();
+            if (!date) return null;
 
-    const normalized = rawPoints
-        .map(toPoint)
-        .filter(Boolean)
-        .sort((a, b) => a.ts - b.ts);
+            const value = Number(
+                row?.[valueKey]
+                ?? row?.[valueKey === 'total_value' ? 'totalValue' : 'totalPnl']
+                ?? row?.[fallbackKey]
+                ?? row?.[fallbackKey === 'total_value' ? 'totalValue' : 'totalPnl'],
+            );
+            if (!Number.isFinite(value)) return null;
 
-    if (!normalized.length) return [];
-
-    const deduped = [];
-    const seenDates = new Set();
-    for (let i = normalized.length - 1; i >= 0; i -= 1) {
-        const point = normalized[i];
-        if (seenDates.has(point.date)) continue;
-        seenDates.add(point.date);
-        deduped.push(point);
-    }
-
-    return deduped.reverse();
+            return { date, value };
+        })
+        .filter(Boolean);
 };
 
 const buildChartState = ({
@@ -677,6 +651,7 @@ const Dashboard = () => {
     const [tradeBlotterRows, setTradeBlotterRows] = useState([]);
     const [tradeBlotterLoading, setTradeBlotterLoading] = useState(false);
     const [tradeBlotterError, setTradeBlotterError] = useState('');
+    const [accountPerformanceHistory, setAccountPerformanceHistory] = useState([]);
 
     // =========================================
     // Admin-only removal tools
@@ -2076,6 +2051,86 @@ const Dashboard = () => {
         ) || null;
     }, [selectedAccount.competition_code, selectedAccount.team_id, selectedAccount.type, teamCompetitionAccounts]);
 
+    const getSelectedAccountForPerformance = useCallback(() => {
+        if (selectedAccount.type === 'global') return globalAccount;
+        if (selectedAccount.type === 'competition') return getSelectedCompetitionAccount();
+        if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') return getSelectedTeamCompetitionAccount();
+        return null;
+    }, [getSelectedCompetitionAccount, getSelectedTeamCompetitionAccount, globalAccount, selectedAccount.type]);
+
+    const getSelectedPerformanceRequestParams = useCallback(() => {
+        const account = getSelectedAccountForPerformance();
+        if (!account) return null;
+
+        const accountId = String(
+            account?.account_id
+            ?? account?.accountId
+            ?? account?.id
+            ?? account?.portfolio_id
+            ?? account?.portfolioId
+            ?? account?.code
+            ?? account?.competition_code
+            ?? account?.competitionCode
+            ?? selectedAccount?.id
+            ?? '',
+        ).trim();
+        if (!accountId) return null;
+
+        const accountType = String(
+            account?.account_type
+            ?? account?.type
+            ?? selectedAccount?.type
+            ?? '',
+        ).trim().toLowerCase();
+        if (!accountType) return null;
+
+        return {
+            params: {
+                username,
+                account_id: accountId,
+                account_type: accountType,
+            },
+        };
+    }, [getSelectedAccountForPerformance, selectedAccount?.id, selectedAccount?.type, username]);
+
+    useEffect(() => {
+        const trimmedUsername = String(username || '').trim();
+        if (!trimmedUsername) {
+            setAccountPerformanceHistory([]);
+            return;
+        }
+
+        const requestConfig = getSelectedPerformanceRequestParams();
+        if (!requestConfig?.params) {
+            setAccountPerformanceHistory([]);
+            return;
+        }
+
+        let cancelled = false;
+        const fetchPerformanceHistory = async () => {
+            const endpointCandidates = ['/account/performance/history', '/account/performance'];
+            for (const endpoint of endpointCandidates) {
+                try {
+                    const response = await axios.get(`${BASE_URL}${endpoint}`, {
+                        params: requestConfig.params,
+                    });
+                    if (cancelled) return;
+                    setAccountPerformanceHistory(normalizePerformanceHistoryRows(response?.data));
+                    return;
+                } catch (error) {
+                    if (error?.response?.status === 404) continue;
+                }
+            }
+
+            if (!cancelled) setAccountPerformanceHistory([]);
+        };
+
+        fetchPerformanceHistory();
+        return () => {
+            cancelled = true;
+        };
+    }, [BASE_URL, getSelectedPerformanceRequestParams, username]);
+
     const buildInceptionPerformanceChart = (account) => {
         if (!account) return { chart: null, metrics: null };
 
@@ -2088,41 +2143,32 @@ const Dashboard = () => {
         };
 
         const totalValue = parseNum(account?.total_value, account?.totalValue) ?? 0;
-        const totalPnl = parseNum(account?.pnl, account?.total_pnl, account?.totalPnl) ?? 0;
-        const inceptionValue = Math.max(0, totalValue - totalPnl);
-        const startDate = account?.created_at || account?.createdAt || account?.start_date || account?.startDate;
-        const startLabel = startDate ? new Date(startDate).toLocaleDateString() : 'Inception';
-        const performancePoints = normalizeAccountPerformancePoints(account);
-        const hasDailyPerformance = performancePoints.length >= 2;
-        const chartLabels = hasDailyPerformance
-            ? performancePoints.map((point) => point.date)
-            : [startLabel, 'Today'];
-        const chartValues = hasDailyPerformance
-            ? performancePoints.map((point) => point.value)
-            : [inceptionValue, totalValue];
-        const previousClose = hasDailyPerformance
-            ? chartValues[chartValues.length - 2]
-            : inceptionValue;
+        const metricMode = String(account?.performance_chart_mode ?? account?.performanceChartMode ?? 'value').toLowerCase();
+        const dailyPerformancePoints = buildDailyPerformancePoints(accountPerformanceHistory, metricMode);
+
+        const chartLabels = dailyPerformancePoints.map((point) => point.date);
+        const chartValues = dailyPerformancePoints.map((point) => point.value);
+        const previousClose = chartValues.length >= 2 ? chartValues[chartValues.length - 2] : chartValues[0] ?? totalValue;
         const latestValue = chartValues[chartValues.length - 1] ?? totalValue;
-        const firstValue = chartValues[0] ?? inceptionValue;
+        const firstValue = chartValues[0] ?? latestValue;
         const rangeChangeValue = latestValue - firstValue;
         const rangeChangePercent = firstValue ? (rangeChangeValue / firstValue) * 100 : 0;
 
         return {
-            chart: {
+            chart: chartLabels.length > 0 ? {
                 labels: chartLabels,
                 datasets: [
                     {
-                        label: 'Account value',
+                        label: metricMode === 'pnl' ? 'Account P&L' : 'Account value',
                         data: chartValues,
                         borderColor: '#0b63b6',
                         borderWidth: 2,
-                        pointRadius: 3,
+                        pointRadius: chartValues.length > 1 ? 3 : 4,
                         fill: false,
                         tension: 0.25,
                     },
                 ],
-            },
+            } : null,
             metrics: {
                 latestPrice: latestValue,
                 previousClose,
