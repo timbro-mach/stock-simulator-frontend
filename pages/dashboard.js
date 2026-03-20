@@ -581,6 +581,7 @@ const Dashboard = () => {
     const [chartData, setChartData] = useState(null);
     const [chartMetrics, setChartMetrics] = useState(null);
     const [chartRange, setChartRange] = useState('1M');
+    const [accountPerformanceHistory, setAccountPerformanceHistory] = useState([]);
 
     // =========================================
     // Teams & Competitions state
@@ -1080,6 +1081,53 @@ const Dashboard = () => {
             if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
             if (teamRows.length > 0) setTeams(teamRows);
             setTradeBlotterLink(resolveTradeBlotterLink(response.data));
+
+            const snapshotPayloads = [
+                {
+                    username,
+                    account_id: 'global',
+                    account_type: 'global',
+                    total_value: Number(data?.global_account?.total_value ?? 0),
+                    cash: Number(data?.global_account?.cash_balance ?? 0),
+                    total_pnl: Number(data?.global_account?.pnl ?? 0),
+                },
+                ...competitionAccountRows.map((account) => ({
+                    username,
+                    account_id: String(account?.code ?? ''),
+                    account_type: 'competition',
+                    total_value: Number(account?.total_value ?? 0),
+                    cash: Number(account?.cash_balance ?? 0),
+                    total_pnl: Number(account?.pnl ?? 0),
+                })),
+                ...teamCompetitionRows.map((account) => ({
+                    username,
+                    account_id: `${String(account?.code ?? '')}:${String(account?.team_id ?? '')}`,
+                    account_type: 'team',
+                    total_value: Number(account?.total_value ?? 0),
+                    cash: Number(account?.cash_balance ?? 0),
+                    total_pnl: Number(account?.pnl ?? 0),
+                })),
+            ].filter((entry) => entry.account_id);
+
+            await Promise.all(
+                snapshotPayloads.map(async (payload) => {
+                    const snapshotEndpoints = [
+                        `${BASE_URL}/account/performance/snapshot`,
+                        `${BASE_URL}/account/performance`,
+                    ];
+
+                    for (const endpoint of snapshotEndpoints) {
+                        try {
+                            await axios.post(endpoint, payload);
+                            return;
+                        } catch (error) {
+                            if (error?.response?.status === 404) continue;
+                            console.error('Failed to snapshot account performance:', error);
+                            return;
+                        }
+                    }
+                }),
+            );
         } catch (error) {
             if (error.response?.status === 404) {
                 console.error('User not found. Clearing session.');
@@ -2011,53 +2059,164 @@ const Dashboard = () => {
         ) || null;
     }, [selectedAccount.competition_code, selectedAccount.team_id, selectedAccount.type, teamCompetitionAccounts]);
 
-    const buildInceptionPerformanceChart = (account) => {
-        if (!account) return { chart: null, metrics: null };
+    const getPerformanceAccountContext = useCallback(() => {
+        if (!username) return null;
 
-        const parseNum = (...values) => {
-            for (const value of values) {
-                const n = Number(value);
-                if (Number.isFinite(n)) return n;
+        if (selectedAccount.type === 'global') {
+            return {
+                username,
+                account_id: 'global',
+                account_type: 'global',
+                total_value: Number(globalAccount?.total_value ?? 0),
+                cash: Number(globalAccount?.cash_balance ?? 0),
+                total_pnl: Number(globalAccount?.pnl ?? 0),
+            };
+        }
+
+        if (selectedAccount.type === 'competition') {
+            const compAcc = getSelectedCompetitionAccount();
+            if (!compAcc) return null;
+            return {
+                username,
+                account_id: String(compAcc?.code ?? selectedAccount.id ?? ''),
+                account_type: 'competition',
+                total_value: Number(compAcc?.total_value ?? 0),
+                cash: Number(compAcc?.cash_balance ?? 0),
+                total_pnl: Number(compAcc?.pnl ?? 0),
+            };
+        }
+
+        if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
+            const teamAcc = getSelectedTeamCompetitionAccount();
+            if (!teamAcc) return null;
+            return {
+                username,
+                account_id: `${String(teamAcc?.code ?? selectedAccount.competition_code ?? '')}:${String(teamAcc?.team_id ?? selectedAccount.team_id ?? '')}`,
+                account_type: 'team',
+                total_value: Number(teamAcc?.total_value ?? 0),
+                cash: Number(teamAcc?.cash_balance ?? 0),
+                total_pnl: Number(teamAcc?.pnl ?? 0),
+            };
+        }
+
+        return null;
+    }, [
+        getSelectedCompetitionAccount,
+        getSelectedTeamCompetitionAccount,
+        globalAccount?.cash_balance,
+        globalAccount?.pnl,
+        globalAccount?.total_value,
+        selectedAccount.competition_code,
+        selectedAccount.id,
+        selectedAccount.team_id,
+        selectedAccount.type,
+        username,
+    ]);
+
+    useEffect(() => {
+        if (!isLoggedIn) {
+            setAccountPerformanceHistory([]);
+            return;
+        }
+
+        const context = getPerformanceAccountContext();
+        if (!context || !context.account_id || !context.account_type) {
+            setAccountPerformanceHistory([]);
+            return;
+        }
+
+        let cancelled = false;
+        const syncAndFetchHistory = async () => {
+            try {
+                const historyEndpoints = [
+                    `${BASE_URL}/account/performance/history`,
+                    `${BASE_URL}/account/performance`,
+                ];
+
+                for (const endpoint of historyEndpoints) {
+                    try {
+                        const response = await axios.get(endpoint, { params: context });
+                        if (!cancelled) {
+                            const rows = Array.isArray(response?.data?.history) ? response.data.history : [];
+                            setAccountPerformanceHistory(rows);
+                        }
+                        return;
+                    } catch (error) {
+                        if (error?.response?.status === 404) continue;
+                        throw error;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load account performance history:', error);
+                if (!cancelled) setAccountPerformanceHistory([]);
             }
-            return null;
         };
 
-        const totalValue = parseNum(account?.total_value, account?.totalValue) ?? 0;
-        const totalPnl = parseNum(account?.pnl, account?.total_pnl, account?.totalPnl) ?? 0;
-        const inceptionValue = Math.max(0, totalValue - totalPnl);
-        const startDate = account?.created_at || account?.createdAt || account?.start_date || account?.startDate;
-        const startLabel = startDate ? new Date(startDate).toLocaleDateString() : 'Inception';
+        syncAndFetchHistory();
+        return () => {
+            cancelled = true;
+        };
+    }, [BASE_URL, getPerformanceAccountContext, isLoggedIn]);
+
+    const buildAccountHistoryChart = useCallback((historyRows = []) => {
+        const parsed = historyRows
+            .map((row) => {
+                const value = Number(row?.total_value);
+                const cash = Number(row?.cash);
+                const pnl = row?.total_pnl === null || row?.total_pnl === undefined ? null : Number(row?.total_pnl);
+                const date = row?.date ? new Date(row.date) : null;
+                return {
+                    date: date && !Number.isNaN(date.getTime()) ? date : null,
+                    value: Number.isFinite(value) ? value : null,
+                    cash: Number.isFinite(cash) ? cash : 0,
+                    pnl: Number.isFinite(pnl) ? pnl : null,
+                };
+            })
+            .filter((row) => row.date && Number.isFinite(row.value))
+            .sort((a, b) => a.date - b.date);
+
+        if (!parsed.length) return { chart: null, metrics: null };
+
+        const labels = parsed.map((row) => row.date.toLocaleDateString());
+        const values = parsed.map((row) => row.value);
+        const firstValue = values[0];
+        const lastValue = values[values.length - 1];
+        const netChange = lastValue - firstValue;
+        const netPercent = firstValue ? (netChange / firstValue) * 100 : 0;
+        const previousValue = values.length > 1 ? values[values.length - 2] : firstValue;
+        const dayChangeValue = lastValue - previousValue;
+        const dayChangePercent = previousValue ? (dayChangeValue / previousValue) * 100 : 0;
 
         return {
             chart: {
-                labels: [startLabel, 'Today'],
+                labels,
                 datasets: [
                     {
                         label: 'Account value',
-                        data: [inceptionValue, totalValue],
+                        data: values,
                         borderColor: '#0b63b6',
                         borderWidth: 2,
-                        pointRadius: 3,
+                        pointRadius: parsed.length > 45 ? 1 : 2,
                         fill: false,
                         tension: 0.25,
                     },
                 ],
             },
             metrics: {
-                latestPrice: totalValue,
-                previousClose: inceptionValue,
+                latestPrice: lastValue,
+                previousClose: previousValue,
                 range: 'Since inception',
-                rangeChangeValue: totalValue - inceptionValue,
-                rangeChangePercent: inceptionValue ? ((totalValue - inceptionValue) / inceptionValue) * 100 : 0,
-                dayChangeValue: totalValue - inceptionValue,
-                dayChangePercent: inceptionValue ? ((totalValue - inceptionValue) / inceptionValue) * 100 : 0,
+                rangeChangeValue: netChange,
+                rangeChangePercent: netPercent,
+                dayChangeValue,
+                dayChangePercent,
             },
         };
-    };
+    }, []);
 
     const renderAccountDetails = () => {
         const renderSummaryAndChart = (account, heading, isGlobal = false) => {
-            const inceptionChart = buildInceptionPerformanceChart(account);
+            const historyChart = buildAccountHistoryChart(accountPerformanceHistory);
 
             return (
                 <div className="card section">
@@ -2065,9 +2224,9 @@ const Dashboard = () => {
                     <div className="account-summary-layout">
                         <AccountSummaryBox account={account} isGlobal={isGlobal} onReset={isGlobal ? resetGlobalAccount : undefined} />
                         <ChartPanel
-                            chartData={inceptionChart.chart}
+                            chartData={historyChart.chart}
                             chartRange="ALL"
-                            chartMetrics={inceptionChart.metrics}
+                            chartMetrics={historyChart.metrics}
                             chartSymbol=""
                             onRangeChange={() => {}}
                             title="Account Performance"
