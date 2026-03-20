@@ -233,6 +233,71 @@ const getIntradayBaselinePrice = (points, fallbackPrice) => {
     return Number.isFinite(firstPoint) ? firstPoint : fallbackPrice;
 };
 
+const normalizeAccountPerformancePoints = (account) => {
+    const candidates = [
+        account?.daily_performance,
+        account?.dailyPerformance,
+        account?.performance_history,
+        account?.performanceHistory,
+        account?.account_performance_history,
+        account?.accountPerformanceHistory,
+        account?.equity_history,
+        account?.equityHistory,
+        account?.total_value_history,
+        account?.totalValueHistory,
+        account?.chart_points,
+        account?.chartPoints,
+        account?.history,
+    ];
+
+    const rawPoints = candidates.find((value) => Array.isArray(value) && value.length > 0);
+    if (!Array.isArray(rawPoints) || rawPoints.length === 0) return [];
+
+    const toPoint = (point) => {
+        if (!point || typeof point !== 'object') return null;
+        const date = point?.date
+            ?? point?.day
+            ?? point?.timestamp
+            ?? point?.time
+            ?? point?.label
+            ?? null;
+        const value = Number(
+            point?.total_value
+            ?? point?.totalValue
+            ?? point?.portfolio_value
+            ?? point?.portfolioValue
+            ?? point?.equity
+            ?? point?.value
+            ?? point?.close,
+        );
+        const ts = toTimestamp(date);
+        if (!Number.isFinite(value) || !Number.isFinite(ts)) return null;
+        return {
+            date: new Date(ts).toISOString().split('T')[0],
+            value,
+            ts,
+        };
+    };
+
+    const normalized = rawPoints
+        .map(toPoint)
+        .filter(Boolean)
+        .sort((a, b) => a.ts - b.ts);
+
+    if (!normalized.length) return [];
+
+    const deduped = [];
+    const seenDates = new Set();
+    for (let i = normalized.length - 1; i >= 0; i -= 1) {
+        const point = normalized[i];
+        if (seenDates.has(point.date)) continue;
+        seenDates.add(point.date);
+        deduped.push(point);
+    }
+
+    return deduped.reverse();
+};
+
 const buildChartState = ({
     points,
     symbol,
@@ -379,7 +444,7 @@ const ChartPanel = memo(({ chartData, chartRange, onRangeChange, chartMetrics, c
                 </h3>
                 {chartMetrics && (
                     <p style={{ margin: '5px 0 0', color: chartMetrics.dayChangeValue >= 0 ? '#047857' : '#b91c1c', fontWeight: 600 }}>
-                        {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) today
+                        {formatSignedMoney(chartMetrics.dayChangeValue)} ({chartMetrics.dayChangeValue >= 0 ? '+' : ''}{chartMetrics.dayChangePercent.toFixed(2)}%) {chartMetrics.dayChangeLabel || 'today'}
                     </p>
                 )}
             </div>
@@ -2027,14 +2092,29 @@ const Dashboard = () => {
         const inceptionValue = Math.max(0, totalValue - totalPnl);
         const startDate = account?.created_at || account?.createdAt || account?.start_date || account?.startDate;
         const startLabel = startDate ? new Date(startDate).toLocaleDateString() : 'Inception';
+        const performancePoints = normalizeAccountPerformancePoints(account);
+        const hasDailyPerformance = performancePoints.length >= 2;
+        const chartLabels = hasDailyPerformance
+            ? performancePoints.map((point) => point.date)
+            : [startLabel, 'Today'];
+        const chartValues = hasDailyPerformance
+            ? performancePoints.map((point) => point.value)
+            : [inceptionValue, totalValue];
+        const previousClose = hasDailyPerformance
+            ? chartValues[chartValues.length - 2]
+            : inceptionValue;
+        const latestValue = chartValues[chartValues.length - 1] ?? totalValue;
+        const firstValue = chartValues[0] ?? inceptionValue;
+        const rangeChangeValue = latestValue - firstValue;
+        const rangeChangePercent = firstValue ? (rangeChangeValue / firstValue) * 100 : 0;
 
         return {
             chart: {
-                labels: [startLabel, 'Today'],
+                labels: chartLabels,
                 datasets: [
                     {
                         label: 'Account value',
-                        data: [inceptionValue, totalValue],
+                        data: chartValues,
                         borderColor: '#0b63b6',
                         borderWidth: 2,
                         pointRadius: 3,
@@ -2044,13 +2124,14 @@ const Dashboard = () => {
                 ],
             },
             metrics: {
-                latestPrice: totalValue,
-                previousClose: inceptionValue,
+                latestPrice: latestValue,
+                previousClose,
                 range: 'Since inception',
-                rangeChangeValue: totalValue - inceptionValue,
-                rangeChangePercent: inceptionValue ? ((totalValue - inceptionValue) / inceptionValue) * 100 : 0,
-                dayChangeValue: totalValue - inceptionValue,
-                dayChangePercent: inceptionValue ? ((totalValue - inceptionValue) / inceptionValue) * 100 : 0,
+                rangeChangeValue,
+                rangeChangePercent,
+                dayChangeValue: rangeChangeValue,
+                dayChangePercent: rangeChangePercent,
+                dayChangeLabel: 'Overall',
             },
         };
     };
