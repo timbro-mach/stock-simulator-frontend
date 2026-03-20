@@ -2176,19 +2176,27 @@ const Dashboard = () => {
             return null;
         };
 
-        const totalValue = parseNum(account?.total_value, account?.totalValue) ?? 0;
+        const totalValue = parseNum(account?.total_value, account?.totalValue);
         const metricMode = String(account?.performance_chart_mode ?? account?.performanceChartMode ?? 'value').toLowerCase();
         const dailyPerformancePoints = buildDailyPerformancePoints(accountPerformanceHistory, metricMode);
 
         const chartLabels = dailyPerformancePoints.map((point) => point.date);
         const chartValues = dailyPerformancePoints.map((point) => point.value);
-        const previousClose = chartValues.length >= 2 ? chartValues[chartValues.length - 2] : chartValues[0] ?? totalValue;
-        const latestValue = chartValues[chartValues.length - 1] ?? totalValue;
-        const firstValue = chartValues[0] ?? latestValue;
+        const singlePointMode = chartLabels.length === 1;
+        const resolvedChartValues = singlePointMode && Number.isFinite(totalValue)
+            ? [totalValue]
+            : chartValues;
+
+        const previousClose = resolvedChartValues.length >= 2
+            ? resolvedChartValues[resolvedChartValues.length - 2]
+            : resolvedChartValues[0] ?? totalValue;
+        const latestValue = resolvedChartValues[resolvedChartValues.length - 1] ?? totalValue;
+        const firstValue = resolvedChartValues[0] ?? latestValue;
         const rangeChangeValue = latestValue - firstValue;
         const rangeChangePercent = firstValue ? (rangeChangeValue / firstValue) * 100 : 0;
         const hasHistory = chartLabels.length > 0;
-        const singlePointMode = chartLabels.length === 1;
+        const safeRangeChangeValue = Number.isFinite(rangeChangeValue) ? rangeChangeValue : 0;
+        const safeRangeChangePercent = Number.isFinite(rangeChangePercent) ? rangeChangePercent : 0;
 
         return {
             chart: hasHistory ? {
@@ -2196,7 +2204,7 @@ const Dashboard = () => {
                 datasets: [
                     {
                         label: metricMode === 'pnl' ? 'Account P&L' : 'Account value',
-                        data: chartValues,
+                        data: resolvedChartValues,
                         borderColor: '#0b63b6',
                         borderWidth: 2,
                         pointRadius: singlePointMode ? 5 : 3,
@@ -2213,10 +2221,10 @@ const Dashboard = () => {
                 latestPrice: latestValue,
                 previousClose,
                 range: 'Since inception',
-                rangeChangeValue,
-                rangeChangePercent,
-                dayChangeValue: rangeChangeValue,
-                dayChangePercent: rangeChangePercent,
+                rangeChangeValue: safeRangeChangeValue,
+                rangeChangePercent: safeRangeChangePercent,
+                dayChangeValue: safeRangeChangeValue,
+                dayChangePercent: safeRangeChangePercent,
                 dayChangeLabel: 'Overall',
             },
         };
