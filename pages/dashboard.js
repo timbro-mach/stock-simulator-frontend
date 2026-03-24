@@ -33,7 +33,7 @@ const formatChartDateLabel = (value, range) => {
     if (!value || Number.isNaN(date.getTime())) return String(value || '');
 
     if (range === '2D') return DATE_FORMATTERS.intraday.format(date);
-    if (range === '5D' || range === '1M') return DATE_FORMATTERS.shortDate.format(date);
+    if (range === '5D' || range === '1M' || range === 'ALL') return DATE_FORMATTERS.shortDate.format(date);
     return DATE_FORMATTERS.monthYear.format(date);
 };
 
