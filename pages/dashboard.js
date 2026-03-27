@@ -26,15 +26,24 @@ const DATE_FORMATTERS = {
     intraday: new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }),
     shortDate: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }),
     monthYear: new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit' }),
+    shortDateUtc: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+    monthYearUtc: new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
 };
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 const formatChartDateLabel = (value, range) => {
+    const rawValue = String(value || '').trim();
+    if (!rawValue) return String(value || '');
+    const isDateOnly = DATE_ONLY_PATTERN.test(rawValue);
     const date = new Date(value);
-    if (!value || Number.isNaN(date.getTime())) return String(value || '');
+    if (Number.isNaN(date.getTime())) return String(value || '');
 
     if (range === '2D') return DATE_FORMATTERS.intraday.format(date);
-    if (range === '5D' || range === '1M' || range === 'ALL') return DATE_FORMATTERS.shortDate.format(date);
-    return DATE_FORMATTERS.monthYear.format(date);
+    if (range === '5D' || range === '1M' || range === 'ALL') {
+        return isDateOnly ? DATE_FORMATTERS.shortDateUtc.format(date) : DATE_FORMATTERS.shortDate.format(date);
+    }
+    return isDateOnly ? DATE_FORMATTERS.monthYearUtc.format(date) : DATE_FORMATTERS.monthYear.format(date);
 };
 
 const normalizeArray = (value) => {
