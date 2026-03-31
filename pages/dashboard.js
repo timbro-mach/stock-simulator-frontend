@@ -21,6 +21,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 
 const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
 const formatSignedMoney = (value) => `${Number(value) >= 0 ? '+' : '-'}$${Math.abs(Number(value || 0)).toFixed(2)}`;
+const INCEPTION_STARTING_BALANCE = 100000;
 
 const DATE_FORMATTERS = {
     intraday: new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }),
@@ -2189,20 +2190,33 @@ const Dashboard = () => {
         const metricMode = String(account?.performance_chart_mode ?? account?.performanceChartMode ?? 'value').toLowerCase();
         const dailyPerformancePoints = buildDailyPerformancePoints(accountPerformanceHistory, metricMode);
 
-        const chartLabels = dailyPerformancePoints.map((point) => point.date);
-        const chartValues = dailyPerformancePoints.map((point) => point.value);
-        const singlePointMode = chartLabels.length === 1;
-        const resolvedChartValues = singlePointMode && Number.isFinite(totalValue)
+        const rawChartLabels = dailyPerformancePoints.map((point) => point.date);
+        const rawChartValues = dailyPerformancePoints.map((point) => point.value);
+        const hasRawHistory = rawChartLabels.length > 0;
+        const fallbackLatestValue = Number.isFinite(totalValue) ? totalValue : INCEPTION_STARTING_BALANCE;
+        const hasSingleRawPoint = rawChartLabels.length === 1;
+        const resolvedRawValues = hasSingleRawPoint && Number.isFinite(totalValue)
             ? [totalValue]
-            : chartValues;
+            : rawChartValues;
+        const shouldInjectInceptionPoint = hasRawHistory
+            && Math.abs((resolvedRawValues[0] ?? INCEPTION_STARTING_BALANCE) - INCEPTION_STARTING_BALANCE) > 0.005;
 
-        const previousClose = resolvedChartValues.length >= 2
-            ? resolvedChartValues[resolvedChartValues.length - 2]
-            : resolvedChartValues[0] ?? totalValue;
-        const latestValue = resolvedChartValues[resolvedChartValues.length - 1] ?? totalValue;
-        const firstValue = resolvedChartValues[0] ?? latestValue;
-        const rangeChangeValue = latestValue - firstValue;
-        const rangeChangePercent = firstValue ? (rangeChangeValue / firstValue) * 100 : 0;
+        const chartLabels = shouldInjectInceptionPoint
+            ? ['Inception', ...rawChartLabels]
+            : rawChartLabels;
+        const chartValues = shouldInjectInceptionPoint
+            ? [INCEPTION_STARTING_BALANCE, ...resolvedRawValues]
+            : resolvedRawValues;
+        const singlePointMode = chartLabels.length === 1;
+
+        const previousClose = resolvedRawValues.length >= 2
+            ? resolvedRawValues[resolvedRawValues.length - 2]
+            : resolvedRawValues[0] ?? fallbackLatestValue;
+        const latestValue = resolvedRawValues[resolvedRawValues.length - 1] ?? fallbackLatestValue;
+        const rangeChangeValue = latestValue - INCEPTION_STARTING_BALANCE;
+        const rangeChangePercent = INCEPTION_STARTING_BALANCE
+            ? (rangeChangeValue / INCEPTION_STARTING_BALANCE) * 100
+            : 0;
         const hasHistory = chartLabels.length > 0;
         const safeRangeChangeValue = Number.isFinite(rangeChangeValue) ? rangeChangeValue : 0;
         const safeRangeChangePercent = Number.isFinite(rangeChangePercent) ? rangeChangePercent : 0;
@@ -2213,7 +2227,7 @@ const Dashboard = () => {
                 datasets: [
                     {
                         label: metricMode === 'pnl' ? 'Account P&L' : 'Account value',
-                        data: resolvedChartValues,
+                        data: chartValues,
                         borderColor: '#0b63b6',
                         borderWidth: 2,
                         pointRadius: singlePointMode ? 5 : 3,
