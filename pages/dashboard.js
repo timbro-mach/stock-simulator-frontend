@@ -15,6 +15,11 @@ import {
     CURRICULUM_WEEK_MAX,
     CURRICULUM_WEEK_MIN,
 } from '../lib/curriculum/helpers';
+import {
+    buildCurriculumPath,
+    getCanonicalCompetitionId,
+    getCompetitionCode,
+} from '../lib/curriculum/competitionId';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -107,6 +112,7 @@ const deriveCurriculumOverviewFromCompetition = (competition, competitionCode = 
     if (curriculumEnabledRaw === undefined || curriculumEnabledRaw === null) return null;
 
     return normalizeCurriculumOverview({
+        competition_id: getCanonicalCompetitionId(competition),
         competition_code: competitionCode || competition?.code || competition?.competition_code || competition?.competitionCode || '',
         curriculum_enabled: curriculumEnabledRaw,
         curriculum_weeks: competition?.curriculum_weeks ?? competition?.curriculumWeeks ?? null,
@@ -142,6 +148,7 @@ const normalizeCompetitionEntry = (competition) => {
     return {
         ...competition,
         code,
+        competition_id: getCanonicalCompetitionId(competition),
         name,
         featured: Boolean(featuredRaw),
         is_open: isOpenRaw === undefined || isOpenRaw === null ? true : Boolean(isOpenRaw),
@@ -150,18 +157,16 @@ const normalizeCompetitionEntry = (competition) => {
     };
 };
 
-const toAccountCode = (account) => String(
-    account?.code
-    || account?.competition_code
-    || account?.competitionCode
-    || account?.competition?.code
-    || account?.competition?.competition_code
-    || account?.competition?.competitionCode
-    || account?.id
-    || account?.account_id
-    || account?.accountId
-    || '',
-).trim();
+const toAccountCode = (account) => {
+    const code = getCompetitionCode(account);
+    if (code) return code;
+    return String(
+        account?.id
+        || account?.account_id
+        || account?.accountId
+        || '',
+    ).trim();
+};
 
 const toCompetitionName = (account, fallbackCode = '') => {
     const name = account?.name
@@ -184,6 +189,7 @@ const normalizeCompetitionAccount = (account) => {
     return {
         ...account,
         code,
+        competition_id: getCanonicalCompetitionId(account),
         name: toCompetitionName(account, code),
     };
 };
@@ -213,6 +219,7 @@ const normalizeTeamCompetitionAccount = (account) => {
     return {
         ...account,
         code,
+        competition_id: getCanonicalCompetitionId(account),
         name: competitionName,
         team_id: teamId,
         team_name: String(teamName || '').trim(),
@@ -731,6 +738,7 @@ const Dashboard = () => {
     const [curriculumLoading, setCurriculumLoading] = useState(false);
     const [curriculumError, setCurriculumError] = useState('');
     const [curriculumActionLoading, setCurriculumActionLoading] = useState(false);
+    const [currentUserId, setCurrentUserId] = useState('');
 
     // =========================================
     // Admin-only removal tools
@@ -752,6 +760,30 @@ const Dashboard = () => {
         }
         return '';
     }, [selectedAccount.competition_code, selectedAccount.id, selectedAccount.type]);
+    const selectedCompetitionId = useMemo(() => {
+        if (selectedAccount.type === 'competition') {
+            if (selectedAccount.competition_id) return selectedAccount.competition_id;
+            const matched = competitionAccounts.find((account) => String(account?.code) === String(selectedAccount.id));
+            return matched?.competition_id || '';
+        }
+        if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
+            if (selectedAccount.competition_id) return selectedAccount.competition_id;
+            const matched = teamCompetitionAccounts.find(
+                (account) => String(account?.team_id) === String(selectedAccount.team_id)
+                    && String(account?.code) === String(selectedAccount.competition_code),
+            );
+            return matched?.competition_id || '';
+        }
+        return '';
+    }, [
+        competitionAccounts,
+        selectedAccount.competition_code,
+        selectedAccount.competition_id,
+        selectedAccount.id,
+        selectedAccount.team_id,
+        selectedAccount.type,
+        teamCompetitionAccounts,
+    ]);
 
     useEffect(() => {
         if (!curriculumEnabled || curriculumDateOverride) return;
@@ -1114,6 +1146,7 @@ const Dashboard = () => {
         try {
             const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
             const data = response?.data || {};
+            setCurrentUserId(String(data?.user_id ?? data?.id ?? data?.user?.id ?? username ?? '').trim());
             const accountsCollection = pickFirstNonEmptyArray(
                 data?.accounts,
                 data?.user_accounts,
@@ -1849,7 +1882,7 @@ const Dashboard = () => {
     }, [BASE_URL]);
 
     useEffect(() => {
-        if (!isLoggedIn || !showTrading || !selectedCompetitionCode || !username) {
+        if (!isLoggedIn || !showTrading || !selectedCompetitionId || !username) {
             setCurriculumOverview(null);
             setCurriculumModules([]);
             setCurriculumGradeSummary(null);
@@ -1864,10 +1897,7 @@ const Dashboard = () => {
             setCurriculumError('');
             try {
                 const params = { username, competition_code: selectedCompetitionCode };
-                const overview = await fetchFromEndpointCandidates(
-                    ['/competition/curriculum', '/curriculum/competition', '/curriculum'],
-                    params,
-                );
+                const overview = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}`))?.data ?? null;
                 if (cancelled) return;
 
                 const normalizedOverview = normalizeCurriculumOverview(overview?.curriculum || overview);
@@ -1880,9 +1910,12 @@ const Dashboard = () => {
                     return;
                 }
 
+                const effectiveUserId = String(currentUserId || username || '').trim();
                 const [modulesData, gradesData, instructorData] = await Promise.all([
-                    fetchFromEndpointCandidates(['/competition/curriculum/modules', '/curriculum/modules'], params).catch(() => []),
-                    fetchFromEndpointCandidates(['/competition/curriculum/grades', '/curriculum/grades'], params).catch(() => null),
+                    axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`).then((response) => response?.data ?? []).catch(() => []),
+                    effectiveUserId
+                        ? axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`).then((response) => response?.data ?? null).catch(() => null)
+                        : Promise.resolve(null),
                     fetchFromEndpointCandidates(['/competition/curriculum/instructor-summary', '/curriculum/instructor-summary'], params).catch(() => null),
                 ]);
                 if (cancelled) return;
@@ -1909,12 +1942,12 @@ const Dashboard = () => {
                         || null;
 
                     const localOverview = deriveCurriculumOverviewFromCompetition(localCompetitionData, selectedCompetitionCode);
-                    if (localOverview) {
+                    if (localOverview?.curriculum_enabled) {
                         setCurriculumOverview(localOverview);
-                        setCurriculumError('Curriculum API endpoints are unavailable (404). Showing competition-level curriculum settings only.');
+                        setCurriculumError('Invalid competition reference for curriculum. Please refresh and re-open this competition.');
                     } else {
                         setCurriculumOverview({ curriculum_enabled: false });
-                        setCurriculumError('Curriculum is not available for this competition yet (curriculum endpoints returned 404).');
+                        setCurriculumError('Curriculum is not enabled for this competition.');
                     }
                 } else {
                     setCurriculumError('Unable to load curriculum data right now.');
@@ -1936,8 +1969,10 @@ const Dashboard = () => {
         selectedAccount.team_id,
         selectedAccount.type,
         selectedCompetitionCode,
+        selectedCompetitionId,
         showTrading,
         teamCompetitionAccounts,
+        currentUserId,
         username,
     ]);
 
@@ -2966,7 +3001,7 @@ const Dashboard = () => {
                                             <button
                                                 key={acc.code}
                                                 className={isActive ? 'account-chip account-chip-active' : 'account-chip'}
-                                                onClick={() => setSelectedAccount({ type: 'competition', id: acc.code })}
+                                                onClick={() => setSelectedAccount({ type: 'competition', id: acc.code, competition_id: acc.competition_id || '' })}
                                                 disabled={isLoading}
                                             >
                                                 {acc.name} ({acc.code})
@@ -2988,6 +3023,7 @@ const Dashboard = () => {
                                                         type: 'team_competition',
                                                         team_id: acc.team_id,
                                                         competition_code: acc.code,
+                                                        competition_id: acc.competition_id || '',
                                                     })
                                                 }
                                                 disabled={isLoading}
