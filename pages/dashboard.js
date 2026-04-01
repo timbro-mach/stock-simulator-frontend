@@ -101,6 +101,22 @@ const normalizeCurriculumOverview = (overview) => {
     };
 };
 
+const deriveCurriculumOverviewFromCompetition = (competition, competitionCode = '') => {
+    if (!competition || typeof competition !== 'object') return null;
+    const curriculumEnabledRaw = competition?.curriculum_enabled ?? competition?.curriculumEnabled;
+    if (curriculumEnabledRaw === undefined || curriculumEnabledRaw === null) return null;
+
+    return normalizeCurriculumOverview({
+        competition_code: competitionCode || competition?.code || competition?.competition_code || competition?.competitionCode || '',
+        curriculum_enabled: curriculumEnabledRaw,
+        curriculum_weeks: competition?.curriculum_weeks ?? competition?.curriculumWeeks ?? null,
+        curriculum_start_date: competition?.curriculum_start_date ?? competition?.curriculumStartDate ?? competition?.start_date ?? competition?.startDate ?? null,
+        curriculum_end_date: competition?.curriculum_end_date ?? competition?.curriculumEndDate ?? competition?.end_date ?? competition?.endDate ?? null,
+        module_count: competition?.module_count ?? competition?.moduleCount ?? 0,
+        progress_percent: competition?.progress_percent ?? competition?.progressPercent ?? 0,
+    });
+};
+
 const normalizeCompetitionEntry = (competition) => {
     const code = String(
         competition?.code
@@ -1877,11 +1893,29 @@ const Dashboard = () => {
             } catch (error) {
                 if (cancelled) return;
                 if (error?.response?.status === 404) {
-                    setCurriculumOverview({ curriculum_enabled: false });
                     setCurriculumModules([]);
                     setCurriculumGradeSummary(null);
                     setCurriculumInstructorSummary(null);
-                    setCurriculumError('Curriculum is not available for this competition yet (curriculum endpoints returned 404).');
+                    const localCompetitionData = (selectedAccount.type === 'competition'
+                        ? competitionAccounts.find((competition) => String(competition?.code) === String(selectedCompetitionCode))
+                        : null)
+                        || ((selectedAccount.type === 'team' || selectedAccount.type === 'team_competition')
+                            ? teamCompetitionAccounts.find(
+                                (competition) => String(competition?.code) === String(selectedCompetitionCode)
+                                    && String(competition?.team_id) === String(selectedAccount?.team_id),
+                            )
+                            : null)
+                        || allCompetitions.find((competition) => String(competition?.code) === String(selectedCompetitionCode))
+                        || null;
+
+                    const localOverview = deriveCurriculumOverviewFromCompetition(localCompetitionData, selectedCompetitionCode);
+                    if (localOverview) {
+                        setCurriculumOverview(localOverview);
+                        setCurriculumError('Curriculum API endpoints are unavailable (404). Showing competition-level curriculum settings only.');
+                    } else {
+                        setCurriculumOverview({ curriculum_enabled: false });
+                        setCurriculumError('Curriculum is not available for this competition yet (curriculum endpoints returned 404).');
+                    }
                 } else {
                     setCurriculumError('Unable to load curriculum data right now.');
                 }
@@ -1894,7 +1928,18 @@ const Dashboard = () => {
         return () => {
             cancelled = true;
         };
-    }, [fetchFromEndpointCandidates, isLoggedIn, selectedCompetitionCode, showTrading, username]);
+    }, [
+        allCompetitions,
+        competitionAccounts,
+        fetchFromEndpointCandidates,
+        isLoggedIn,
+        selectedAccount.team_id,
+        selectedAccount.type,
+        selectedCompetitionCode,
+        showTrading,
+        teamCompetitionAccounts,
+        username,
+    ]);
 
 
     // =========================================
