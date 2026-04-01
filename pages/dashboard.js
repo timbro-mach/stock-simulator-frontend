@@ -764,7 +764,9 @@ const Dashboard = () => {
         if (selectedAccount.type === 'competition') {
             if (selectedAccount.competition_id) return selectedAccount.competition_id;
             const matched = competitionAccounts.find((account) => String(account?.code) === String(selectedAccount.id));
-            return matched?.competition_id || '';
+            if (matched?.competition_id) return matched.competition_id;
+            const fromAllCompetitions = allCompetitions.find((competition) => String(competition?.code) === String(selectedAccount.id));
+            return fromAllCompetitions?.competition_id || '';
         }
         if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
             if (selectedAccount.competition_id) return selectedAccount.competition_id;
@@ -776,6 +778,7 @@ const Dashboard = () => {
         }
         return '';
     }, [
+        allCompetitions,
         competitionAccounts,
         selectedAccount.competition_code,
         selectedAccount.competition_id,
@@ -1882,7 +1885,7 @@ const Dashboard = () => {
     }, [BASE_URL]);
 
     useEffect(() => {
-        if (!isLoggedIn || !showTrading || !selectedCompetitionId || !username) {
+        if (!isLoggedIn || !showTrading || !selectedCompetitionCode || !username) {
             setCurriculumOverview(null);
             setCurriculumModules([]);
             setCurriculumGradeSummary(null);
@@ -1897,7 +1900,8 @@ const Dashboard = () => {
             setCurriculumError('');
             try {
                 const params = { username, competition_code: selectedCompetitionCode };
-                const overview = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}`))?.data ?? null;
+                const competitionReference = selectedCompetitionId || selectedCompetitionCode;
+                const overview = (await axios.get(`${BASE_URL}${buildCurriculumPath(competitionReference)}`))?.data ?? null;
                 if (cancelled) return;
 
                 const normalizedOverview = normalizeCurriculumOverview(overview?.curriculum || overview);
@@ -1912,9 +1916,9 @@ const Dashboard = () => {
 
                 const effectiveUserId = String(currentUserId || username || '').trim();
                 const [modulesData, gradesData, instructorData] = await Promise.all([
-                    axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`).then((response) => response?.data ?? []).catch(() => []),
+                    axios.get(`${BASE_URL}${buildCurriculumPath(competitionReference, 'modules')}`).then((response) => response?.data ?? []).catch(() => []),
                     effectiveUserId
-                        ? axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`).then((response) => response?.data ?? null).catch(() => null)
+                        ? axios.get(`${BASE_URL}${buildCurriculumPath(competitionReference, `grades/${effectiveUserId}`)}`).then((response) => response?.data ?? null).catch(() => null)
                         : Promise.resolve(null),
                     fetchFromEndpointCandidates(['/competition/curriculum/instructor-summary', '/curriculum/instructor-summary'], params).catch(() => null),
                 ]);
