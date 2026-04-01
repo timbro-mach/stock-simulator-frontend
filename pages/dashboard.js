@@ -81,6 +81,26 @@ const normalizeCompetitionCollection = (payload) => pickFirstNonEmptyArray(
     payload?.results,
 );
 
+const toBooleanFlag = (value) => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['true', '1', 'yes', 'y', 'enabled', 'on'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'n', 'disabled', 'off', ''].includes(normalized)) return false;
+    }
+    return Boolean(value);
+};
+
+const normalizeCurriculumOverview = (overview) => {
+    const source = overview && typeof overview === 'object' ? overview : {};
+    const curriculumEnabledRaw = source?.curriculum_enabled ?? source?.curriculumEnabled;
+    return {
+        ...source,
+        curriculum_enabled: toBooleanFlag(curriculumEnabledRaw),
+    };
+};
+
 const normalizeCompetitionEntry = (competition) => {
     const code = String(
         competition?.code
@@ -1835,10 +1855,10 @@ const Dashboard = () => {
                 );
                 if (cancelled) return;
 
-                const normalizedOverview = overview?.curriculum || overview || {};
+                const normalizedOverview = normalizeCurriculumOverview(overview?.curriculum || overview);
                 setCurriculumOverview(normalizedOverview);
 
-                if (!normalizedOverview?.curriculum_enabled) {
+                if (!normalizedOverview.curriculum_enabled) {
                     setCurriculumModules([]);
                     setCurriculumGradeSummary(null);
                     setCurriculumInstructorSummary(null);
