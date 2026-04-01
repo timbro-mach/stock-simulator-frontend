@@ -1196,7 +1196,6 @@ const Dashboard = () => {
             setTeamCompetitionAccounts(teamCompetitionRows);
             if (response.data.is_admin !== undefined) setIsAdmin(response.data.is_admin);
             if (teamRows.length > 0) setTeams(teamRows);
-            setTradeBlotterLink(resolveTradeBlotterLink(response.data));
         } catch (error) {
             if (error.response?.status === 404) {
                 console.error('User not found. Clearing session.');
@@ -1882,6 +1881,7 @@ const Dashboard = () => {
                     setCurriculumModules([]);
                     setCurriculumGradeSummary(null);
                     setCurriculumInstructorSummary(null);
+                    setCurriculumError('Curriculum is not available for this competition yet (curriculum endpoints returned 404).');
                 } else {
                     setCurriculumError('Unable to load curriculum data right now.');
                 }
@@ -2990,6 +2990,12 @@ const Dashboard = () => {
                                     overview={curriculumOverview}
                                     instructorSummary={curriculumInstructorSummary}
                                 />
+                            )}
+                            {showTrading && selectedCompetitionCode && !curriculumLoading && curriculumOverview && !curriculumOverview.curriculum_enabled && curriculumError && (
+                                <div className="card section">
+                                    <h3>Curriculum</h3>
+                                    <p className="note" style={{ color: '#b45309' }}>{curriculumError}</p>
+                                </div>
                             )}
 
                             {selectedAccount.type === 'competition' && (
