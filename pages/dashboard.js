@@ -4,6 +4,17 @@ import Link from 'next/link';
 import { getApiBaseUrl } from '../lib/api';
 import { normalizeChartPoints, toTimestamp } from '../lib/chartData';
 import Leaderboard from '../components/Leaderboard';
+import {
+    CurriculumSummaryCard,
+    GradeSummaryCard,
+    InstructorCurriculumPanel,
+    StudentCurriculumPanel,
+} from '../components/curriculum/CurriculumSection';
+import {
+    calculateCurriculumEndDate,
+    CURRICULUM_WEEK_MAX,
+    CURRICULUM_WEEK_MIN,
+} from '../lib/curriculum/helpers';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -653,6 +664,11 @@ const Dashboard = () => {
     const [compEndDate, setCompEndDate] = useState('');
     const [maxPositionLimit, setMaxPositionLimit] = useState('100%');
     const [featureCompetition, setFeatureCompetition] = useState(false);
+    const [curriculumEnabled, setCurriculumEnabled] = useState(false);
+    const [curriculumWeeks, setCurriculumWeeks] = useState('8');
+    const [curriculumStartDate, setCurriculumStartDate] = useState('');
+    const [curriculumEndDate, setCurriculumEndDate] = useState('');
+    const [curriculumDateOverride, setCurriculumDateOverride] = useState(false);
     const [joinCompetitionCode, setJoinCompetitionCode] = useState('');
     const [competitionMessage, setCompetitionMessage] = useState('');
 
@@ -672,6 +688,13 @@ const Dashboard = () => {
     const [tradeBlotterLoading, setTradeBlotterLoading] = useState(false);
     const [tradeBlotterError, setTradeBlotterError] = useState('');
     const [accountPerformanceHistory, setAccountPerformanceHistory] = useState([]);
+    const [curriculumOverview, setCurriculumOverview] = useState(null);
+    const [curriculumModules, setCurriculumModules] = useState([]);
+    const [curriculumGradeSummary, setCurriculumGradeSummary] = useState(null);
+    const [curriculumInstructorSummary, setCurriculumInstructorSummary] = useState(null);
+    const [curriculumLoading, setCurriculumLoading] = useState(false);
+    const [curriculumError, setCurriculumError] = useState('');
+    const [curriculumActionLoading, setCurriculumActionLoading] = useState(false);
 
     // =========================================
     // Admin-only removal tools
@@ -686,6 +709,20 @@ const Dashboard = () => {
     // API base
     // =========================================
     const BASE_URL = getApiBaseUrl();
+    const selectedCompetitionCode = useMemo(() => {
+        if (selectedAccount.type === 'competition') return selectedAccount.id || '';
+        if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
+            return selectedAccount.competition_code || '';
+        }
+        return '';
+    }, [selectedAccount.competition_code, selectedAccount.id, selectedAccount.type]);
+
+    useEffect(() => {
+        if (!curriculumEnabled || curriculumDateOverride) return;
+        const endDate = calculateCurriculumEndDate(curriculumStartDate, Number(curriculumWeeks));
+        setCurriculumEndDate(endDate);
+    }, [curriculumDateOverride, curriculumEnabled, curriculumStartDate, curriculumWeeks]);
+
     const teamNameById = useMemo(() => {
         const map = new Map();
         const appendTeamName = (identifiers, rawName) => {
@@ -1760,10 +1797,125 @@ const Dashboard = () => {
         return () => clearInterval(interval);
     }, [BASE_URL, buildTradeRequest, fetchTradeBlotterRows, fetchUserData, isLoggedIn, pendingLimitOrders, showTradeBlotterModal, username]);
 
+    const fetchFromEndpointCandidates = useCallback(async (endpointCandidates, params = {}) => {
+        let lastError = null;
+        for (const endpoint of endpointCandidates) {
+            try {
+                const response = await axios.get(`${BASE_URL}${endpoint}`, { params });
+                return response?.data ?? null;
+            } catch (error) {
+                lastError = error;
+                const status = error?.response?.status;
+                if (status !== 404 && status !== 405) throw error;
+            }
+        }
+        if (lastError) throw lastError;
+        return null;
+    }, [BASE_URL]);
+
+    useEffect(() => {
+        if (!isLoggedIn || !showTrading || !selectedCompetitionCode || !username) {
+            setCurriculumOverview(null);
+            setCurriculumModules([]);
+            setCurriculumGradeSummary(null);
+            setCurriculumInstructorSummary(null);
+            setCurriculumError('');
+            return;
+        }
+
+        let cancelled = false;
+        const fetchCurriculumData = async () => {
+            setCurriculumLoading(true);
+            setCurriculumError('');
+            try {
+                const params = { username, competition_code: selectedCompetitionCode };
+                const overview = await fetchFromEndpointCandidates(
+                    ['/competition/curriculum', '/curriculum/competition', '/curriculum'],
+                    params,
+                );
+                if (cancelled) return;
+
+                const normalizedOverview = overview?.curriculum || overview || {};
+                setCurriculumOverview(normalizedOverview);
+
+                if (!normalizedOverview?.curriculum_enabled) {
+                    setCurriculumModules([]);
+                    setCurriculumGradeSummary(null);
+                    setCurriculumInstructorSummary(null);
+                    return;
+                }
+
+                const [modulesData, gradesData, instructorData] = await Promise.all([
+                    fetchFromEndpointCandidates(['/competition/curriculum/modules', '/curriculum/modules'], params).catch(() => []),
+                    fetchFromEndpointCandidates(['/competition/curriculum/grades', '/curriculum/grades'], params).catch(() => null),
+                    fetchFromEndpointCandidates(['/competition/curriculum/instructor-summary', '/curriculum/instructor-summary'], params).catch(() => null),
+                ]);
+                if (cancelled) return;
+
+                setCurriculumModules(Array.isArray(modulesData?.modules) ? modulesData.modules : (Array.isArray(modulesData) ? modulesData : []));
+                setCurriculumGradeSummary(gradesData?.grade_summary || gradesData || null);
+                setCurriculumInstructorSummary(instructorData?.summary || instructorData || null);
+            } catch (error) {
+                if (cancelled) return;
+                if (error?.response?.status === 404) {
+                    setCurriculumOverview({ curriculum_enabled: false });
+                    setCurriculumModules([]);
+                    setCurriculumGradeSummary(null);
+                    setCurriculumInstructorSummary(null);
+                } else {
+                    setCurriculumError('Unable to load curriculum data right now.');
+                }
+            } finally {
+                if (!cancelled) setCurriculumLoading(false);
+            }
+        };
+
+        fetchCurriculumData();
+        return () => {
+            cancelled = true;
+        };
+    }, [fetchFromEndpointCandidates, isLoggedIn, selectedCompetitionCode, showTrading, username]);
+
 
     // =========================================
     // Teams & Competitions
     // =========================================
+    const handleOpenCurriculumItem = (item) => {
+        const itemTitle = item?.title || 'item';
+        setTradeMessage(`Opened curriculum item: ${itemTitle}`);
+    };
+
+    const handleSubmitCurriculumItem = async (item) => {
+        if (!selectedCompetitionCode || !item?.id) return;
+        const itemType = String(item?.type || '').toLowerCase();
+        const endpointCandidates = itemType === 'assignment'
+            ? ['/curriculum/assignment/submit', '/competition/curriculum/assignment/submit']
+            : ['/curriculum/quiz/submit', '/competition/curriculum/quiz/submit'];
+
+        setCurriculumActionLoading(true);
+        try {
+            const payload = { username, competition_code: selectedCompetitionCode, item_id: item.id };
+            let successful = false;
+            for (const endpoint of endpointCandidates) {
+                try {
+                    await axios.post(`${BASE_URL}${endpoint}`, payload);
+                    successful = true;
+                    break;
+                } catch (error) {
+                    const status = error?.response?.status;
+                    if (status !== 404 && status !== 405) throw error;
+                }
+            }
+            if (!successful) throw new Error('No curriculum submission endpoint available.');
+            setTradeMessage(`Submitted ${itemType || 'item'}: ${item.title}`);
+        } catch (error) {
+            console.error('Error submitting curriculum item:', error);
+            setTradeMessage(`Could not submit curriculum item: ${item?.title || 'Unknown item'}`);
+        } finally {
+            setCurriculumActionLoading(false);
+        }
+    };
+
     const createTeam = async () => {
         if (!teamName) return setTeamMessage('Please enter a team name.');
         setIsLoading(true);
@@ -1798,6 +1950,18 @@ const Dashboard = () => {
 
     const createCompetition = async () => {
         if (!competitionName) return setCompetitionMessage('Please enter a competition name.');
+        if (curriculumEnabled) {
+            const parsedWeeks = Number(curriculumWeeks);
+            if (!Number.isInteger(parsedWeeks) || parsedWeeks < CURRICULUM_WEEK_MIN || parsedWeeks > CURRICULUM_WEEK_MAX) {
+                return setCompetitionMessage(`Curriculum length must be an integer between ${CURRICULUM_WEEK_MIN} and ${CURRICULUM_WEEK_MAX} weeks.`);
+            }
+            if (!curriculumStartDate) {
+                return setCompetitionMessage('Curriculum start date is required when curriculum is enabled.');
+            }
+            if (!curriculumEndDate) {
+                return setCompetitionMessage('Curriculum end date is required when curriculum is enabled.');
+            }
+        }
         setIsLoading(true);
         try {
             const payload = {
@@ -1808,6 +1972,12 @@ const Dashboard = () => {
                 max_position_limit: maxPositionLimit,
                 featured: isAdmin ? featureCompetition : false, // Restrict featuring to admins
             };
+            if (curriculumEnabled) {
+                payload.curriculumEnabled = true;
+                payload.curriculumWeeks = Number(curriculumWeeks);
+                payload.curriculumStartDate = curriculumStartDate;
+                payload.curriculumEndDate = curriculumEndDate;
+            }
             console.log('Creating competition with payload:', payload); // Debug
             const res = await axios.post(`${BASE_URL}/competition/create`, payload);
             setCompetitionMessage(`Competition created successfully! Code: ${res.data.competition_code}`);
@@ -1816,6 +1986,11 @@ const Dashboard = () => {
             setCompEndDate('');
             setMaxPositionLimit('100%');
             setFeatureCompetition(false);
+            setCurriculumEnabled(false);
+            setCurriculumWeeks('8');
+            setCurriculumStartDate('');
+            setCurriculumEndDate('');
+            setCurriculumDateOverride(false);
             fetchUserData();
             fetchFeaturedCompetitions();
         } catch (error) {
@@ -2609,6 +2784,12 @@ const Dashboard = () => {
                                                 <strong>{comp.name}</strong> (Code: {comp.code})<br />
                                                 Open: {comp.is_open ? '✅' : '❌'} | Featured: {comp.featured ? '⭐' : '☆'}<br />
                                                 {comp.start_date && comp.end_date ? `${new Date(comp.start_date).toLocaleDateString()} → ${new Date(comp.end_date).toLocaleDateString()}` : 'No dates set'}
+                                                {(comp.curriculum_enabled || comp.curriculumEnabled) ? (
+                                                    <>
+                                                        <br />
+                                                        Curriculum: Enabled • {comp.curriculum_weeks || comp.curriculumWeeks || '-'} weeks • {comp.module_count || 0} modules
+                                                    </>
+                                                ) : null}
                                             </p>
                                             <div style={{ display: 'flex', gap: 8 }}>
                                                 <button onClick={() => toggleCompetitionOpen(comp.code, comp.is_open)} disabled={isLoading}>
@@ -2620,6 +2801,17 @@ const Dashboard = () => {
                                                 <button onClick={() => deleteCompetition(comp.code)} disabled={isLoading}>
                                                     Delete
                                                 </button>
+                                                {(comp.curriculum_enabled || comp.curriculumEnabled) && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowTrading(true);
+                                                            setSelectedAccount({ type: 'competition', id: comp.code });
+                                                        }}
+                                                        disabled={isLoading}
+                                                    >
+                                                        View Curriculum
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     ))
@@ -2757,6 +2949,28 @@ const Dashboard = () => {
                             {renderAccountDetails()}
                             {renderPortfolioBox()}
                             {renderTradeBox()}
+                            <CurriculumSummaryCard overview={curriculumOverview} />
+                            {curriculumOverview?.curriculum_enabled && (
+                                <StudentCurriculumPanel
+                                    overview={curriculumOverview}
+                                    modules={curriculumModules}
+                                    gradeSummary={curriculumGradeSummary}
+                                    loading={curriculumLoading}
+                                    error={curriculumError}
+                                    onOpenItem={handleOpenCurriculumItem}
+                                    onSubmitItem={handleSubmitCurriculumItem}
+                                    actionLoading={curriculumActionLoading}
+                                />
+                            )}
+                            {curriculumOverview?.curriculum_enabled && (
+                                <GradeSummaryCard gradeSummary={curriculumGradeSummary} />
+                            )}
+                            {isAdmin && curriculumOverview?.curriculum_enabled && (
+                                <InstructorCurriculumPanel
+                                    overview={curriculumOverview}
+                                    instructorSummary={curriculumInstructorSummary}
+                                />
+                            )}
 
                             {selectedAccount.type === 'competition' && (
                                 <div className="card section">
@@ -2869,6 +3083,57 @@ const Dashboard = () => {
                                             <option value="50%">50%</option>
                                             <option value="100%">100%</option>
                                         </select>
+
+                                        <div style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
+                                            <label className="em" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={curriculumEnabled}
+                                                    onChange={(e) => setCurriculumEnabled(e.target.checked)}
+                                                    disabled={isLoading}
+                                                />
+                                                Enable Investment Curriculum
+                                            </label>
+                                            <p className="note" style={{ marginTop: 8 }}>
+                                                Attach an auto-scheduled investment curriculum with quizzes, assignments, and final exam.
+                                            </p>
+                                            {curriculumEnabled && (
+                                                <div className="section" style={{ display: 'grid', gap: 8 }}>
+                                                    <label className="em">Curriculum Length (Weeks)</label>
+                                                    <input
+                                                        type="number"
+                                                        min={CURRICULUM_WEEK_MIN}
+                                                        max={CURRICULUM_WEEK_MAX}
+                                                        value={curriculumWeeks}
+                                                        onChange={(e) => setCurriculumWeeks(e.target.value)}
+                                                        disabled={isLoading}
+                                                    />
+                                                    <label className="em">Curriculum Start Date</label>
+                                                    <input
+                                                        type="date"
+                                                        value={curriculumStartDate}
+                                                        onChange={(e) => setCurriculumStartDate(e.target.value)}
+                                                        disabled={isLoading}
+                                                    />
+                                                    <label className="em" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={curriculumDateOverride}
+                                                            onChange={(e) => setCurriculumDateOverride(e.target.checked)}
+                                                            disabled={isLoading}
+                                                        />
+                                                        Manually override end date
+                                                    </label>
+                                                    <label className="em">Curriculum End Date {curriculumDateOverride ? '' : '(Auto-calculated)'}</label>
+                                                    <input
+                                                        type="date"
+                                                        value={curriculumEndDate}
+                                                        onChange={(e) => setCurriculumEndDate(e.target.value)}
+                                                        disabled={isLoading || !curriculumDateOverride}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
                                         {isAdmin && (
                                             <label className="em" style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: '200px' }}>
                                                 <input
