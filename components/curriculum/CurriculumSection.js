@@ -151,11 +151,18 @@ export const CurriculumDebugPanel = ({ debugState }) => {
       <p className="note" style={{ margin: 0 }}><strong>Id resolved from code:</strong> {String(Boolean(hydrationInfo?.resolvedFromCode))}</p>
       <p className="note" style={{ margin: 0 }}><strong>Id source:</strong> {hydrationInfo?.idSource || '(unknown)'}</p>
       <p className="note" style={{ margin: 0 }}><strong>Hydration source:</strong> {hydrationInfo?.source || '(none)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Extracted id:</strong> {hydrationInfo?.extractedId || '(none)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Extracted id key:</strong> {hydrationInfo?.extractedIdKey || '(none)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Selected competition updated:</strong> {String(Boolean(hydrationInfo?.selectedCompetitionUpdated))}</p>
       <p className="note" style={{ margin: 0 }}><strong>Curriculum enabled (frontend):</strong> {String(Boolean(debugState?.competitionContext?.curriculumEnabled))}</p>
       <p className="note" style={{ margin: 0 }}><strong>Endpoint URL:</strong> {requestInfo?.endpointUrl || '(not set)'}</p>
       <p className="note" style={{ margin: 0 }}><strong>Request made:</strong> {String(Boolean(requestInfo?.requestMade))}</p>
       <p className="note" style={{ margin: 0 }}><strong>HTTP status:</strong> {requestInfo?.httpStatus ?? '(n/a)'}</p>
       <p className="note" style={{ margin: 0 }}><strong>Backend message:</strong> {requestInfo?.responseMessage || '(n/a)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>By-code response body:</strong></p>
+      <pre style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>
+        {JSON.stringify(hydrationInfo?.rawResponseBody ?? null, null, 2)}
+      </pre>
       <p className="note" style={{ margin: 0 }}><strong>Curriculum fields:</strong></p>
       <pre style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>
         {JSON.stringify(competitionFields, null, 2)}

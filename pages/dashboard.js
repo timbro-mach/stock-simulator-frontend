@@ -127,10 +127,26 @@ const getCurriculumResponseMessage = (error) => (
 
 const getCompetitionIdentityId = (competition) => {
     if (!competition || typeof competition !== 'object') return '';
-    const rawId = competition?.id ?? competition?.competition_id;
+    const rawId = competition?.id ?? competition?.competition_id ?? competition?.competitionId;
     const parsed = String(rawId ?? '').trim();
     if (parsed) return parsed;
     return getCanonicalCompetitionId(competition);
+};
+
+const getByCodeResponseIdentity = (payload) => {
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const rawIdByPriority = [
+        { key: 'response.data.id', value: source?.id },
+        { key: 'response.data.competition_id', value: source?.competition_id },
+        { key: 'response.data.competitionId', value: source?.competitionId },
+    ];
+    for (const candidate of rawIdByPriority) {
+        const parsed = String(candidate.value ?? '').trim();
+        if (parsed) {
+            return { id: parsed, idKey: candidate.key };
+        }
+    }
+    return { id: '', idKey: '' };
 };
 
 const normalizeCompetitionEntry = (competition) => {
@@ -157,8 +173,15 @@ const normalizeCompetitionEntry = (competition) => {
 
     return {
         ...competition,
+        id: getCompetitionIdentityId(competition),
         code,
         competition_id: getCompetitionIdentityId(competition),
+        competitionId: getCompetitionIdentityId(competition),
+        competition_code: code,
+        curriculum_enabled: toBooleanFlag(competition?.curriculum_enabled ?? competition?.curriculumEnabled),
+        curriculumEnabled: toBooleanFlag(competition?.curriculum_enabled ?? competition?.curriculumEnabled),
+        curriculum_id: competition?.curriculum_id ?? competition?.curriculumId ?? null,
+        curriculumId: competition?.curriculumId ?? competition?.curriculum_id ?? null,
         name,
         featured: Boolean(featuredRaw),
         is_open: isOpenRaw === undefined || isOpenRaw === null ? true : Boolean(isOpenRaw),
@@ -761,6 +784,10 @@ const Dashboard = () => {
         source: '',
         idSource: '',
         record: null,
+        rawResponseBody: null,
+        extractedId: '',
+        extractedIdKey: '',
+        selectedCompetitionUpdated: false,
     });
     const [curriculumActionLoading, setCurriculumActionLoading] = useState(false);
     const [currentUserId, setCurrentUserId] = useState('');
@@ -794,7 +821,12 @@ const Dashboard = () => {
             const matchedCompetitionId = getCanonicalCompetitionId(matched);
             if (matchedCompetitionId) return matchedCompetitionId;
             const fromAllCompetitions = allCompetitions.find((competition) => String(competition?.code) === String(selectedAccount.id));
-            return getCanonicalCompetitionId(fromAllCompetitions);
+            const fromAllCompetitionsId = getCanonicalCompetitionId(fromAllCompetitions);
+            if (fromAllCompetitionsId) return fromAllCompetitionsId;
+            if (competitionHydration?.code && String(competitionHydration.code) === String(selectedAccount.id)) {
+                return getCanonicalCompetitionId(competitionHydration.record);
+            }
+            return '';
         }
         if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
             const matched = teamCompetitionAccounts.find(
@@ -826,9 +858,14 @@ const Dashboard = () => {
     ]);
     const selectedCompetitionRecord = useMemo(() => {
         if (selectedAccount.type === 'competition') {
-            return competitionAccounts.find((account) => String(account?.code) === String(selectedAccount.id))
+            const matchedCompetition = competitionAccounts.find((account) => String(account?.code) === String(selectedAccount.id))
                 || allCompetitions.find((competition) => String(competition?.code) === String(selectedAccount.id))
                 || null;
+            if (matchedCompetition) return matchedCompetition;
+            if (competitionHydration?.code && String(competitionHydration.code) === String(selectedAccount.id)) {
+                return competitionHydration.record;
+            }
+            return null;
         }
         if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
             const matchedTeamCompetition = teamCompetitionAccounts.find(
@@ -874,6 +911,10 @@ const Dashboard = () => {
                 source: '',
                 idSource: '',
                 record: null,
+                rawResponseBody: null,
+                extractedId: '',
+                extractedIdKey: '',
+                selectedCompetitionUpdated: false,
             });
             return;
         }
@@ -886,6 +927,10 @@ const Dashboard = () => {
                 source: 'direct',
                 idSource: 'list payload',
                 record: null,
+                rawResponseBody: null,
+                extractedId: '',
+                extractedIdKey: '',
+                selectedCompetitionUpdated: true,
             });
             return;
         }
@@ -906,6 +951,10 @@ const Dashboard = () => {
                         source: 'local-cache',
                         idSource: 'list payload',
                         record: localMatch,
+                        rawResponseBody: null,
+                        extractedId: localCompetitionId,
+                        extractedIdKey: 'list payload',
+                        selectedCompetitionUpdated: true,
                     });
                 }
                 return;
@@ -918,23 +967,54 @@ const Dashboard = () => {
                 source: 'by-code',
                 idSource: '',
                 record: null,
+                rawResponseBody: null,
+                extractedId: '',
+                extractedIdKey: '',
+                selectedCompetitionUpdated: false,
             });
 
             try {
                 const response = await axios.get(`${BASE_URL}/competition/by_code/${encodeURIComponent(competitionCode)}`);
                 if (cancelled) return;
+                const rawBody = response?.data ?? null;
                 const competitionData = response?.data?.competition || response?.data || null;
+                const byCodeIdentity = getByCodeResponseIdentity(rawBody);
                 const normalized = normalizeCompetitionEntry(competitionData);
-                const competitionId = getCompetitionIdentityId(normalized);
-                if (!normalized || !competitionId) return;
+                const competitionId = getCompetitionIdentityId(normalized) || byCodeIdentity.id;
+                if (!normalized || !competitionId) {
+                    setCompetitionHydration({
+                        code: competitionCode,
+                        attempted: true,
+                        resolvedFromCode: false,
+                        source: 'by-code',
+                        idSource: '',
+                        record: normalized,
+                        rawResponseBody: rawBody,
+                        extractedId: byCodeIdentity.id,
+                        extractedIdKey: byCodeIdentity.idKey,
+                        selectedCompetitionUpdated: false,
+                    });
+                    return;
+                }
 
                 setCompetitionHydration({
                     code: competitionCode,
                     attempted: true,
                     resolvedFromCode: true,
                     source: 'by-code',
-                    idSource: 'by-code hydration',
-                    record: normalized,
+                    idSource: byCodeIdentity.idKey || 'by-code hydration',
+                    record: {
+                        ...normalized,
+                        id: competitionId,
+                        competition_id: competitionId,
+                        competitionId: competitionId,
+                        code: normalized?.code || competitionCode,
+                        competition_code: normalized?.competition_code || normalized?.code || competitionCode,
+                    },
+                    rawResponseBody: rawBody,
+                    extractedId: competitionId,
+                    extractedIdKey: byCodeIdentity.idKey || 'normalized competition identity',
+                    selectedCompetitionUpdated: true,
                 });
             } catch (error) {
                 if (cancelled) return;
@@ -2060,6 +2140,10 @@ const Dashboard = () => {
                     resolvedFromCode: competitionHydration?.resolvedFromCode || false,
                     source: competitionHydration?.source || '',
                     idSource: selectedCompetitionIdSource,
+                    extractedId: competitionHydration?.extractedId || '',
+                    extractedIdKey: competitionHydration?.extractedIdKey || '',
+                    selectedCompetitionUpdated: Boolean(competitionHydration?.selectedCompetitionUpdated),
+                    rawResponseBody: competitionHydration?.rawResponseBody ?? null,
                 },
                 requestInfo: {
                     endpointUrl: selectedCompetitionId ? `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}` : '',
@@ -2091,6 +2175,10 @@ const Dashboard = () => {
                     resolvedFromCode: competitionHydration?.resolvedFromCode || false,
                     source: competitionHydration?.source || '',
                     idSource: selectedCompetitionIdSource,
+                    extractedId: competitionHydration?.extractedId || '',
+                    extractedIdKey: competitionHydration?.extractedIdKey || '',
+                    selectedCompetitionUpdated: Boolean(competitionHydration?.selectedCompetitionUpdated),
+                    rawResponseBody: competitionHydration?.rawResponseBody ?? null,
                 },
                 requestInfo: {
                     endpointUrl: selectedCompetitionId ? `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}` : '',
@@ -2102,14 +2190,21 @@ const Dashboard = () => {
             setCurriculumDebugState(baseDebugState);
             try {
                 if (!selectedCompetitionId) {
+                    const hasHydratedResponseId = Boolean(String(competitionHydration?.extractedId || '').trim());
                     setCurriculumDebugState({
                         ...baseDebugState,
                         hasError: true,
                         renderReason: competitionHydration?.attempted
-                            ? 'curriculum fetch did not run (competition_id unresolved after hydration)'
+                            ? hasHydratedResponseId
+                                ? 'curriculum fetch did not run (selected competition state not updated after hydration)'
+                                : 'curriculum fetch did not run (competition_id unresolved after hydration)'
                             : 'curriculum fetch did not run (waiting for competition hydration)',
                     });
-                    throw new Error(`Missing competition_id for competition code "${selectedCompetitionCode}".`);
+                    throw new Error(
+                        hasHydratedResponseId
+                            ? `Selected competition state was not updated after hydration for competition code "${selectedCompetitionCode}".`
+                            : `Missing competition_id for competition code "${selectedCompetitionCode}".`,
+                    );
                 }
                 const overviewUrl = `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}`;
                 setCurriculumDebugState((previous) => ({
