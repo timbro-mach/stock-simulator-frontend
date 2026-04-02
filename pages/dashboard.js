@@ -743,7 +743,15 @@ const Dashboard = () => {
         hasError: false,
         renderReason: '',
         competitionContext: null,
+        hydrationInfo: null,
         requestInfo: null,
+    });
+    const [competitionHydration, setCompetitionHydration] = useState({
+        code: '',
+        attempted: false,
+        resolvedFromCode: false,
+        source: '',
+        record: null,
     });
     const [curriculumActionLoading, setCurriculumActionLoading] = useState(false);
     const [currentUserId, setCurrentUserId] = useState('');
@@ -784,17 +792,27 @@ const Dashboard = () => {
                 (account) => String(account?.team_id) === String(selectedAccount.team_id)
                     && String(account?.code) === String(selectedAccount.competition_code),
             );
-            return getCanonicalCompetitionId(matched);
+            const matchedCompetitionId = getCanonicalCompetitionId(matched);
+            if (matchedCompetitionId) return matchedCompetitionId;
+            if (competitionHydration?.code && String(competitionHydration.code) === String(selectedAccount.competition_code)) {
+                return getCanonicalCompetitionId(competitionHydration.record);
+            }
+            return '';
+        }
+        if (competitionHydration?.code && String(competitionHydration.code) === String(selectedCompetitionCode)) {
+            return getCanonicalCompetitionId(competitionHydration.record);
         }
         return '';
     }, [
         allCompetitions,
         competitionAccounts,
+        competitionHydration,
         selectedAccount.competition_code,
         selectedAccount.competition_id,
         selectedAccount.id,
         selectedAccount.team_id,
         selectedAccount.type,
+        selectedCompetitionCode,
         teamCompetitionAccounts,
     ]);
     const selectedCompetitionRecord = useMemo(() => {
@@ -804,20 +822,129 @@ const Dashboard = () => {
                 || null;
         }
         if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
-            return teamCompetitionAccounts.find(
+            const matchedTeamCompetition = teamCompetitionAccounts.find(
                 (account) => String(account?.team_id) === String(selectedAccount.team_id)
                     && String(account?.code) === String(selectedAccount.competition_code),
-            ) || null;
+            );
+            if (matchedTeamCompetition) return matchedTeamCompetition;
+            if (competitionHydration?.code && String(competitionHydration.code) === String(selectedAccount.competition_code)) {
+                return competitionHydration.record;
+            }
+            return null;
+        }
+        if (competitionHydration?.code && String(competitionHydration.code) === String(selectedCompetitionCode)) {
+            return competitionHydration.record;
         }
         return null;
     }, [
         allCompetitions,
         competitionAccounts,
+        competitionHydration,
         selectedAccount.competition_code,
         selectedAccount.id,
         selectedAccount.team_id,
         selectedAccount.type,
+        selectedCompetitionCode,
         teamCompetitionAccounts,
+    ]);
+
+    useEffect(() => {
+        const competitionCode = String(selectedCompetitionCode || '').trim();
+        if (!isLoggedIn || !showTrading || !competitionCode) {
+            setCompetitionHydration({
+                code: competitionCode,
+                attempted: false,
+                resolvedFromCode: false,
+                source: '',
+                record: null,
+            });
+            return;
+        }
+
+        if (selectedCompetitionId) {
+            setCompetitionHydration((previous) => ({
+                code: competitionCode,
+                attempted: previous?.code === competitionCode ? previous.attempted : false,
+                resolvedFromCode: previous?.code === competitionCode ? previous.resolvedFromCode : false,
+                source: previous?.code === competitionCode ? previous.source : '',
+                record: null,
+            }));
+            return;
+        }
+
+        let cancelled = false;
+        const hydrateCompetitionByCode = async () => {
+            const localMatch = allCompetitions.find((competition) => String(competition?.code) === competitionCode)
+                || competitionAccounts.find((account) => String(account?.code) === competitionCode)
+                || teamCompetitionAccounts.find((account) => String(account?.code) === competitionCode)
+                || null;
+            const localCompetitionId = getCanonicalCompetitionId(localMatch);
+            if (localCompetitionId) {
+                if (!cancelled) {
+                    setCompetitionHydration({
+                        code: competitionCode,
+                        attempted: true,
+                        resolvedFromCode: true,
+                        source: 'local-cache',
+                        record: localMatch,
+                    });
+                }
+                return;
+            }
+
+            setCompetitionHydration({
+                code: competitionCode,
+                attempted: true,
+                resolvedFromCode: false,
+                source: 'remote-fetch',
+                record: null,
+            });
+
+            const endpointCandidates = isAdmin
+                ? [`${BASE_URL}/admin/competitions?admin_username=${username}`]
+                : [`${BASE_URL}/competitions`, `${BASE_URL}/featured_competitions`];
+
+            for (const endpoint of endpointCandidates) {
+                try {
+                    const response = await axios.get(endpoint);
+                    if (cancelled) return;
+                    const competitions = normalizeCompetitionCollection(response?.data)
+                        .map(normalizeCompetitionEntry)
+                        .filter(Boolean);
+                    const matched = competitions.find((competition) => String(competition?.code) === competitionCode);
+                    const competitionId = getCanonicalCompetitionId(matched);
+                    if (!matched || !competitionId) continue;
+
+                    setCompetitionHydration({
+                        code: competitionCode,
+                        attempted: true,
+                        resolvedFromCode: true,
+                        source: endpoint,
+                        record: matched,
+                    });
+                    return;
+                } catch (error) {
+                    if (cancelled) return;
+                    if (error?.response?.status === 404) continue;
+                }
+            }
+        };
+
+        hydrateCompetitionByCode();
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        BASE_URL,
+        allCompetitions,
+        competitionAccounts,
+        isAdmin,
+        isLoggedIn,
+        selectedCompetitionCode,
+        selectedCompetitionId,
+        showTrading,
+        teamCompetitionAccounts,
+        username,
     ]);
 
     useEffect(() => {
@@ -1918,6 +2045,11 @@ const Dashboard = () => {
                     ),
                     fields: getCurriculumCompetitionFields(selectedCompetitionRecord),
                 },
+                hydrationInfo: {
+                    attempted: competitionHydration?.attempted || false,
+                    resolvedFromCode: competitionHydration?.resolvedFromCode || false,
+                    source: competitionHydration?.source || '',
+                },
                 requestInfo: {
                     endpointUrl: selectedCompetitionId ? `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}` : '',
                     requestMade: false,
@@ -1943,6 +2075,11 @@ const Dashboard = () => {
                     ),
                     fields: getCurriculumCompetitionFields(selectedCompetitionRecord),
                 },
+                hydrationInfo: {
+                    attempted: competitionHydration?.attempted || false,
+                    resolvedFromCode: competitionHydration?.resolvedFromCode || false,
+                    source: competitionHydration?.source || '',
+                },
                 requestInfo: {
                     endpointUrl: selectedCompetitionId ? `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}` : '',
                     requestMade: false,
@@ -1956,9 +2093,11 @@ const Dashboard = () => {
                     setCurriculumDebugState({
                         ...baseDebugState,
                         hasError: true,
-                        renderReason: 'curriculum fetch did not run',
+                        renderReason: competitionHydration?.attempted
+                            ? 'curriculum fetch did not run (competition_id unresolved after hydration)'
+                            : 'curriculum fetch did not run (waiting for competition hydration)',
                     });
-                    throw new Error(`Curriculum enabled state could not be resolved: missing competition_id for competition code "${selectedCompetitionCode}".`);
+                    throw new Error(`Missing competition_id for competition code "${selectedCompetitionCode}".`);
                 }
                 const overviewUrl = `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}`;
                 setCurriculumDebugState((previous) => ({
@@ -1995,7 +2134,7 @@ const Dashboard = () => {
                     setCurriculumDebugState((previous) => ({
                         ...previous,
                         hasError: true,
-                        renderReason: 'curriculum not enabled on selected competition object',
+                        renderReason: 'curriculum not enabled by backend overview response',
                     }));
                     return;
                 }
@@ -2094,6 +2233,7 @@ const Dashboard = () => {
         selectedCompetitionCode,
         selectedCompetitionId,
         selectedCompetitionRecord,
+        competitionHydration,
         showTrading,
         currentUserId,
         username,
