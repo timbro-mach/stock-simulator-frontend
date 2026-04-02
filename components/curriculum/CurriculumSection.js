@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { formatDisplayDate, getLetterGrade, normalizeCurriculumStatus } from '../../lib/curriculum/helpers';
+import { buildAssignmentSubmissionPayload, normalizeAssignmentIdKey } from '../../lib/curriculum/submission';
 
 const progressShell = {
   width: '100%',
@@ -46,7 +47,7 @@ const gradeTile = {
 };
 
 const getModuleId = (module) => module?.moduleId || module?.id || module?.week_number || module?.weekNumber;
-const getAssignmentId = (assignment) => assignment?.assignmentId || assignment?.id;
+const getAssignmentId = (assignment) => normalizeAssignmentIdKey(assignment?.assignmentId || assignment?.id);
 
 const getAssignments = (module) => {
   if (Array.isArray(module?.assignments)) return module.assignments;
@@ -212,7 +213,7 @@ export const CurriculumSummaryCard = ({ overview }) => {
   );
 };
 
-const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem, submittedMap }) => {
+const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem, submittedMap, submissionState }) => {
   const [quizAnswers, setQuizAnswers] = useState({});
   const [writtenAnswers, setWrittenAnswers] = useState({});
   const [quizScore, setQuizScore] = useState(null);
@@ -220,27 +221,29 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
   const assignmentId = getAssignmentId(assignment);
   const questions = getQuestions(assignment?.content);
   const submitted = Boolean(submittedMap?.[assignmentId]) || String(assignment?.status || '').toLowerCase() === 'submitted';
+  const [submitValidationError, setSubmitValidationError] = useState('');
+  const currentSubmission = submissionState?.byAssignmentId?.[assignmentId] || null;
 
   const payload = useMemo(() => {
-    if (isWrittenAssignment(assignment)) {
-      return {
-        answers: questions.map((question, index) => ({
-          questionId: getQuestionId(question, index),
-          response: writtenAnswers[getQuestionId(question, index)] || '',
-        })),
-      };
-    }
-
-    return {
-      answers: questions.map((question, index) => ({
-        questionId: getQuestionId(question, index),
-        selectedChoice: quizAnswers[getQuestionId(question, index)] || '',
-      })),
-    };
-  }, [assignment, questions, quizAnswers, writtenAnswers]);
+    return buildAssignmentSubmissionPayload({
+      assignmentType,
+      questions,
+      quizAnswers,
+      writtenAnswers,
+    });
+  }, [assignmentType, questions, quizAnswers, writtenAnswers]);
 
   const handleSubmit = () => {
+    setSubmitValidationError('');
     if (isQuizAssignment(assignment)) {
+      const unansweredQuestions = questions.filter((question, index) => {
+        const questionId = getQuestionId(question, index);
+        return !quizAnswers[questionId];
+      });
+      if (unansweredQuestions.length > 0) {
+        setSubmitValidationError('Please answer every quiz question before submitting.');
+        return;
+      }
       const gradable = questions.filter((question) => getCorrectChoice(question));
       if (gradable.length > 0) {
         const correctCount = gradable.reduce((count, question, index) => {
@@ -282,7 +285,8 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
                 {parts.length > 0 ? (
                   <div style={{ display: 'grid', gap: 6 }}>
                     {parts.map((part, partIndex) => {
-                      const partKey = `${questionId}-part-${part?.id || partIndex}`;
+                      const partId = part?.partId || part?.id || `part-${partIndex}`;
+                      const partKey = `${questionId}-part-${partId}`;
                       const partPrompt = part?.prompt || part?.question || part?.text || `Part ${String.fromCharCode(97 + partIndex)}`;
                       return (
                         <div key={partKey}>
@@ -347,13 +351,29 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
           Score: {quizScore.correctCount}/{quizScore.total} ({quizScore.percent}%)
         </p>
       ) : null}
+      {currentSubmission?.result?.score !== null && currentSubmission?.result?.score !== undefined ? (
+        <p className="note" style={{ marginTop: 8, marginBottom: 0, color: '#1d4ed8' }}>
+          Server graded score: {currentSubmission.result.score}
+          {currentSubmission?.result?.percentage !== null && currentSubmission?.result?.percentage !== undefined
+            ? ` (${Number(currentSubmission.result.percentage).toFixed(1)}%)`
+            : ''}
+          {currentSubmission?.result?.status ? ` • ${currentSubmission.result.status}` : ''}
+        </p>
+      ) : null}
+      {submitValidationError ? <p className="note" style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c' }}>{submitValidationError}</p> : null}
+      {currentSubmission?.status === 'error' ? (
+        <p className="note" style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c' }}>{currentSubmission?.message || 'Unable to submit assignment.'}</p>
+      ) : null}
+      {currentSubmission?.status === 'success' ? (
+        <p className="note" style={{ marginTop: 8, marginBottom: 0, color: '#15803d' }}>{currentSubmission?.message || 'Submission saved.'}</p>
+      ) : null}
 
       <div style={{ marginTop: 10 }}>
         <button
           onClick={handleSubmit}
-          disabled={moduleLocked || actionLoading || !assignmentId}
+          disabled={moduleLocked || actionLoading || !assignmentId || currentSubmission?.status === 'loading'}
         >
-          Submit
+          {currentSubmission?.status === 'loading' ? 'Submitting…' : 'Submit'}
         </button>
       </div>
     </div>
@@ -372,6 +392,18 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
       {loading ? <p className="note">Loading curriculum...</p> : null}
       {error ? <p className="note" style={{ color: '#b91c1c' }}>{error}</p> : null}
       {gradesMessage ? <p className="note" style={{ color: '#b45309' }}>{gradesMessage}</p> : null}
+      {submissionState?.latestMessage ? (
+        <p className="note" style={{ color: '#1d4ed8' }}>{submissionState.latestMessage}</p>
+      ) : null}
+      {submissionState?.lastSubmissionResult?.score !== null && submissionState?.lastSubmissionResult?.score !== undefined ? (
+        <p className="note" style={{ marginTop: 0, color: '#1d4ed8' }}>
+          Latest graded result: {submissionState.lastSubmissionResult.score}
+          {submissionState?.lastSubmissionResult?.percentage !== null && submissionState?.lastSubmissionResult?.percentage !== undefined
+            ? ` (${Number(submissionState.lastSubmissionResult.percentage).toFixed(1)}%)`
+            : ''}
+          {submissionState?.lastSubmissionResult?.status ? ` • ${submissionState.lastSubmissionResult.status}` : ''}
+        </p>
+      ) : null}
 
       {!loading && (
         <>
@@ -449,6 +481,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
                           actionLoading={actionLoading}
                           onSubmitItem={onSubmitItem}
                           submittedMap={submissionState?.submittedByAssignmentId}
+                          submissionState={submissionState}
                         />
                       )) : <p className="note">No assignments in this module yet.</p>}
                     </div>
