@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
-import { getApiBaseUrl } from '../lib/api';
+import { getApiBaseUrl, getApiErrorMessage } from '../lib/api';
 import { normalizeChartPoints, toTimestamp } from '../lib/chartData';
 import Leaderboard from '../components/Leaderboard';
 import {
@@ -99,28 +99,10 @@ const toBooleanFlag = (value) => {
 
 const normalizeCurriculumOverview = (overview) => {
     const source = overview && typeof overview === 'object' ? overview : {};
-    const curriculumEnabledRaw = source?.curriculum_enabled ?? source?.curriculumEnabled;
     return {
         ...source,
-        curriculum_enabled: toBooleanFlag(curriculumEnabledRaw),
+        curriculum_enabled: toBooleanFlag(source?.curriculum_enabled),
     };
-};
-
-const deriveCurriculumOverviewFromCompetition = (competition, competitionCode = '') => {
-    if (!competition || typeof competition !== 'object') return null;
-    const curriculumEnabledRaw = competition?.curriculum_enabled ?? competition?.curriculumEnabled;
-    if (curriculumEnabledRaw === undefined || curriculumEnabledRaw === null) return null;
-
-    return normalizeCurriculumOverview({
-        competition_id: getCanonicalCompetitionId(competition),
-        competition_code: competitionCode || competition?.code || competition?.competition_code || competition?.competitionCode || '',
-        curriculum_enabled: curriculumEnabledRaw,
-        curriculum_weeks: competition?.curriculum_weeks ?? competition?.curriculumWeeks ?? null,
-        curriculum_start_date: competition?.curriculum_start_date ?? competition?.curriculumStartDate ?? competition?.start_date ?? competition?.startDate ?? null,
-        curriculum_end_date: competition?.curriculum_end_date ?? competition?.curriculumEndDate ?? competition?.end_date ?? competition?.endDate ?? null,
-        module_count: competition?.module_count ?? competition?.moduleCount ?? 0,
-        progress_percent: competition?.progress_percent ?? competition?.progressPercent ?? 0,
-    });
 };
 
 const normalizeCompetitionEntry = (competition) => {
@@ -761,20 +743,22 @@ const Dashboard = () => {
         return '';
     }, [selectedAccount.competition_code, selectedAccount.id, selectedAccount.type]);
     const selectedCompetitionId = useMemo(() => {
+        const directSelectedCompetitionId = getCanonicalCompetitionId(selectedAccount);
+        if (directSelectedCompetitionId) return directSelectedCompetitionId;
+
         if (selectedAccount.type === 'competition') {
-            if (selectedAccount.competition_id) return selectedAccount.competition_id;
             const matched = competitionAccounts.find((account) => String(account?.code) === String(selectedAccount.id));
-            if (matched?.competition_id) return matched.competition_id;
+            const matchedCompetitionId = getCanonicalCompetitionId(matched);
+            if (matchedCompetitionId) return matchedCompetitionId;
             const fromAllCompetitions = allCompetitions.find((competition) => String(competition?.code) === String(selectedAccount.id));
-            return fromAllCompetitions?.competition_id || '';
+            return getCanonicalCompetitionId(fromAllCompetitions);
         }
         if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
-            if (selectedAccount.competition_id) return selectedAccount.competition_id;
             const matched = teamCompetitionAccounts.find(
                 (account) => String(account?.team_id) === String(selectedAccount.team_id)
                     && String(account?.code) === String(selectedAccount.competition_code),
             );
-            return matched?.competition_id || '';
+            return getCanonicalCompetitionId(matched);
         }
         return '';
     }, [
@@ -1868,22 +1852,6 @@ const Dashboard = () => {
         return () => clearInterval(interval);
     }, [BASE_URL, buildTradeRequest, fetchTradeBlotterRows, fetchUserData, isLoggedIn, pendingLimitOrders, showTradeBlotterModal, username]);
 
-    const fetchFromEndpointCandidates = useCallback(async (endpointCandidates, params = {}) => {
-        let lastError = null;
-        for (const endpoint of endpointCandidates) {
-            try {
-                const response = await axios.get(`${BASE_URL}${endpoint}`, { params });
-                return response?.data ?? null;
-            } catch (error) {
-                lastError = error;
-                const status = error?.response?.status;
-                if (status !== 404 && status !== 405) throw error;
-            }
-        }
-        if (lastError) throw lastError;
-        return null;
-    }, [BASE_URL]);
-
     useEffect(() => {
         if (!isLoggedIn || !showTrading || !selectedCompetitionCode || !username) {
             setCurriculumOverview(null);
@@ -1899,9 +1867,10 @@ const Dashboard = () => {
             setCurriculumLoading(true);
             setCurriculumError('');
             try {
-                const params = { username, competition_code: selectedCompetitionCode };
-                const competitionReference = selectedCompetitionId || selectedCompetitionCode;
-                const overview = (await axios.get(`${BASE_URL}${buildCurriculumPath(competitionReference)}`))?.data ?? null;
+                if (!selectedCompetitionId) {
+                    throw new Error(`Curriculum enabled state could not be resolved: missing competition_id for competition code "${selectedCompetitionCode}".`);
+                }
+                const overview = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}`))?.data ?? null;
                 if (cancelled) return;
 
                 const normalizedOverview = normalizeCurriculumOverview(overview?.curriculum || overview);
@@ -1911,51 +1880,37 @@ const Dashboard = () => {
                     setCurriculumModules([]);
                     setCurriculumGradeSummary(null);
                     setCurriculumInstructorSummary(null);
+                    setCurriculumError('Curriculum is not enabled for this competition.');
                     return;
                 }
 
                 const effectiveUserId = String(currentUserId || username || '').trim();
                 const [modulesData, gradesData, instructorData] = await Promise.all([
-                    axios.get(`${BASE_URL}${buildCurriculumPath(competitionReference, 'modules')}`).then((response) => response?.data ?? []).catch(() => []),
+                    axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`).then((response) => response?.data ?? []),
                     effectiveUserId
-                        ? axios.get(`${BASE_URL}${buildCurriculumPath(competitionReference, `grades/${effectiveUserId}`)}`).then((response) => response?.data ?? null).catch(() => null)
+                        ? axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`).then((response) => response?.data ?? null)
                         : Promise.resolve(null),
-                    fetchFromEndpointCandidates(['/competition/curriculum/instructor-summary', '/curriculum/instructor-summary'], params).catch(() => null),
+                    axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor-overview')}`).then((response) => response?.data ?? null),
                 ]);
                 if (cancelled) return;
 
-                setCurriculumModules(Array.isArray(modulesData?.modules) ? modulesData.modules : (Array.isArray(modulesData) ? modulesData : []));
-                setCurriculumGradeSummary(gradesData?.grade_summary || gradesData || null);
-                setCurriculumInstructorSummary(instructorData?.summary || instructorData || null);
+                const resolvedModules = Array.isArray(modulesData?.modules) ? modulesData.modules : (Array.isArray(modulesData) ? modulesData : []);
+                const resolvedGradeSummary = gradesData?.grade_summary || gradesData || null;
+                const resolvedInstructorSummary = instructorData?.summary || instructorData || null;
+
+                setCurriculumModules(resolvedModules);
+                setCurriculumGradeSummary(resolvedGradeSummary);
+                setCurriculumInstructorSummary(resolvedInstructorSummary);
+
+                if (resolvedModules.length === 0 && !resolvedGradeSummary && !resolvedInstructorSummary) {
+                    setCurriculumError(`Curriculum is enabled, but no curriculum records were returned yet for competition_id=${selectedCompetitionId}.`);
+                }
             } catch (error) {
                 if (cancelled) return;
-                if (error?.response?.status === 404) {
-                    setCurriculumModules([]);
-                    setCurriculumGradeSummary(null);
-                    setCurriculumInstructorSummary(null);
-                    const localCompetitionData = (selectedAccount.type === 'competition'
-                        ? competitionAccounts.find((competition) => String(competition?.code) === String(selectedCompetitionCode))
-                        : null)
-                        || ((selectedAccount.type === 'team' || selectedAccount.type === 'team_competition')
-                            ? teamCompetitionAccounts.find(
-                                (competition) => String(competition?.code) === String(selectedCompetitionCode)
-                                    && String(competition?.team_id) === String(selectedAccount?.team_id),
-                            )
-                            : null)
-                        || allCompetitions.find((competition) => String(competition?.code) === String(selectedCompetitionCode))
-                        || null;
-
-                    const localOverview = deriveCurriculumOverviewFromCompetition(localCompetitionData, selectedCompetitionCode);
-                    if (localOverview?.curriculum_enabled) {
-                        setCurriculumOverview(localOverview);
-                        setCurriculumError('Invalid competition reference for curriculum. Please refresh and re-open this competition.');
-                    } else {
-                        setCurriculumOverview({ curriculum_enabled: false });
-                        setCurriculumError('Curriculum is not enabled for this competition.');
-                    }
-                } else {
-                    setCurriculumError('Unable to load curriculum data right now.');
-                }
+                setCurriculumModules([]);
+                setCurriculumGradeSummary(null);
+                setCurriculumInstructorSummary(null);
+                setCurriculumError(getApiErrorMessage(error, 'Unable to load curriculum data right now.'));
             } finally {
                 if (!cancelled) setCurriculumLoading(false);
             }
@@ -1966,16 +1921,10 @@ const Dashboard = () => {
             cancelled = true;
         };
     }, [
-        allCompetitions,
-        competitionAccounts,
-        fetchFromEndpointCandidates,
         isLoggedIn,
-        selectedAccount.team_id,
-        selectedAccount.type,
         selectedCompetitionCode,
         selectedCompetitionId,
         showTrading,
-        teamCompetitionAccounts,
         currentUserId,
         username,
     ]);
@@ -1992,25 +1941,14 @@ const Dashboard = () => {
     const handleSubmitCurriculumItem = async (item) => {
         if (!selectedCompetitionCode || !item?.id) return;
         const itemType = String(item?.type || '').toLowerCase();
-        const endpointCandidates = itemType === 'assignment'
-            ? ['/curriculum/assignment/submit', '/competition/curriculum/assignment/submit']
-            : ['/curriculum/quiz/submit', '/competition/curriculum/quiz/submit'];
+        const submitEndpoint = itemType === 'assignment'
+            ? '/curriculum/assignment/submit'
+            : '/curriculum/quiz/submit';
 
         setCurriculumActionLoading(true);
         try {
             const payload = { username, competition_code: selectedCompetitionCode, item_id: item.id };
-            let successful = false;
-            for (const endpoint of endpointCandidates) {
-                try {
-                    await axios.post(`${BASE_URL}${endpoint}`, payload);
-                    successful = true;
-                    break;
-                } catch (error) {
-                    const status = error?.response?.status;
-                    if (status !== 404 && status !== 405) throw error;
-                }
-            }
-            if (!successful) throw new Error('No curriculum submission endpoint available.');
+            await axios.post(`${BASE_URL}${submitEndpoint}`, payload);
             setTradeMessage(`Submitted ${itemType || 'item'}: ${item.title}`);
         } catch (error) {
             console.error('Error submitting curriculum item:', error);
@@ -2095,8 +2033,15 @@ const Dashboard = () => {
             setCurriculumStartDate('');
             setCurriculumEndDate('');
             setCurriculumDateOverride(false);
-            fetchUserData();
-            fetchFeaturedCompetitions();
+            await fetchUserData();
+            await fetchFeaturedCompetitions();
+            if (res?.data?.competition_code) {
+                setSelectedAccount({
+                    type: 'competition',
+                    id: String(res.data.competition_code),
+                    competition_id: String(res.data?.competition_id || '').trim(),
+                });
+            }
         } catch (error) {
             console.error('Error creating competition:', error);
             setCompetitionMessage(error.response?.data?.message || 'Error creating competition.');
@@ -2888,10 +2833,10 @@ const Dashboard = () => {
                                                 <strong>{comp.name}</strong> (Code: {comp.code})<br />
                                                 Open: {comp.is_open ? '✅' : '❌'} | Featured: {comp.featured ? '⭐' : '☆'}<br />
                                                 {comp.start_date && comp.end_date ? `${new Date(comp.start_date).toLocaleDateString()} → ${new Date(comp.end_date).toLocaleDateString()}` : 'No dates set'}
-                                                {(comp.curriculum_enabled || comp.curriculumEnabled) ? (
+                                                {comp.curriculum_enabled ? (
                                                     <>
                                                         <br />
-                                                        Curriculum: Enabled • {comp.curriculum_weeks || comp.curriculumWeeks || '-'} weeks • {comp.module_count || 0} modules
+                                                        Curriculum: Enabled • {comp.curriculum_weeks || '-'} weeks • {comp.module_count || 0} modules
                                                     </>
                                                 ) : null}
                                             </p>
@@ -2905,7 +2850,7 @@ const Dashboard = () => {
                                                 <button onClick={() => deleteCompetition(comp.code)} disabled={isLoading}>
                                                     Delete
                                                 </button>
-                                                {(comp.curriculum_enabled || comp.curriculumEnabled) && (
+                                                {comp.curriculum_enabled && (
                                                     <button
                                                         onClick={() => {
                                                             setShowTrading(true);
