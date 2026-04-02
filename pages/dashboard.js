@@ -5,6 +5,7 @@ import { getApiBaseUrl, getApiErrorMessage } from '../lib/api';
 import { normalizeChartPoints, toTimestamp } from '../lib/chartData';
 import Leaderboard from '../components/Leaderboard';
 import {
+    CurriculumDebugPanel,
     CurriculumSummaryCard,
     GradeSummaryCard,
     InstructorCurriculumPanel,
@@ -104,6 +105,25 @@ const normalizeCurriculumOverview = (overview) => {
         curriculum_enabled: toBooleanFlag(source?.curriculum_enabled),
     };
 };
+
+const getCurriculumCompetitionFields = (competition) => ({
+    curriculum_enabled: competition?.curriculum_enabled ?? null,
+    curriculumEnabled: competition?.curriculumEnabled ?? null,
+    curriculum_weeks: competition?.curriculum_weeks ?? null,
+    curriculumWeeks: competition?.curriculumWeeks ?? null,
+    curriculum_start_date: competition?.curriculum_start_date ?? null,
+    curriculumStartDate: competition?.curriculumStartDate ?? null,
+    curriculum_end_date: competition?.curriculum_end_date ?? null,
+    curriculumEndDate: competition?.curriculumEndDate ?? null,
+});
+
+const getCurriculumResponseMessage = (error) => (
+    error?.response?.data?.message
+    || error?.response?.data?.error
+    || (typeof error?.response?.data === 'string' ? error.response.data : '')
+    || error?.message
+    || ''
+);
 
 const normalizeCompetitionEntry = (competition) => {
     const code = String(
@@ -719,6 +739,12 @@ const Dashboard = () => {
     const [curriculumInstructorSummary, setCurriculumInstructorSummary] = useState(null);
     const [curriculumLoading, setCurriculumLoading] = useState(false);
     const [curriculumError, setCurriculumError] = useState('');
+    const [curriculumDebugState, setCurriculumDebugState] = useState({
+        hasError: false,
+        renderReason: '',
+        competitionContext: null,
+        requestInfo: null,
+    });
     const [curriculumActionLoading, setCurriculumActionLoading] = useState(false);
     const [currentUserId, setCurrentUserId] = useState('');
 
@@ -766,6 +792,28 @@ const Dashboard = () => {
         competitionAccounts,
         selectedAccount.competition_code,
         selectedAccount.competition_id,
+        selectedAccount.id,
+        selectedAccount.team_id,
+        selectedAccount.type,
+        teamCompetitionAccounts,
+    ]);
+    const selectedCompetitionRecord = useMemo(() => {
+        if (selectedAccount.type === 'competition') {
+            return competitionAccounts.find((account) => String(account?.code) === String(selectedAccount.id))
+                || allCompetitions.find((competition) => String(competition?.code) === String(selectedAccount.id))
+                || null;
+        }
+        if (selectedAccount.type === 'team' || selectedAccount.type === 'team_competition') {
+            return teamCompetitionAccounts.find(
+                (account) => String(account?.team_id) === String(selectedAccount.team_id)
+                    && String(account?.code) === String(selectedAccount.competition_code),
+            ) || null;
+        }
+        return null;
+    }, [
+        allCompetitions,
+        competitionAccounts,
+        selectedAccount.competition_code,
         selectedAccount.id,
         selectedAccount.team_id,
         selectedAccount.type,
@@ -1859,6 +1907,24 @@ const Dashboard = () => {
             setCurriculumGradeSummary(null);
             setCurriculumInstructorSummary(null);
             setCurriculumError('');
+            setCurriculumDebugState({
+                hasError: !selectedCompetitionCode,
+                renderReason: !selectedCompetitionCode ? 'competition not selected' : '',
+                competitionContext: {
+                    id: selectedCompetitionId || '',
+                    name: selectedCompetitionRecord?.name || '',
+                    curriculumEnabled: toBooleanFlag(
+                        selectedCompetitionRecord?.curriculum_enabled ?? selectedCompetitionRecord?.curriculumEnabled,
+                    ),
+                    fields: getCurriculumCompetitionFields(selectedCompetitionRecord),
+                },
+                requestInfo: {
+                    endpointUrl: selectedCompetitionId ? `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}` : '',
+                    requestMade: false,
+                    httpStatus: null,
+                    responseMessage: '',
+                },
+            });
             return;
         }
 
@@ -1866,32 +1932,118 @@ const Dashboard = () => {
         const fetchCurriculumData = async () => {
             setCurriculumLoading(true);
             setCurriculumError('');
+            const baseDebugState = {
+                hasError: false,
+                renderReason: '',
+                competitionContext: {
+                    id: selectedCompetitionId || '',
+                    name: selectedCompetitionRecord?.name || '',
+                    curriculumEnabled: toBooleanFlag(
+                        selectedCompetitionRecord?.curriculum_enabled ?? selectedCompetitionRecord?.curriculumEnabled,
+                    ),
+                    fields: getCurriculumCompetitionFields(selectedCompetitionRecord),
+                },
+                requestInfo: {
+                    endpointUrl: selectedCompetitionId ? `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}` : '',
+                    requestMade: false,
+                    httpStatus: null,
+                    responseMessage: '',
+                },
+            };
+            setCurriculumDebugState(baseDebugState);
             try {
                 if (!selectedCompetitionId) {
+                    setCurriculumDebugState({
+                        ...baseDebugState,
+                        hasError: true,
+                        renderReason: 'curriculum fetch did not run',
+                    });
                     throw new Error(`Curriculum enabled state could not be resolved: missing competition_id for competition code "${selectedCompetitionCode}".`);
                 }
-                const overview = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}`))?.data ?? null;
+                const overviewUrl = `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}`;
+                setCurriculumDebugState((previous) => ({
+                    ...previous,
+                    requestInfo: {
+                        ...previous.requestInfo,
+                        endpointUrl: overviewUrl,
+                        requestMade: true,
+                    },
+                }));
+                const overviewResponse = await axios.get(overviewUrl);
+                const overview = overviewResponse?.data ?? null;
                 if (cancelled) return;
 
                 const normalizedOverview = normalizeCurriculumOverview(overview?.curriculum || overview);
                 setCurriculumOverview(normalizedOverview);
+                setCurriculumDebugState((previous) => ({
+                    ...previous,
+                    competitionContext: {
+                        ...previous.competitionContext,
+                        curriculumEnabled: normalizedOverview.curriculum_enabled,
+                    },
+                    requestInfo: {
+                        ...previous.requestInfo,
+                        httpStatus: overviewResponse?.status ?? null,
+                    },
+                }));
 
                 if (!normalizedOverview.curriculum_enabled) {
                     setCurriculumModules([]);
                     setCurriculumGradeSummary(null);
                     setCurriculumInstructorSummary(null);
                     setCurriculumError('Curriculum is not enabled for this competition.');
+                    setCurriculumDebugState((previous) => ({
+                        ...previous,
+                        hasError: true,
+                        renderReason: 'curriculum not enabled on selected competition object',
+                    }));
                     return;
                 }
 
                 const effectiveUserId = String(currentUserId || username || '').trim();
-                const [modulesData, gradesData, instructorData] = await Promise.all([
-                    axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`).then((response) => response?.data ?? []),
-                    effectiveUserId
-                        ? axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`).then((response) => response?.data ?? null)
-                        : Promise.resolve(null),
-                    axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor-overview')}`).then((response) => response?.data ?? null),
-                ]);
+                let modulesData = [];
+                let gradesData = null;
+                let instructorData = null;
+
+                try {
+                    modulesData = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`))?.data ?? [];
+                } catch (error) {
+                    if (!cancelled) {
+                        setCurriculumDebugState((previous) => ({
+                            ...previous,
+                            hasError: true,
+                            renderReason: 'modules request failed',
+                            requestInfo: {
+                                ...previous.requestInfo,
+                                httpStatus: error?.response?.status ?? null,
+                                responseMessage: getCurriculumResponseMessage(error),
+                            },
+                        }));
+                    }
+                    throw error;
+                }
+
+                if (effectiveUserId) {
+                    try {
+                        gradesData = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`))?.data ?? null;
+                    } catch (error) {
+                        if (!cancelled) {
+                            setCurriculumDebugState((previous) => ({
+                                ...previous,
+                                hasError: true,
+                                renderReason: 'grades request failed',
+                                requestInfo: {
+                                    ...previous.requestInfo,
+                                    httpStatus: error?.response?.status ?? null,
+                                    responseMessage: getCurriculumResponseMessage(error),
+                                },
+                            }));
+                        }
+                        throw error;
+                    }
+                }
+
+                instructorData = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor-overview')}`))?.data ?? null;
                 if (cancelled) return;
 
                 const resolvedModules = Array.isArray(modulesData?.modules) ? modulesData.modules : (Array.isArray(modulesData) ? modulesData : []);
@@ -1905,12 +2057,29 @@ const Dashboard = () => {
                 if (resolvedModules.length === 0 && !resolvedGradeSummary && !resolvedInstructorSummary) {
                     setCurriculumError(`Curriculum is enabled, but no curriculum records were returned yet for competition_id=${selectedCompetitionId}.`);
                 }
+                setCurriculumDebugState((previous) => ({ ...previous, hasError: false, renderReason: '' }));
             } catch (error) {
                 if (cancelled) return;
                 setCurriculumModules([]);
                 setCurriculumGradeSummary(null);
                 setCurriculumInstructorSummary(null);
                 setCurriculumError(getApiErrorMessage(error, 'Unable to load curriculum data right now.'));
+                const statusCode = error?.response?.status ?? null;
+                const reasonByStatus = statusCode === 404
+                    ? 'curriculum endpoint returned 404'
+                    : statusCode === 500
+                        ? 'curriculum endpoint returned 500'
+                        : '';
+                setCurriculumDebugState((previous) => ({
+                    ...previous,
+                    hasError: true,
+                    renderReason: previous.renderReason || reasonByStatus || 'curriculum fetch did not run',
+                    requestInfo: {
+                        ...previous.requestInfo,
+                        httpStatus: statusCode,
+                        responseMessage: getCurriculumResponseMessage(error),
+                    },
+                }));
             } finally {
                 if (!cancelled) setCurriculumLoading(false);
             }
@@ -1924,6 +2093,7 @@ const Dashboard = () => {
         isLoggedIn,
         selectedCompetitionCode,
         selectedCompetitionId,
+        selectedCompetitionRecord,
         showTrading,
         currentUserId,
         username,
@@ -3007,6 +3177,7 @@ const Dashboard = () => {
                                     gradeSummary={curriculumGradeSummary}
                                     loading={curriculumLoading}
                                     error={curriculumError}
+                                    debugState={curriculumDebugState}
                                     onOpenItem={handleOpenCurriculumItem}
                                     onSubmitItem={handleSubmitCurriculumItem}
                                     actionLoading={curriculumActionLoading}
@@ -3021,10 +3192,15 @@ const Dashboard = () => {
                                     instructorSummary={curriculumInstructorSummary}
                                 />
                             )}
-                            {showTrading && selectedCompetitionCode && !curriculumLoading && curriculumOverview && !curriculumOverview.curriculum_enabled && curriculumError && (
+                            {showTrading && selectedCompetitionCode && (!curriculumOverview?.curriculum_enabled && (curriculumError || curriculumDebugState?.hasError)) && (
                                 <div className="card section">
                                     <h3>Curriculum</h3>
-                                    <p className="note" style={{ color: '#b45309' }}>{curriculumError}</p>
+                                    {curriculumError ? (
+                                        <p className="note" style={{ color: '#b45309' }}>{curriculumError}</p>
+                                    ) : (
+                                        <p className="note" style={{ color: '#b45309' }}>Curriculum debug information is available below.</p>
+                                    )}
+                                    <CurriculumDebugPanel debugState={curriculumDebugState} />
                                 </div>
                             )}
 
