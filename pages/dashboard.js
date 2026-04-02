@@ -2445,7 +2445,19 @@ const Dashboard = () => {
                         }
                     } catch (error) {
                         if (!cancelled) {
-                            setCurriculumGradesMessage('Grades are temporarily unavailable.');
+                            const statusCode = error?.response?.status ?? null;
+                            const responseMessage = getCurriculumResponseMessage(error);
+                            const details = [
+                                statusCode ? `HTTP ${statusCode}` : '',
+                                responseMessage || '',
+                            ]
+                                .filter(Boolean)
+                                .join(' — ');
+                            setCurriculumGradesMessage(
+                                details
+                                    ? `Grades are temporarily unavailable (${details}).`
+                                    : 'Grades are temporarily unavailable.',
+                            );
                             setCurriculumDebugState((previous) => ({
                                 ...previous,
                                 requestInfo: {
