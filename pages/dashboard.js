@@ -5,7 +5,6 @@ import { getApiBaseUrl, getApiErrorMessage } from '../lib/api';
 import { normalizeChartPoints, toTimestamp } from '../lib/chartData';
 import Leaderboard from '../components/Leaderboard';
 import {
-    CurriculumDebugPanel,
     CurriculumSummaryCard,
     GradeSummaryCard,
     InstructorCurriculumPanel,
@@ -3778,7 +3777,6 @@ const Dashboard = () => {
                                     gradesMessage={curriculumGradesMessage}
                                     loading={curriculumLoading}
                                     error={curriculumError}
-                                    debugState={curriculumDebugState}
                                     onSubmitItem={handleSubmitCurriculumItem}
                                     actionLoading={curriculumActionLoading}
                                     submissionState={curriculumSubmissionState}
@@ -3799,18 +3797,6 @@ const Dashboard = () => {
                                     instructorMessage={curriculumInstructorMessage}
                                 />
                             )}
-                            {showTrading && selectedCompetitionCode && (!curriculumOverview?.curriculum_enabled && (curriculumError || curriculumDebugState?.hasError)) && (
-                                <div className="card section">
-                                    <h3>Curriculum</h3>
-                                    {curriculumError ? (
-                                        <p className="note" style={{ color: '#b45309' }}>{curriculumError}</p>
-                                    ) : (
-                                        <p className="note" style={{ color: '#b45309' }}>Curriculum debug information is available below.</p>
-                                    )}
-                                    <CurriculumDebugPanel debugState={curriculumDebugState} />
-                                </div>
-                            )}
-
                             {selectedAccount.type === 'competition' && (
                                 <div className="card section">
                                     <h3>Leaderboard — {selectedAccount.id}</h3>
