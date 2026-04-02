@@ -155,6 +155,20 @@ const getCurriculumResponseMessage = (error) => (
     || ''
 );
 
+const getCompactCurriculumErrorMessage = (error) => {
+    const raw = String(getCurriculumResponseMessage(error) || '').trim();
+    if (!raw) return '';
+
+    const withoutTags = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!withoutTags) return '';
+
+    if (/not found/i.test(withoutTags)) return 'Not Found';
+    if (/unauthorized/i.test(withoutTags)) return 'Unauthorized';
+    if (/forbidden/i.test(withoutTags)) return 'Forbidden';
+
+    return withoutTags.length > 120 ? `${withoutTags.slice(0, 117)}...` : withoutTags;
+};
+
 const getCompetitionIdentityId = (competition) => {
     if (!competition || typeof competition !== 'object') return '';
     const rawId = competition?.id ?? competition?.competition_id ?? competition?.competitionId;
@@ -2446,7 +2460,7 @@ const Dashboard = () => {
                     } catch (error) {
                         if (!cancelled) {
                             const statusCode = error?.response?.status ?? null;
-                            const responseMessage = getCurriculumResponseMessage(error);
+                            const responseMessage = getCompactCurriculumErrorMessage(error);
                             const details = [
                                 statusCode ? `HTTP ${statusCode}` : '',
                                 responseMessage || '',
