@@ -129,6 +129,7 @@ export const CurriculumDebugPanel = ({ debugState }) => {
   if (!debugState?.hasError) return null;
 
   const competitionFields = debugState?.competitionContext?.fields || {};
+  const hydrationInfo = debugState?.hydrationInfo || {};
   const requestInfo = debugState?.requestInfo || {};
 
   return (
@@ -146,6 +147,9 @@ export const CurriculumDebugPanel = ({ debugState }) => {
       <p className="note" style={{ margin: 0 }}><strong>Render reason:</strong> {debugState?.renderReason || 'unknown'}</p>
       <p className="note" style={{ margin: 0 }}><strong>Competition id:</strong> {debugState?.competitionContext?.id || '(none)'}</p>
       <p className="note" style={{ margin: 0 }}><strong>Competition name:</strong> {debugState?.competitionContext?.name || '(none)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Hydration attempted:</strong> {String(Boolean(hydrationInfo?.attempted))}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Id resolved from code:</strong> {String(Boolean(hydrationInfo?.resolvedFromCode))}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Hydration source:</strong> {hydrationInfo?.source || '(none)'}</p>
       <p className="note" style={{ margin: 0 }}><strong>Curriculum enabled (frontend):</strong> {String(Boolean(debugState?.competitionContext?.curriculumEnabled))}</p>
       <p className="note" style={{ margin: 0 }}><strong>Endpoint URL:</strong> {requestInfo?.endpointUrl || '(not set)'}</p>
       <p className="note" style={{ margin: 0 }}><strong>Request made:</strong> {String(Boolean(requestInfo?.requestMade))}</p>
