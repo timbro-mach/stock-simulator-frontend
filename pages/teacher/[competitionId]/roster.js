@@ -5,6 +5,14 @@ import axios from 'axios';
 import { getApiBaseUrl } from '../../../lib/api';
 import { asPercent, getStoredUsername } from '../../../lib/teacherDashboard';
 
+const buildRosterUrls = (baseUrl, competitionId) => {
+  const encodedId = encodeURIComponent(competitionId);
+  return [
+    `${baseUrl}/curriculum/competition/${encodedId}/instructor/roster`,
+    `${baseUrl}/curriculum/competition/${encodedId}/teacher/roster`,
+  ];
+};
+
 const mapRosterError = (status) => {
   if (status === 401) return 'Please sign in';
   if (status === 403) return 'Instructor access required';
@@ -39,10 +47,26 @@ export default function TeacherRosterPage() {
       setLoading(true);
       setError('');
       try {
-        const response = await axios.get(
-          `${BASE_URL}/curriculum/competition/${encodeURIComponent(competitionId)}/teacher/roster`,
-          { params: { username } },
-        );
+        const rosterUrls = buildRosterUrls(BASE_URL, competitionId);
+        let response = null;
+
+        for (const rosterUrl of rosterUrls) {
+          try {
+            response = await axios.get(rosterUrl, { params: { username } });
+            break;
+          } catch (candidateError) {
+            const status = candidateError?.response?.status;
+            if (status === 404) continue;
+            throw candidateError;
+          }
+        }
+
+        if (!response) {
+          setRows([]);
+          setError(mapRosterError(404));
+          return;
+        }
+
         setRows(Array.isArray(response?.data) ? response.data : (response?.data?.students || []));
       } catch (requestError) {
         const status = requestError?.response?.status;

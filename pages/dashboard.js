@@ -159,6 +159,38 @@ const getCurriculumResponseMessage = (error) => (
     || ''
 );
 
+const normalizeCollectionPayload = (payload, preferredKeys = []) => {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== 'object') return [];
+
+    for (const key of preferredKeys) {
+        if (Array.isArray(payload?.[key])) return payload[key];
+    }
+
+    const fallbackKeys = ['items', 'rows', 'data', 'results', 'students', 'submissions', 'records'];
+    for (const key of fallbackKeys) {
+        if (Array.isArray(payload?.[key])) return payload[key];
+    }
+    return [];
+};
+
+const resolveInstructorSummaryPayload = (payload) => {
+    if (!payload || typeof payload !== 'object') return null;
+    return (
+        payload?.summary
+        || payload?.instructor_summary
+        || payload?.instructorSummary
+        || payload?.gradebook
+        || payload?.grade_book
+        || payload?.data?.summary
+        || payload?.data?.instructor_summary
+        || payload?.data?.instructorSummary
+        || payload?.data?.gradebook
+        || payload?.data?.grade_book
+        || payload
+    );
+};
+
 const getCompetitionIdentityId = (competition) => {
     if (!competition || typeof competition !== 'object') return '';
     const rawId = competition?.id ?? competition?.competition_id ?? competition?.competitionId;
@@ -2492,20 +2524,35 @@ const Dashboard = () => {
                 }
 
                 try {
-                    instructorData = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor-overview')}`))?.data ?? null;
+                    const instructorOverviewEndpoints = [
+                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor-overview')}`,
+                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'teacher-overview')}`,
+                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor/overview')}`,
+                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'teacher/overview')}`,
+                    ];
+                    for (const endpoint of instructorOverviewEndpoints) {
+                        try {
+                            instructorData = (await axios.get(endpoint, { params: { competition_id: selectedCompetitionId } }))?.data ?? null;
+                            if (instructorData) break;
+                        } catch (error) {
+                            const status = error?.response?.status;
+                            if (status === 404) continue;
+                        }
+                    }
                 } catch (error) {
                     instructorData = null;
                 }
                 try {
                     const instructorSubmissionEndpoints = [
                         `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor/submissions')}`,
+                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'teacher/submissions')}`,
                         `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'submissions')}`,
                         `${BASE_URL}/curriculum/submissions`,
                     ];
                     for (const endpoint of instructorSubmissionEndpoints) {
                         try {
                             const response = await axios.get(endpoint, { params: { competition_id: selectedCompetitionId } });
-                            const resolved = response?.data?.submissions || response?.data?.items || response?.data || [];
+                            const resolved = normalizeCollectionPayload(response?.data, ['submissions', 'items']);
                             if (Array.isArray(resolved)) {
                                 instructorSubmissionsData = resolved;
                                 break;
@@ -2521,7 +2568,7 @@ const Dashboard = () => {
 
                 const resolvedModules = Array.isArray(modulesData?.modules) ? modulesData.modules : (Array.isArray(modulesData) ? modulesData : []);
                 const resolvedGradeSummary = gradesData?.grade_summary || gradesData || null;
-                const resolvedInstructorSummary = instructorData?.summary || instructorData || null;
+                const resolvedInstructorSummary = resolveInstructorSummaryPayload(instructorData);
 
                 setCurriculumModules(resolvedModules);
                 setCurriculumGradeSummary(resolvedGradeSummary);
