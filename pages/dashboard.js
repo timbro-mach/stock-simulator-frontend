@@ -822,6 +822,10 @@ const Dashboard = () => {
         selectedCompetitionUpdated: false,
     });
     const [curriculumActionLoading, setCurriculumActionLoading] = useState(false);
+    const [curriculumRefreshTick, setCurriculumRefreshTick] = useState(0);
+    const [curriculumSubmissionState, setCurriculumSubmissionState] = useState({
+        submittedByAssignmentId: {},
+    });
     const [currentUserId, setCurrentUserId] = useState('');
 
     // =========================================
@@ -932,6 +936,10 @@ const Dashboard = () => {
         }
         return 'list payload';
     }, [competitionHydration?.resolvedFromCode, competitionHydration?.source, selectedCompetitionId]);
+
+    useEffect(() => {
+        setCurriculumSubmissionState({ submittedByAssignmentId: {} });
+    }, [selectedCompetitionId]);
 
     useEffect(() => {
         const competitionCode = String(selectedCompetitionCode || '').trim();
@@ -2525,6 +2533,7 @@ const Dashboard = () => {
         selectedCompetitionRecord,
         selectedCompetitionIdSource,
         competitionHydration,
+        curriculumRefreshTick,
         showTrading,
         currentUserId,
         username,
@@ -2534,26 +2543,29 @@ const Dashboard = () => {
     // =========================================
     // Teams & Competitions
     // =========================================
-    const handleOpenCurriculumItem = (item) => {
-        const itemTitle = item?.title || 'item';
-        setTradeMessage(`Opened curriculum item: ${itemTitle}`);
-    };
-
-    const handleSubmitCurriculumItem = async (item) => {
-        if (!selectedCompetitionCode || !item?.id) return;
-        const itemType = String(item?.type || '').toLowerCase();
-        const submitEndpoint = itemType === 'assignment'
-            ? '/curriculum/assignment/submit'
-            : '/curriculum/quiz/submit';
+    const handleSubmitCurriculumItem = async (item, submissionPayload = {}) => {
+        const assignmentId = item?.assignmentId || item?.id;
+        if (!assignmentId) return;
 
         setCurriculumActionLoading(true);
         try {
-            const payload = { username, competition_code: selectedCompetitionCode, item_id: item.id };
-            await axios.post(`${BASE_URL}${submitEndpoint}`, payload);
-            setTradeMessage(`Submitted ${itemType || 'item'}: ${item.title}`);
+            await axios.post(`${BASE_URL}/curriculum/assignments/${encodeURIComponent(assignmentId)}/submissions`, {
+                username,
+                competition_id: selectedCompetitionId,
+                ...submissionPayload,
+            });
+            setCurriculumSubmissionState((previous) => ({
+                ...previous,
+                submittedByAssignmentId: {
+                    ...previous.submittedByAssignmentId,
+                    [assignmentId]: true,
+                },
+            }));
+            setTradeMessage(`Submitted: ${item?.title || 'assignment'}`);
+            setCurriculumRefreshTick((value) => value + 1);
         } catch (error) {
             console.error('Error submitting curriculum item:', error);
-            setTradeMessage(`Could not submit curriculum item: ${item?.title || 'Unknown item'}`);
+            setTradeMessage(`Could not submit assignment: ${item?.title || 'Unknown assignment'}`);
         } finally {
             setCurriculumActionLoading(false);
         }
@@ -3610,9 +3622,9 @@ const Dashboard = () => {
                                     loading={curriculumLoading}
                                     error={curriculumError}
                                     debugState={curriculumDebugState}
-                                    onOpenItem={handleOpenCurriculumItem}
                                     onSubmitItem={handleSubmitCurriculumItem}
                                     actionLoading={curriculumActionLoading}
+                                    submissionState={curriculumSubmissionState}
                                 />
                             )}
                             {curriculumOverview?.curriculum_enabled && (
