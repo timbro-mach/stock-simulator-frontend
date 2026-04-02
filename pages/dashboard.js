@@ -938,6 +938,23 @@ const Dashboard = () => {
         }
         return 'list payload';
     }, [competitionHydration?.resolvedFromCode, competitionHydration?.source, selectedCompetitionId]);
+    const canManageCurriculumGrades = useMemo(() => {
+        if (isAdmin) return true;
+        const possibleOwner = [
+            selectedCompetitionRecord?.organizer_username,
+            selectedCompetitionRecord?.organizer,
+            selectedCompetitionRecord?.owner_username,
+            selectedCompetitionRecord?.owner,
+            selectedCompetitionRecord?.created_by,
+            selectedCompetitionRecord?.creator_username,
+            selectedCompetitionRecord?.instructor_username,
+            selectedCompetitionRecord?.instructor,
+        ]
+            .map((value) => String(value || '').trim().toLowerCase())
+            .filter(Boolean);
+        if (!username) return false;
+        return possibleOwner.includes(String(username).trim().toLowerCase());
+    }, [isAdmin, selectedCompetitionRecord, username]);
 
     useEffect(() => {
         setCurriculumSubmissionState({ submittedByAssignmentId: {} });
@@ -2623,14 +2640,35 @@ const Dashboard = () => {
         setCurriculumRefreshTick((value) => value + 1);
     };
 
-    const handleGradeSubmission = async ({ submission, score }) => {
+    const handleGradeSubmission = async ({ submission, score, question1Score, question2Score, comments }) => {
         const submissionId = submission?.submission_id || submission?.id;
         const assignmentId = submission?.assignment_id || submission?.assignmentId;
-        const effectiveScore = Number(score);
+        const q1 = Number(question1Score);
+        const q2 = Number(question2Score);
+        const hasQ1 = Number.isFinite(q1);
+        const hasQ2 = Number.isFinite(q2);
+        const manualTotal = Number(score);
+        const effectiveScore = Number.isFinite(manualTotal) ? manualTotal : ((hasQ1 ? q1 : 0) + (hasQ2 ? q2 : 0));
         if (!submissionId || !Number.isFinite(effectiveScore)) {
-            setCurriculumInstructorMessage('Enter a valid score before grading.');
+            setCurriculumInstructorMessage('Enter a valid score before grading (total or question scores).');
             return;
         }
+        if ((hasQ1 && (q1 < 0 || q1 > 10)) || (hasQ2 && (q2 < 0 || q2 > 10)) || effectiveScore < 0 || effectiveScore > 20) {
+            setCurriculumInstructorMessage('Scores must be within range (Q1/Q2: 0-10, total: 0-20).');
+            return;
+        }
+        const gradePayload = {
+            competition_id: selectedCompetitionId,
+            score: effectiveScore,
+            grader: username,
+            comments: comments || '',
+            feedback: comments || '',
+            question_1_score: hasQ1 ? q1 : null,
+            question_2_score: hasQ2 ? q2 : null,
+            q1_score: hasQ1 ? q1 : null,
+            q2_score: hasQ2 ? q2 : null,
+            question_scores: hasQ1 || hasQ2 ? { q1: hasQ1 ? q1 : null, q2: hasQ2 ? q2 : null } : undefined,
+        };
         setCurriculumActionLoading(true);
         setCurriculumInstructorMessage('');
         try {
@@ -2638,17 +2676,17 @@ const Dashboard = () => {
                 {
                     method: 'post',
                     url: `${BASE_URL}/curriculum/submissions/${encodeURIComponent(submissionId)}/grade`,
-                    data: { competition_id: selectedCompetitionId, score: effectiveScore, grader: username },
+                    data: gradePayload,
                 },
                 {
                     method: 'post',
                     url: `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `instructor/grade/${encodeURIComponent(submissionId)}`)}`,
-                    data: { score: effectiveScore, grader: username },
+                    data: { ...gradePayload, competition_id: undefined },
                 },
                 {
                     method: 'post',
                     url: `${BASE_URL}/curriculum/assignments/${encodeURIComponent(assignmentId || 'unknown')}/submissions/${encodeURIComponent(submissionId)}/grade`,
-                    data: { competition_id: selectedCompetitionId, score: effectiveScore, grader: username },
+                    data: gradePayload,
                 },
             ]);
             setCurriculumInstructorMessage('Submission graded successfully.');
@@ -3749,7 +3787,7 @@ const Dashboard = () => {
                             {curriculumOverview?.curriculum_enabled && (
                                 <GradeSummaryCard gradeSummary={curriculumGradeSummary} />
                             )}
-                            {isAdmin && curriculumOverview?.curriculum_enabled && (
+                            {canManageCurriculumGrades && curriculumOverview?.curriculum_enabled && (
                                 <InstructorCurriculumPanel
                                     overview={curriculumOverview}
                                     instructorSummary={curriculumInstructorSummary}
