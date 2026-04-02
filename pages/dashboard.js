@@ -2374,7 +2374,10 @@ const Dashboard = () => {
                     return;
                 }
 
-                const effectiveUserId = String(currentUserId || username || '').trim();
+                const parsedCurrentUserId = Number.parseInt(String(currentUserId || '').trim(), 10);
+                const effectiveUserId = Number.isInteger(parsedCurrentUserId) && parsedCurrentUserId > 0
+                    ? String(parsedCurrentUserId)
+                    : '';
                 let modulesData = [];
                 let gradesData = null;
                 let instructorData = null;
