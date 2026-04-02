@@ -401,7 +401,18 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               const moduleDescription = module?.description || 'No description provided.';
               const unlockDate = module?.unlockDate ?? module?.unlock_date;
               const dueDate = module?.dueDate ?? module?.due_date;
-              const lessonContent = module?.lesson_content || module?.lessonContent || module?.content?.lesson_content || module?.content?.lessonContent;
+              const lessonContent = module?.lesson_content
+                || module?.lessonContent
+                || module?.eText
+                || module?.etext
+                || module?.lesson_text
+                || module?.lessonText
+                || module?.content?.lesson_content
+                || module?.content?.lessonContent
+                || module?.content?.eText
+                || module?.content?.etext
+                || module?.content?.lesson_text
+                || module?.content?.lessonText;
               const moduleGrades = getModuleGradeBreakdown(module);
 
               return (
