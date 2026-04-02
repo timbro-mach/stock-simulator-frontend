@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { formatDisplayDate, getLetterGrade, normalizeCurriculumStatus } from '../../lib/curriculum/helpers';
 
 const ENABLE_CURRICULUM_DEBUG = true;
@@ -17,6 +17,43 @@ const progressFill = (value) => ({
   height: '100%',
 });
 
+const getModuleId = (module) => module?.moduleId || module?.id || module?.week_number || module?.weekNumber;
+const getAssignmentId = (assignment) => assignment?.assignmentId || assignment?.id;
+
+const getAssignments = (module) => {
+  if (Array.isArray(module?.assignments)) return module.assignments;
+  if (Array.isArray(module?.items)) return module.items;
+  return [];
+};
+
+const getQuestions = (content) => {
+  if (Array.isArray(content?.questions)) return content.questions;
+  return [];
+};
+
+const getQuestionPrompt = (question) => {
+  if (typeof question === 'string') return question;
+  return question?.prompt || question?.question || question?.text || 'Question';
+};
+
+const getQuestionId = (question, index) => question?.questionId || question?.id || `q-${index}`;
+
+const getChoices = (question) => {
+  if (Array.isArray(question?.choices)) return question.choices;
+  if (Array.isArray(question?.options)) return question.options;
+  return [];
+};
+
+const getChoiceLabel = (choice) => {
+  if (typeof choice === 'string') return choice;
+  return choice?.label || choice?.text || choice?.value || choice?.id || 'Choice';
+};
+
+const getChoiceValue = (choice, index) => {
+  if (typeof choice === 'string') return choice;
+  return choice?.value || choice?.id || choice?.label || `choice-${index}`;
+};
+
 export const CurriculumSummaryCard = ({ overview }) => {
   if (!overview?.curriculum_enabled) return null;
 
@@ -30,10 +67,107 @@ export const CurriculumSummaryCard = ({ overview }) => {
   );
 };
 
-export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradesMessage, loading, error, debugState, onOpenItem, onSubmitItem, actionLoading }) => {
+const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem, submittedMap }) => {
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [writtenAnswers, setWrittenAnswers] = useState({});
+  const assignmentType = String(assignment?.type || '').toLowerCase();
+  const assignmentId = getAssignmentId(assignment);
+  const questions = getQuestions(assignment?.content);
+  const submitted = Boolean(submittedMap?.[assignmentId]) || String(assignment?.status || '').toLowerCase() === 'submitted';
+
+  const payload = useMemo(() => {
+    if (assignmentType === 'assignment') {
+      return {
+        answers: questions.map((question, index) => ({
+          questionId: getQuestionId(question, index),
+          response: writtenAnswers[getQuestionId(question, index)] || '',
+        })),
+      };
+    }
+
+    return {
+      answers: questions.map((question, index) => ({
+        questionId: getQuestionId(question, index),
+        selectedChoice: quizAnswers[getQuestionId(question, index)] || '',
+      })),
+    };
+  }, [assignmentType, questions, quizAnswers, writtenAnswers]);
+
+  return (
+    <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 10 }}>
+      <p className="note" style={{ margin: 0 }}>
+        <strong>{assignment?.title || 'Untitled assignment'}</strong> • {assignmentType || 'unknown'} • {assignment?.points ?? 0} pts • {normalizeCurriculumStatus(assignment?.status)}
+      </p>
+      {submitted ? <p className="note" style={{ color: '#15803d', marginTop: 8, marginBottom: 0 }}>Submitted</p> : null}
+      <p className="note" style={{ marginTop: 8, marginBottom: 4 }}><strong>Instructions</strong></p>
+      <p className="note" style={{ marginTop: 0 }}>{assignment?.content?.instructions || 'No instructions provided.'}</p>
+
+      <div style={{ display: 'grid', gap: 8 }}>
+        {questions.map((question, questionIndex) => {
+          const questionId = getQuestionId(question, questionIndex);
+          const prompt = getQuestionPrompt(question);
+
+          if (assignmentType === 'assignment') {
+            return (
+              <div key={questionId}>
+                <p className="note" style={{ marginBottom: 4 }}><strong>Prompt {questionIndex + 1}:</strong> {prompt}</p>
+                <textarea
+                  rows={4}
+                  value={writtenAnswers[questionId] || ''}
+                  onChange={(event) => setWrittenAnswers((previous) => ({ ...previous, [questionId]: event.target.value }))}
+                  style={{ width: '100%' }}
+                  disabled={moduleLocked || actionLoading}
+                  placeholder="Write your response here..."
+                />
+              </div>
+            );
+          }
+
+          const choices = getChoices(question);
+          return (
+            <div key={questionId}>
+              <p className="note" style={{ marginBottom: 4 }}><strong>Question {questionIndex + 1}:</strong> {prompt}</p>
+              <div style={{ display: 'grid', gap: 4 }}>
+                {choices.map((choice, choiceIndex) => {
+                  const choiceValue = getChoiceValue(choice, choiceIndex);
+                  const choiceLabel = getChoiceLabel(choice);
+                  return (
+                    <label key={`${questionId}-${choiceValue}`} className="note" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        type="radio"
+                        name={`${assignmentId}-${questionId}`}
+                        value={choiceValue}
+                        checked={quizAnswers[questionId] === choiceValue}
+                        onChange={() => setQuizAnswers((previous) => ({ ...previous, [questionId]: choiceValue }))}
+                        disabled={moduleLocked || actionLoading}
+                      />
+                      <span>{choiceLabel}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <button
+          onClick={() => onSubmitItem(assignment, payload)}
+          disabled={moduleLocked || actionLoading || !assignmentId}
+        >
+          Submit
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradesMessage, loading, error, debugState, onSubmitItem, actionLoading, submissionState }) => {
   if (!overview?.curriculum_enabled) return null;
   const percentage = Number(gradeSummary?.percentage ?? overview?.grade_percentage ?? 0);
   const letter = gradeSummary?.letter_grade || getLetterGrade(percentage);
+  const [expandedModuleId, setExpandedModuleId] = useState(null);
 
   return (
     <div className="card section">
@@ -55,27 +189,45 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
           </p>
 
           <div className="section" style={{ display: 'grid', gap: 12 }}>
-            {Array.isArray(modules) && modules.length > 0 ? modules.map((module) => (
-              <div key={module.id || module.week_number} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
-                <p className="em" style={{ marginBottom: 6 }}>Week {module.week_number}: {module.title}</p>
-                <p className="note">{module.description || 'No description provided.'}</p>
-                <p className="note">Unlocks: {formatDisplayDate(module.unlock_date)} • Due: {formatDisplayDate(module.due_date)}</p>
-                <p className="note">Status: {module.locked ? 'Locked' : 'Unlocked'}</p>
-                <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-                  {(module.items || []).map((item) => (
-                    <div key={item.id || item.title} style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 8 }}>
-                      <p className="note" style={{ margin: 0 }}>
-                        <strong>{item.title}</strong> • {item.points ?? 0} pts • {normalizeCurriculumStatus(item.status)}
-                      </p>
-                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                        <button onClick={() => onOpenItem(item)} disabled={module.locked || actionLoading}>Open</button>
-                        <button onClick={() => onSubmitItem(item)} disabled={module.locked || actionLoading}>Submit</button>
-                      </div>
+            {Array.isArray(modules) && modules.length > 0 ? modules.map((module) => {
+              const moduleId = getModuleId(module);
+              const assignments = getAssignments(module);
+              const isExpanded = expandedModuleId === moduleId;
+              const moduleTitle = module?.title || 'Untitled module';
+              const weekNumber = module?.weekNumber ?? module?.week_number;
+              const moduleDescription = module?.description || 'No description provided.';
+              const unlockDate = module?.unlockDate ?? module?.unlock_date;
+              const dueDate = module?.dueDate ?? module?.due_date;
+
+              return (
+                <div key={moduleId} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
+                  <button
+                    style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 0, padding: 0, cursor: 'pointer' }}
+                    onClick={() => setExpandedModuleId(isExpanded ? null : moduleId)}
+                  >
+                    <p className="em" style={{ marginBottom: 6 }}>Week {weekNumber}: {moduleTitle}</p>
+                    <p className="note">{moduleDescription}</p>
+                    <p className="note">Unlocks: {formatDisplayDate(unlockDate)} • Due: {formatDisplayDate(dueDate)}</p>
+                    <p className="note" style={{ marginBottom: 0 }}>Status: {module?.locked ? 'Locked' : 'Unlocked'} • {assignments.length} assignments • {isExpanded ? 'Click to collapse' : 'Click to open module'}</p>
+                  </button>
+
+                  {isExpanded ? (
+                    <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                      {assignments.length > 0 ? assignments.map((assignment) => (
+                        <AssignmentCard
+                          key={getAssignmentId(assignment) || assignment?.title}
+                          assignment={assignment}
+                          moduleLocked={module?.locked}
+                          actionLoading={actionLoading}
+                          onSubmitItem={onSubmitItem}
+                          submittedMap={submissionState?.submittedByAssignmentId}
+                        />
+                      )) : <p className="note">No assignments in this module yet.</p>}
                     </div>
-                  ))}
+                  ) : null}
                 </div>
-              </div>
-            )) : <p className="note">Curriculum modules are still generating.</p>}
+              );
+            }) : <p className="note">Curriculum modules are still generating.</p>}
           </div>
         </>
       )}
