@@ -19,6 +19,24 @@ const parseStudentResponse = (payload) => {
   };
 };
 
+const buildStudentDetailUrls = (baseUrl, competitionId, studentId) => {
+  const encodedCompetitionId = encodeURIComponent(competitionId);
+  const encodedStudentId = encodeURIComponent(studentId);
+  return [
+    `${baseUrl}/curriculum/competition/${encodedCompetitionId}/instructor/students/${encodedStudentId}`,
+    `${baseUrl}/curriculum/competition/${encodedCompetitionId}/teacher/students/${encodedStudentId}`,
+  ];
+};
+
+const buildStudentTradesUrls = (baseUrl, competitionId, studentId) => {
+  const encodedCompetitionId = encodeURIComponent(competitionId);
+  const encodedStudentId = encodeURIComponent(studentId);
+  return [
+    `${baseUrl}/curriculum/competition/${encodedCompetitionId}/instructor/students/${encodedStudentId}/trades`,
+    `${baseUrl}/curriculum/competition/${encodedCompetitionId}/teacher/students/${encodedStudentId}/trades`,
+  ];
+};
+
 const mapValidationMessage = (message) => {
   const normalized = String(message || '').toLowerCase();
   const whitelist = [
@@ -59,10 +77,25 @@ export default function TeacherStudentDetailPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await axios.get(
-        `${BASE_URL}/curriculum/competition/${encodeURIComponent(competitionId)}/teacher/students/${encodeURIComponent(studentId)}`,
-        { params: { username: activeUsername } },
-      );
+      const detailUrls = buildStudentDetailUrls(BASE_URL, competitionId, studentId);
+      let response = null;
+
+      for (const detailUrl of detailUrls) {
+        try {
+          response = await axios.get(detailUrl, { params: { username: activeUsername } });
+          break;
+        } catch (candidateError) {
+          const status = candidateError?.response?.status;
+          if (status === 404) continue;
+          throw candidateError;
+        }
+      }
+
+      if (!response) {
+        setError('Curriculum is not enabled for this competition');
+        return;
+      }
+
       const parsed = parseStudentResponse(response?.data);
       setStudent(parsed.student);
       setGradeSummary(parsed.gradeSummary);
@@ -155,10 +188,25 @@ export default function TeacherStudentDetailPage() {
     setTradesError('');
 
     try {
-      const response = await axios.get(
-        `${BASE_URL}/curriculum/competition/${encodeURIComponent(competitionId)}/teacher/students/${encodeURIComponent(studentId)}/trades`,
-        { params: { username } },
-      );
+      const tradesUrls = buildStudentTradesUrls(BASE_URL, competitionId, studentId);
+      let response = null;
+
+      for (const tradesUrl of tradesUrls) {
+        try {
+          response = await axios.get(tradesUrl, { params: { username } });
+          break;
+        } catch (candidateError) {
+          const status = candidateError?.response?.status;
+          if (status === 404) continue;
+          throw candidateError;
+        }
+      }
+
+      if (!response) {
+        setTrades([]);
+        return;
+      }
+
       const rows = Array.isArray(response?.data) ? response.data : (response?.data?.trades || []);
       setTrades(rows);
     } catch (requestError) {
