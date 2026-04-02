@@ -100,9 +100,40 @@ const toBooleanFlag = (value) => {
 
 const normalizeCurriculumOverview = (overview) => {
     const source = overview && typeof overview === 'object' ? overview : {};
+    const enabledCandidates = [
+        { key: 'enabled', value: source?.enabled },
+        { key: 'curriculum_enabled', value: source?.curriculum_enabled },
+        { key: 'curriculumEnabled', value: source?.curriculumEnabled },
+    ];
+    const enabledCandidate = enabledCandidates.find((candidate) => candidate.value !== undefined && candidate.value !== null);
+    const parsedEnabled = enabledCandidate
+        ? toBooleanFlag(enabledCandidate.value)
+        : toBooleanFlag(source?.enabled ?? source?.curriculum_enabled ?? source?.curriculumEnabled);
+    const hasCurriculumId = source?.curriculum_id !== undefined
+        ? source?.curriculum_id !== null && String(source?.curriculum_id).trim() !== ''
+        : source?.curriculumId !== null && source?.curriculumId !== undefined && String(source?.curriculumId).trim() !== '';
+    const curriculumEnabled = parsedEnabled || hasCurriculumId;
+
     return {
         ...source,
-        curriculum_enabled: toBooleanFlag(source?.curriculum_enabled),
+        curriculum_enabled: curriculumEnabled,
+        curriculumEnabled: curriculumEnabled,
+        enabled: source?.enabled ?? source?.curriculum_enabled ?? source?.curriculumEnabled ?? null,
+        enabled_source_key: enabledCandidate?.key || (hasCurriculumId ? 'curriculumId-derived' : ''),
+        competition_id: source?.competition_id ?? source?.competitionId ?? null,
+        competitionId: source?.competitionId ?? source?.competition_id ?? null,
+        curriculum_id: source?.curriculum_id ?? source?.curriculumId ?? null,
+        curriculumId: source?.curriculumId ?? source?.curriculum_id ?? null,
+        curriculum_weeks: source?.curriculum_weeks ?? source?.totalWeeks ?? null,
+        totalWeeks: source?.totalWeeks ?? source?.curriculum_weeks ?? null,
+        curriculum_start_date: source?.curriculum_start_date ?? source?.startDate ?? null,
+        startDate: source?.startDate ?? source?.curriculum_start_date ?? null,
+        curriculum_end_date: source?.curriculum_end_date ?? source?.endDate ?? null,
+        endDate: source?.endDate ?? source?.curriculum_end_date ?? null,
+        module_count: source?.module_count ?? source?.moduleCount ?? null,
+        moduleCount: source?.moduleCount ?? source?.module_count ?? null,
+        assignment_count: source?.assignment_count ?? source?.assignmentCount ?? null,
+        assignmentCount: source?.assignmentCount ?? source?.assignment_count ?? null,
     };
 };
 
@@ -2265,10 +2296,13 @@ const Dashboard = () => {
                     competitionContext: {
                         ...previous.competitionContext,
                         curriculumEnabled: normalizedOverview.curriculum_enabled,
+                        parsedEnabledValue: normalizedOverview.curriculum_enabled,
+                        parsedEnabledSourceKey: normalizedOverview.enabled_source_key || '(none)',
                     },
                     requestInfo: {
                         ...previous.requestInfo,
                         httpStatus: overviewResponse?.status ?? null,
+                        rawOverviewBody: overview,
                     },
                 }));
 
