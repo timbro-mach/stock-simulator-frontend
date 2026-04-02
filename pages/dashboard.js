@@ -2610,19 +2610,37 @@ const Dashboard = () => {
 
         setCurriculumActionLoading(true);
         try {
-            await axios.post(`${BASE_URL}/curriculum/assignments/${encodeURIComponent(assignmentId)}/submissions`, {
+            const response = await axios.post(`${BASE_URL}/curriculum/assignments/${encodeURIComponent(assignmentId)}/submissions`, {
                 username,
                 competition_id: selectedCompetitionId,
                 ...submissionPayload,
             });
+            const immediateResult = response?.data || {};
+            const immediateStatus = immediateResult?.status || immediateResult?.gradingStatus;
             setCurriculumSubmissionState((previous) => ({
                 ...previous,
                 submittedByAssignmentId: {
                     ...previous.submittedByAssignmentId,
                     [assignmentId]: true,
                 },
+                lastSubmissionResult: {
+                    assignmentId,
+                    score: immediateResult?.score ?? null,
+                    pointsEarned: immediateResult?.pointsEarned ?? immediateResult?.points_earned ?? null,
+                    pointsPossible: immediateResult?.pointsPossible ?? immediateResult?.points_possible ?? null,
+                    percentage: immediateResult?.percentage ?? null,
+                    status: immediateStatus ?? null,
+                    feedback: immediateResult?.feedback ?? null,
+                },
             }));
-            setTradeMessage(`Submitted: ${item?.title || 'assignment'}`);
+            const immediateScoreLabel = immediateResult?.score !== undefined && immediateResult?.score !== null
+                ? ` score ${immediateResult.score}`
+                : '';
+            const immediatePercentageLabel = immediateResult?.percentage !== undefined && immediateResult?.percentage !== null
+                ? ` (${Number(immediateResult.percentage).toFixed(1)}%)`
+                : '';
+            const immediateStatusLabel = immediateStatus ? ` • ${String(immediateStatus)}` : '';
+            setTradeMessage(`Submitted: ${item?.title || 'assignment'}${immediateScoreLabel}${immediatePercentageLabel}${immediateStatusLabel}`);
             setCurriculumRefreshTick((value) => value + 1);
         } catch (error) {
             console.error('Error submitting curriculum item:', error);
@@ -3774,6 +3792,14 @@ const Dashboard = () => {
                                     >
                                         📒 Open Trade Blotter
                                     </button>
+                                    {canManageCurriculumGrades && selectedCompetitionId ? (
+                                        <Link
+                                            href={`/teacher/${encodeURIComponent(selectedCompetitionId)}/roster`}
+                                            style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
+                                        >
+                                            <button type="button" disabled={isLoading}>🧑‍🏫 Teacher Dashboard</button>
+                                        </Link>
+                                    ) : null}
                                 </div>
                                 <button className="logout-button" onClick={handleLogout} disabled={isLoading}>
                                     Logout
