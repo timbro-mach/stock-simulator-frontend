@@ -20,6 +20,10 @@ import {
     getCanonicalCompetitionId,
     getCompetitionCode,
 } from '../lib/curriculum/competitionId';
+import {
+    canManageCurriculumGradesForCompetition,
+    normalizeAssignmentIdKey,
+} from '../lib/curriculum/submission';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -824,6 +828,8 @@ const Dashboard = () => {
     const [curriculumRefreshTick, setCurriculumRefreshTick] = useState(0);
     const [curriculumSubmissionState, setCurriculumSubmissionState] = useState({
         submittedByAssignmentId: {},
+        byAssignmentId: {},
+        latestMessage: '',
     });
     const [curriculumInstructorSubmissions, setCurriculumInstructorSubmissions] = useState([]);
     const [curriculumInstructorMessage, setCurriculumInstructorMessage] = useState('');
@@ -938,25 +944,19 @@ const Dashboard = () => {
         return 'list payload';
     }, [competitionHydration?.resolvedFromCode, competitionHydration?.source, selectedCompetitionId]);
     const canManageCurriculumGrades = useMemo(() => {
-        if (isAdmin) return true;
-        const possibleOwner = [
-            selectedCompetitionRecord?.organizer_username,
-            selectedCompetitionRecord?.organizer,
-            selectedCompetitionRecord?.owner_username,
-            selectedCompetitionRecord?.owner,
-            selectedCompetitionRecord?.created_by,
-            selectedCompetitionRecord?.creator_username,
-            selectedCompetitionRecord?.instructor_username,
-            selectedCompetitionRecord?.instructor,
-        ]
-            .map((value) => String(value || '').trim().toLowerCase())
-            .filter(Boolean);
-        if (!username) return false;
-        return possibleOwner.includes(String(username).trim().toLowerCase());
+        return canManageCurriculumGradesForCompetition({
+            isAdmin,
+            username,
+            competitionRecord: selectedCompetitionRecord,
+        });
     }, [isAdmin, selectedCompetitionRecord, username]);
 
     useEffect(() => {
-        setCurriculumSubmissionState({ submittedByAssignmentId: {} });
+        setCurriculumSubmissionState({
+            submittedByAssignmentId: {},
+            byAssignmentId: {},
+            latestMessage: '',
+        });
     }, [selectedCompetitionId]);
 
     useEffect(() => {
@@ -2605,9 +2605,20 @@ const Dashboard = () => {
     // Teams & Competitions
     // =========================================
     const handleSubmitCurriculumItem = async (item, submissionPayload = {}) => {
-        const assignmentId = item?.assignmentId || item?.id;
+        const assignmentId = normalizeAssignmentIdKey(item?.assignmentId || item?.id);
         if (!assignmentId) return;
 
+        setCurriculumSubmissionState((previous) => ({
+            ...previous,
+            byAssignmentId: {
+                ...(previous.byAssignmentId || {}),
+                [assignmentId]: {
+                    status: 'loading',
+                    message: 'Submitting assignment...',
+                    result: null,
+                },
+            },
+        }));
         setCurriculumActionLoading(true);
         try {
             const response = await axios.post(`${BASE_URL}/curriculum/assignments/${encodeURIComponent(assignmentId)}/submissions`, {
@@ -2617,12 +2628,29 @@ const Dashboard = () => {
             });
             const immediateResult = response?.data || {};
             const immediateStatus = immediateResult?.status || immediateResult?.gradingStatus;
+            const successMessage = `Submitted: ${item?.title || 'assignment'}${immediateStatus ? ` • ${String(immediateStatus)}` : ''}`;
             setCurriculumSubmissionState((previous) => ({
                 ...previous,
                 submittedByAssignmentId: {
                     ...previous.submittedByAssignmentId,
                     [assignmentId]: true,
                 },
+                byAssignmentId: {
+                    ...(previous.byAssignmentId || {}),
+                    [assignmentId]: {
+                        status: 'success',
+                        message: successMessage,
+                        result: {
+                            score: immediateResult?.score ?? null,
+                            pointsEarned: immediateResult?.pointsEarned ?? immediateResult?.points_earned ?? null,
+                            pointsPossible: immediateResult?.pointsPossible ?? immediateResult?.points_possible ?? null,
+                            percentage: immediateResult?.percentage ?? null,
+                            status: immediateStatus ?? null,
+                            feedback: immediateResult?.feedback ?? null,
+                        },
+                    },
+                },
+                latestMessage: successMessage,
                 lastSubmissionResult: {
                     assignmentId,
                     score: immediateResult?.score ?? null,
@@ -2633,18 +2661,22 @@ const Dashboard = () => {
                     feedback: immediateResult?.feedback ?? null,
                 },
             }));
-            const immediateScoreLabel = immediateResult?.score !== undefined && immediateResult?.score !== null
-                ? ` score ${immediateResult.score}`
-                : '';
-            const immediatePercentageLabel = immediateResult?.percentage !== undefined && immediateResult?.percentage !== null
-                ? ` (${Number(immediateResult.percentage).toFixed(1)}%)`
-                : '';
-            const immediateStatusLabel = immediateStatus ? ` • ${String(immediateStatus)}` : '';
-            setTradeMessage(`Submitted: ${item?.title || 'assignment'}${immediateScoreLabel}${immediatePercentageLabel}${immediateStatusLabel}`);
             setCurriculumRefreshTick((value) => value + 1);
         } catch (error) {
             console.error('Error submitting curriculum item:', error);
-            setTradeMessage(`Could not submit assignment: ${item?.title || 'Unknown assignment'}`);
+            const errorMessage = getApiErrorMessage(error, `Could not submit assignment: ${item?.title || 'Unknown assignment'}`);
+            setCurriculumSubmissionState((previous) => ({
+                ...previous,
+                byAssignmentId: {
+                    ...(previous.byAssignmentId || {}),
+                    [assignmentId]: {
+                        status: 'error',
+                        message: errorMessage,
+                        result: null,
+                    },
+                },
+                latestMessage: errorMessage,
+            }));
         } finally {
             setCurriculumActionLoading(false);
         }
