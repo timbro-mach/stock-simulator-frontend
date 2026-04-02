@@ -20,6 +20,27 @@ const mapRosterError = (status) => {
   return 'Unable to load roster.';
 };
 
+const parseRosterResponse = (payload) => {
+  if (Array.isArray(payload)) {
+    return {
+      rows: payload,
+      isInstructor: true,
+    };
+  }
+
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const rows = Array.isArray(source.roster)
+    ? source.roster
+    : Array.isArray(source.students)
+      ? source.students
+      : [];
+
+  return {
+    rows,
+    isInstructor: source.is_instructor_for_competition ?? source.isInstructorForCompetition ?? true,
+  };
+};
+
 export default function TeacherRosterPage() {
   const router = useRouter();
   const { competitionId } = router.query;
@@ -67,7 +88,12 @@ export default function TeacherRosterPage() {
           return;
         }
 
-        setRows(Array.isArray(response?.data) ? response.data : (response?.data?.students || []));
+        const parsed = parseRosterResponse(response?.data);
+        if (!parsed.isInstructor) {
+          router.replace('/not-authorized');
+          return;
+        }
+        setRows(parsed.rows);
       } catch (requestError) {
         const status = requestError?.response?.status;
         if (status === 403) {
