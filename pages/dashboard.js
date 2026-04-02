@@ -801,6 +801,7 @@ const Dashboard = () => {
     const [curriculumInstructorSummary, setCurriculumInstructorSummary] = useState(null);
     const [curriculumLoading, setCurriculumLoading] = useState(false);
     const [curriculumError, setCurriculumError] = useState('');
+    const [curriculumGradesMessage, setCurriculumGradesMessage] = useState('');
     const [curriculumDebugState, setCurriculumDebugState] = useState({
         hasError: false,
         renderReason: '',
@@ -2194,6 +2195,7 @@ const Dashboard = () => {
             setCurriculumGradeSummary(null);
             setCurriculumInstructorSummary(null);
             setCurriculumError('');
+            setCurriculumGradesMessage('');
             setCurriculumDebugState({
                 hasError: !selectedCompetitionCode,
                 renderReason: !selectedCompetitionCode ? 'competition not selected' : '',
@@ -2220,6 +2222,11 @@ const Dashboard = () => {
                     requestMade: false,
                     httpStatus: null,
                     responseMessage: '',
+                    requestStatus: {
+                        overview: { attempted: false, ok: false, status: null, message: '' },
+                        modules: { attempted: false, ok: false, status: null, message: '' },
+                        grades: { attempted: false, ok: false, status: null, message: '' },
+                    },
                 },
             });
             return;
@@ -2229,6 +2236,7 @@ const Dashboard = () => {
         const fetchCurriculumData = async () => {
             setCurriculumLoading(true);
             setCurriculumError('');
+            setCurriculumGradesMessage('');
             const baseDebugState = {
                 hasError: false,
                 renderReason: '',
@@ -2255,6 +2263,11 @@ const Dashboard = () => {
                     requestMade: false,
                     httpStatus: null,
                     responseMessage: '',
+                    requestStatus: {
+                        overview: { attempted: false, ok: false, status: null, message: '' },
+                        modules: { attempted: false, ok: false, status: null, message: '' },
+                        grades: { attempted: false, ok: false, status: null, message: '' },
+                    },
                 },
             };
             setCurriculumDebugState(baseDebugState);
@@ -2283,6 +2296,10 @@ const Dashboard = () => {
                         ...previous.requestInfo,
                         endpointUrl: overviewUrl,
                         requestMade: true,
+                        requestStatus: {
+                            ...previous.requestInfo?.requestStatus,
+                            overview: { attempted: true, ok: false, status: null, message: '' },
+                        },
                     },
                 }));
                 const overviewResponse = await axios.get(overviewUrl);
@@ -2303,6 +2320,15 @@ const Dashboard = () => {
                         ...previous.requestInfo,
                         httpStatus: overviewResponse?.status ?? null,
                         rawOverviewBody: overview,
+                        requestStatus: {
+                            ...previous.requestInfo?.requestStatus,
+                            overview: {
+                                attempted: true,
+                                ok: true,
+                                status: overviewResponse?.status ?? null,
+                                message: '',
+                            },
+                        },
                     },
                 }));
 
@@ -2325,7 +2351,25 @@ const Dashboard = () => {
                 let instructorData = null;
 
                 try {
-                    modulesData = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`))?.data ?? [];
+                    const modulesResponse = await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`);
+                    modulesData = modulesResponse?.data ?? [];
+                    if (!cancelled) {
+                        setCurriculumDebugState((previous) => ({
+                            ...previous,
+                            requestInfo: {
+                                ...previous.requestInfo,
+                                requestStatus: {
+                                    ...previous.requestInfo?.requestStatus,
+                                    modules: {
+                                        attempted: true,
+                                        ok: true,
+                                        status: modulesResponse?.status ?? null,
+                                        message: '',
+                                    },
+                                },
+                            },
+                        }));
+                    }
                 } catch (error) {
                     if (!cancelled) {
                         setCurriculumDebugState((previous) => ({
@@ -2334,35 +2378,79 @@ const Dashboard = () => {
                             renderReason: 'modules request failed',
                             requestInfo: {
                                 ...previous.requestInfo,
-                                httpStatus: error?.response?.status ?? null,
-                                responseMessage: getCurriculumResponseMessage(error),
+                                requestStatus: {
+                                    ...previous.requestInfo?.requestStatus,
+                                    modules: {
+                                        attempted: true,
+                                        ok: false,
+                                        status: error?.response?.status ?? null,
+                                        message: getCurriculumResponseMessage(error),
+                                    },
+                                },
                             },
                         }));
                     }
-                    throw error;
                 }
 
                 if (effectiveUserId) {
                     try {
-                        gradesData = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`))?.data ?? null;
-                    } catch (error) {
+                        const gradesResponse = await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`);
+                        gradesData = gradesResponse?.data ?? null;
                         if (!cancelled) {
                             setCurriculumDebugState((previous) => ({
                                 ...previous,
-                                hasError: true,
-                                renderReason: 'grades request failed',
                                 requestInfo: {
                                     ...previous.requestInfo,
-                                    httpStatus: error?.response?.status ?? null,
-                                    responseMessage: getCurriculumResponseMessage(error),
+                                    requestStatus: {
+                                        ...previous.requestInfo?.requestStatus,
+                                        grades: {
+                                            attempted: true,
+                                            ok: true,
+                                            status: gradesResponse?.status ?? null,
+                                            message: '',
+                                        },
+                                    },
                                 },
                             }));
                         }
-                        throw error;
+                    } catch (error) {
+                        if (!cancelled) {
+                            setCurriculumGradesMessage('Grades are temporarily unavailable.');
+                            setCurriculumDebugState((previous) => ({
+                                ...previous,
+                                requestInfo: {
+                                    ...previous.requestInfo,
+                                    requestStatus: {
+                                        ...previous.requestInfo?.requestStatus,
+                                        grades: {
+                                            attempted: true,
+                                            ok: false,
+                                            status: error?.response?.status ?? null,
+                                            message: getCurriculumResponseMessage(error),
+                                        },
+                                    },
+                                },
+                            }));
+                        }
                     }
+                } else if (!cancelled) {
+                    setCurriculumDebugState((previous) => ({
+                        ...previous,
+                        requestInfo: {
+                            ...previous.requestInfo,
+                            requestStatus: {
+                                ...previous.requestInfo?.requestStatus,
+                                grades: { attempted: false, ok: false, status: null, message: 'skipped (no user id)' },
+                            },
+                        },
+                    }));
                 }
 
-                instructorData = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor-overview')}`))?.data ?? null;
+                try {
+                    instructorData = (await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor-overview')}`))?.data ?? null;
+                } catch (error) {
+                    instructorData = null;
+                }
                 if (cancelled) return;
 
                 const resolvedModules = Array.isArray(modulesData?.modules) ? modulesData.modules : (Array.isArray(modulesData) ? modulesData : []);
@@ -2376,12 +2464,23 @@ const Dashboard = () => {
                 if (resolvedModules.length === 0 && !resolvedGradeSummary && !resolvedInstructorSummary) {
                     setCurriculumError(`Curriculum is enabled, but no curriculum records were returned yet for competition_id=${selectedCompetitionId}.`);
                 }
-                setCurriculumDebugState((previous) => ({ ...previous, hasError: false, renderReason: '' }));
+                setCurriculumDebugState((previous) => {
+                    const moduleRequestFailed = previous?.requestInfo?.requestStatus?.modules?.attempted
+                        && !previous?.requestInfo?.requestStatus?.modules?.ok;
+                    const gradesRequestFailed = previous?.requestInfo?.requestStatus?.grades?.attempted
+                        && !previous?.requestInfo?.requestStatus?.grades?.ok;
+                    return {
+                        ...previous,
+                        hasError: moduleRequestFailed || gradesRequestFailed,
+                        renderReason: moduleRequestFailed ? 'modules request failed' : (gradesRequestFailed ? 'grades request failed (non-fatal)' : ''),
+                    };
+                });
             } catch (error) {
                 if (cancelled) return;
                 setCurriculumModules([]);
                 setCurriculumGradeSummary(null);
                 setCurriculumInstructorSummary(null);
+                setCurriculumGradesMessage('');
                 setCurriculumError(getApiErrorMessage(error, 'Unable to load curriculum data right now.'));
                 const statusCode = error?.response?.status ?? null;
                 const reasonByStatus = statusCode === 404
@@ -2397,6 +2496,17 @@ const Dashboard = () => {
                         ...previous.requestInfo,
                         httpStatus: statusCode,
                         responseMessage: getCurriculumResponseMessage(error),
+                        requestStatus: {
+                            ...previous.requestInfo?.requestStatus,
+                            overview: previous.requestInfo?.requestStatus?.overview?.attempted
+                                ? {
+                                    ...previous.requestInfo?.requestStatus?.overview,
+                                    ok: false,
+                                    status: statusCode,
+                                    message: getCurriculumResponseMessage(error),
+                                }
+                                : previous.requestInfo?.requestStatus?.overview,
+                        },
                     },
                 }));
             } finally {
@@ -3496,6 +3606,7 @@ const Dashboard = () => {
                                     overview={curriculumOverview}
                                     modules={curriculumModules}
                                     gradeSummary={curriculumGradeSummary}
+                                    gradesMessage={curriculumGradesMessage}
                                     loading={curriculumLoading}
                                     error={curriculumError}
                                     debugState={curriculumDebugState}
