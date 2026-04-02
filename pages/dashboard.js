@@ -125,6 +125,14 @@ const getCurriculumResponseMessage = (error) => (
     || ''
 );
 
+const getCompetitionIdentityId = (competition) => {
+    if (!competition || typeof competition !== 'object') return '';
+    const rawId = competition?.id ?? competition?.competition_id;
+    const parsed = String(rawId ?? '').trim();
+    if (parsed) return parsed;
+    return getCanonicalCompetitionId(competition);
+};
+
 const normalizeCompetitionEntry = (competition) => {
     const code = String(
         competition?.code
@@ -150,7 +158,7 @@ const normalizeCompetitionEntry = (competition) => {
     return {
         ...competition,
         code,
-        competition_id: getCanonicalCompetitionId(competition),
+        competition_id: getCompetitionIdentityId(competition),
         name,
         featured: Boolean(featuredRaw),
         is_open: isOpenRaw === undefined || isOpenRaw === null ? true : Boolean(isOpenRaw),
@@ -751,6 +759,7 @@ const Dashboard = () => {
         attempted: false,
         resolvedFromCode: false,
         source: '',
+        idSource: '',
         record: null,
     });
     const [curriculumActionLoading, setCurriculumActionLoading] = useState(false);
@@ -847,6 +856,13 @@ const Dashboard = () => {
         selectedCompetitionCode,
         teamCompetitionAccounts,
     ]);
+    const selectedCompetitionIdSource = useMemo(() => {
+        if (!selectedCompetitionId) return 'missing';
+        if (competitionHydration?.resolvedFromCode && competitionHydration?.source === 'by-code') {
+            return 'by-code hydration';
+        }
+        return 'list payload';
+    }, [competitionHydration?.resolvedFromCode, competitionHydration?.source, selectedCompetitionId]);
 
     useEffect(() => {
         const competitionCode = String(selectedCompetitionCode || '').trim();
@@ -856,19 +872,21 @@ const Dashboard = () => {
                 attempted: false,
                 resolvedFromCode: false,
                 source: '',
+                idSource: '',
                 record: null,
             });
             return;
         }
 
         if (selectedCompetitionId) {
-            setCompetitionHydration((previous) => ({
+            setCompetitionHydration({
                 code: competitionCode,
-                attempted: previous?.code === competitionCode ? previous.attempted : false,
-                resolvedFromCode: previous?.code === competitionCode ? previous.resolvedFromCode : false,
-                source: previous?.code === competitionCode ? previous.source : '',
+                attempted: false,
+                resolvedFromCode: false,
+                source: 'direct',
+                idSource: 'list payload',
                 record: null,
-            }));
+            });
             return;
         }
 
@@ -886,6 +904,7 @@ const Dashboard = () => {
                         attempted: true,
                         resolvedFromCode: true,
                         source: 'local-cache',
+                        idSource: 'list payload',
                         record: localMatch,
                     });
                 }
@@ -896,37 +915,29 @@ const Dashboard = () => {
                 code: competitionCode,
                 attempted: true,
                 resolvedFromCode: false,
-                source: 'remote-fetch',
+                source: 'by-code',
+                idSource: '',
                 record: null,
             });
 
-            const endpointCandidates = isAdmin
-                ? [`${BASE_URL}/admin/competitions?admin_username=${username}`]
-                : [`${BASE_URL}/competitions`, `${BASE_URL}/featured_competitions`];
+            try {
+                const response = await axios.get(`${BASE_URL}/competition/by_code/${encodeURIComponent(competitionCode)}`);
+                if (cancelled) return;
+                const competitionData = response?.data?.competition || response?.data || null;
+                const normalized = normalizeCompetitionEntry(competitionData);
+                const competitionId = getCompetitionIdentityId(normalized);
+                if (!normalized || !competitionId) return;
 
-            for (const endpoint of endpointCandidates) {
-                try {
-                    const response = await axios.get(endpoint);
-                    if (cancelled) return;
-                    const competitions = normalizeCompetitionCollection(response?.data)
-                        .map(normalizeCompetitionEntry)
-                        .filter(Boolean);
-                    const matched = competitions.find((competition) => String(competition?.code) === competitionCode);
-                    const competitionId = getCanonicalCompetitionId(matched);
-                    if (!matched || !competitionId) continue;
-
-                    setCompetitionHydration({
-                        code: competitionCode,
-                        attempted: true,
-                        resolvedFromCode: true,
-                        source: endpoint,
-                        record: matched,
-                    });
-                    return;
-                } catch (error) {
-                    if (cancelled) return;
-                    if (error?.response?.status === 404) continue;
-                }
+                setCompetitionHydration({
+                    code: competitionCode,
+                    attempted: true,
+                    resolvedFromCode: true,
+                    source: 'by-code',
+                    idSource: 'by-code hydration',
+                    record: normalized,
+                });
+            } catch (error) {
+                if (cancelled) return;
             }
         };
 
@@ -944,7 +955,6 @@ const Dashboard = () => {
         selectedCompetitionId,
         showTrading,
         teamCompetitionAccounts,
-        username,
     ]);
 
     useEffect(() => {
@@ -2049,6 +2059,7 @@ const Dashboard = () => {
                     attempted: competitionHydration?.attempted || false,
                     resolvedFromCode: competitionHydration?.resolvedFromCode || false,
                     source: competitionHydration?.source || '',
+                    idSource: selectedCompetitionIdSource,
                 },
                 requestInfo: {
                     endpointUrl: selectedCompetitionId ? `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}` : '',
@@ -2079,6 +2090,7 @@ const Dashboard = () => {
                     attempted: competitionHydration?.attempted || false,
                     resolvedFromCode: competitionHydration?.resolvedFromCode || false,
                     source: competitionHydration?.source || '',
+                    idSource: selectedCompetitionIdSource,
                 },
                 requestInfo: {
                     endpointUrl: selectedCompetitionId ? `${BASE_URL}${buildCurriculumPath(selectedCompetitionId)}` : '',
@@ -2233,6 +2245,7 @@ const Dashboard = () => {
         selectedCompetitionCode,
         selectedCompetitionId,
         selectedCompetitionRecord,
+        selectedCompetitionIdSource,
         competitionHydration,
         showTrading,
         currentUserId,
