@@ -17,6 +17,22 @@ const progressFill = (value) => ({
   height: '100%',
 });
 
+const detailShell = {
+  border: '1px solid var(--border-color)',
+  borderRadius: 8,
+  padding: 10,
+};
+
+const lessonShell = {
+  border: '1px solid #cbd5e1',
+  background: '#f8fafc',
+  borderRadius: 8,
+  padding: 12,
+  maxHeight: 280,
+  overflowY: 'auto',
+  whiteSpace: 'pre-wrap',
+};
+
 const getModuleId = (module) => module?.moduleId || module?.id || module?.week_number || module?.weekNumber;
 const getAssignmentId = (assignment) => assignment?.assignmentId || assignment?.id;
 
@@ -54,6 +70,32 @@ const getChoiceValue = (choice, index) => {
   return choice?.value || choice?.id || choice?.label || `choice-${index}`;
 };
 
+const getCorrectChoice = (question) => (
+  question?.correctChoice
+  || question?.correct_choice
+  || question?.correctAnswer
+  || question?.correct_answer
+  || question?.answer
+  || ''
+);
+
+const getAssignmentType = (assignment) => String(assignment?.type || '').trim().toLowerCase();
+const isWrittenAssignment = (assignment) => getAssignmentType(assignment) === 'assignment';
+const isQuizAssignment = (assignment) => ['quiz', 'final_exam', 'final-exam', 'exam', 'test'].includes(getAssignmentType(assignment));
+const isFinalExam = (assignment) => {
+  const type = getAssignmentType(assignment);
+  if (['final_exam', 'final-exam'].includes(type)) return true;
+  return String(assignment?.title || '').toLowerCase().includes('final exam');
+};
+
+const getItemStatus = (assignment, submittedMap) => {
+  const assignmentId = getAssignmentId(assignment);
+  const rawStatus = String(assignment?.status || '').trim().toLowerCase();
+  if (rawStatus) return normalizeCurriculumStatus(rawStatus);
+  if (submittedMap?.[assignmentId]) return 'Submitted';
+  return 'Not started';
+};
+
 export const CurriculumSummaryCard = ({ overview }) => {
   if (!overview?.curriculum_enabled) return null;
 
@@ -70,13 +112,14 @@ export const CurriculumSummaryCard = ({ overview }) => {
 const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem, submittedMap }) => {
   const [quizAnswers, setQuizAnswers] = useState({});
   const [writtenAnswers, setWrittenAnswers] = useState({});
-  const assignmentType = String(assignment?.type || '').toLowerCase();
+  const [quizScore, setQuizScore] = useState(null);
+  const assignmentType = getAssignmentType(assignment);
   const assignmentId = getAssignmentId(assignment);
   const questions = getQuestions(assignment?.content);
   const submitted = Boolean(submittedMap?.[assignmentId]) || String(assignment?.status || '').toLowerCase() === 'submitted';
 
   const payload = useMemo(() => {
-    if (assignmentType === 'assignment') {
+    if (isWrittenAssignment(assignment)) {
       return {
         answers: questions.map((question, index) => ({
           questionId: getQuestionId(question, index),
@@ -91,12 +134,33 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
         selectedChoice: quizAnswers[getQuestionId(question, index)] || '',
       })),
     };
-  }, [assignmentType, questions, quizAnswers, writtenAnswers]);
+  }, [assignment, questions, quizAnswers, writtenAnswers]);
+
+  const handleSubmit = () => {
+    if (isQuizAssignment(assignment)) {
+      const gradable = questions.filter((question) => getCorrectChoice(question));
+      if (gradable.length > 0) {
+        const correctCount = gradable.reduce((count, question, index) => {
+          const questionId = getQuestionId(question, index);
+          return quizAnswers[questionId] === getCorrectChoice(question) ? count + 1 : count;
+        }, 0);
+        const percent = Math.round((correctCount / gradable.length) * 100);
+        setQuizScore({
+          correctCount,
+          total: gradable.length,
+          percent,
+        });
+      }
+    }
+    onSubmitItem(assignment, payload);
+  };
 
   return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 10 }}>
+    <div style={detailShell}>
       <p className="note" style={{ margin: 0 }}>
-        <strong>{assignment?.title || 'Untitled assignment'}</strong> • {assignmentType || 'unknown'} • {assignment?.points ?? 0} pts • {normalizeCurriculumStatus(assignment?.status)}
+        <strong>{assignment?.title || 'Untitled assignment'}</strong>
+        {isFinalExam(assignment) ? ' • Final Exam' : ''}
+        {' • '}{assignmentType || 'unknown'} • {assignment?.points ?? 0} pts • {getItemStatus(assignment, submittedMap)}
       </p>
       {submitted ? <p className="note" style={{ color: '#15803d', marginTop: 8, marginBottom: 0 }}>Submitted</p> : null}
       <p className="note" style={{ marginTop: 8, marginBottom: 4 }}><strong>Instructions</strong></p>
@@ -107,18 +171,41 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
           const questionId = getQuestionId(question, questionIndex);
           const prompt = getQuestionPrompt(question);
 
-          if (assignmentType === 'assignment') {
+          if (isWrittenAssignment(assignment)) {
+            const parts = Array.isArray(question?.parts) ? question.parts : [];
             return (
               <div key={questionId}>
                 <p className="note" style={{ marginBottom: 4 }}><strong>Prompt {questionIndex + 1}:</strong> {prompt}</p>
-                <textarea
-                  rows={4}
-                  value={writtenAnswers[questionId] || ''}
-                  onChange={(event) => setWrittenAnswers((previous) => ({ ...previous, [questionId]: event.target.value }))}
-                  style={{ width: '100%' }}
-                  disabled={moduleLocked || actionLoading}
-                  placeholder="Write your response here..."
-                />
+                {parts.length > 0 ? (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {parts.map((part, partIndex) => {
+                      const partKey = `${questionId}-part-${part?.id || partIndex}`;
+                      const partPrompt = part?.prompt || part?.question || part?.text || `Part ${String.fromCharCode(97 + partIndex)}`;
+                      return (
+                        <div key={partKey}>
+                          <p className="note" style={{ marginBottom: 4 }}><strong>{String.fromCharCode(97 + partIndex)}.</strong> {partPrompt}</p>
+                          <textarea
+                            rows={3}
+                            value={writtenAnswers[partKey] || ''}
+                            onChange={(event) => setWrittenAnswers((previous) => ({ ...previous, [partKey]: event.target.value }))}
+                            style={{ width: '100%' }}
+                            disabled={moduleLocked || actionLoading}
+                            placeholder="Write your response here..."
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <textarea
+                    rows={4}
+                    value={writtenAnswers[questionId] || ''}
+                    onChange={(event) => setWrittenAnswers((previous) => ({ ...previous, [questionId]: event.target.value }))}
+                    style={{ width: '100%' }}
+                    disabled={moduleLocked || actionLoading}
+                    placeholder="Write your response here..."
+                  />
+                )}
               </div>
             );
           }
@@ -151,9 +238,15 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
         })}
       </div>
 
+      {quizScore ? (
+        <p className="note" style={{ marginTop: 10, marginBottom: 0, color: '#1d4ed8' }}>
+          Score: {quizScore.correctCount}/{quizScore.total} ({quizScore.percent}%)
+        </p>
+      ) : null}
+
       <div style={{ marginTop: 10 }}>
         <button
-          onClick={() => onSubmitItem(assignment, payload)}
+          onClick={handleSubmit}
           disabled={moduleLocked || actionLoading || !assignmentId}
         >
           Submit
@@ -198,6 +291,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               const moduleDescription = module?.description || 'No description provided.';
               const unlockDate = module?.unlockDate ?? module?.unlock_date;
               const dueDate = module?.dueDate ?? module?.due_date;
+              const lessonContent = module?.lesson_content || module?.lessonContent || module?.content?.lesson_content || module?.content?.lessonContent;
 
               return (
                 <div key={moduleId} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
@@ -213,6 +307,12 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
 
                   {isExpanded ? (
                     <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                      <div style={detailShell}>
+                        <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Lesson (eText)</strong></p>
+                        <div style={lessonShell}>
+                          {lessonContent || 'Lesson content has not been published yet.'}
+                        </div>
+                      </div>
                       {assignments.length > 0 ? assignments.map((assignment) => (
                         <AssignmentCard
                           key={getAssignmentId(assignment) || assignment?.title}
@@ -259,15 +359,25 @@ export const GradeSummaryCard = ({ gradeSummary }) => {
   );
 };
 
-export const InstructorCurriculumPanel = ({ overview, instructorSummary }) => {
+export const InstructorCurriculumPanel = ({ overview, instructorSummary, submissions, actionLoading, onRefresh, onGradeSubmission, onOverrideScore, instructorMessage }) => {
   if (!overview?.curriculum_enabled) return null;
+
+  const [expandedSubmissionId, setExpandedSubmissionId] = useState(null);
+  const [manualScoreBySubmission, setManualScoreBySubmission] = useState({});
+  const [overrideByStudent, setOverrideByStudent] = useState({});
+
+  const students = instructorSummary?.students || instructorSummary?.student_grades || [];
 
   return (
     <div className="card section">
       <h3>Instructor Curriculum View</h3>
       <p className="note">Average Grade: {Number(instructorSummary?.average_grade ?? 0).toFixed(1)}%</p>
       <p className="note">Student completion: {instructorSummary?.student_completion_summary || 'No submissions yet.'}</p>
+      {instructorMessage ? <p className="note" style={{ color: '#b45309' }}>{instructorMessage}</p> : null}
+      <button onClick={onRefresh} disabled={actionLoading}>Refresh instructor data</button>
+
       <div className="section" style={{ display: 'grid', gap: 8 }}>
+        <p className="em" style={{ margin: 0 }}>Overall Class Progress</p>
         {(instructorSummary?.modules || []).map((module) => (
           <div key={module.id || module.week_number} style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 8 }}>
             <p className="note" style={{ margin: 0 }}>
@@ -275,6 +385,80 @@ export const InstructorCurriculumPanel = ({ overview, instructorSummary }) => {
             </p>
           </div>
         ))}
+      </div>
+
+      <div className="section" style={{ display: 'grid', gap: 8 }}>
+        <p className="em" style={{ margin: 0 }}>Student Grades</p>
+        {students.length > 0 ? students.map((student) => {
+          const studentId = student?.user_id || student?.username || student?.id;
+          return (
+            <div key={studentId} style={detailShell}>
+              <p className="note" style={{ margin: 0 }}>
+                <strong>{student?.name || student?.username || studentId}</strong> • {Number(student?.grade_percentage ?? student?.percentage ?? 0).toFixed(1)}% • {normalizeCurriculumStatus(student?.status)}
+              </p>
+              <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="number"
+                  placeholder="Override %"
+                  value={overrideByStudent[studentId] || ''}
+                  onChange={(event) => setOverrideByStudent((prev) => ({ ...prev, [studentId]: event.target.value }))}
+                  style={{ width: 120 }}
+                  disabled={actionLoading}
+                />
+                <button
+                  disabled={actionLoading}
+                  onClick={() => onOverrideScore({ studentId, score: overrideByStudent[studentId] })}
+                >
+                  Override score
+                </button>
+              </div>
+            </div>
+          );
+        }) : <p className="note">No student grade rows available yet.</p>}
+      </div>
+
+      <div className="section" style={{ display: 'grid', gap: 8 }}>
+        <p className="em" style={{ margin: 0 }}>Student Submissions</p>
+        {(submissions || []).map((submission) => {
+          const submissionId = submission?.id || submission?.submission_id;
+          const isExpanded = expandedSubmissionId === submissionId;
+          return (
+            <div key={submissionId} style={detailShell}>
+              <button
+                style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 0, padding: 0, cursor: 'pointer' }}
+                onClick={() => setExpandedSubmissionId(isExpanded ? null : submissionId)}
+              >
+                <p className="note" style={{ margin: 0 }}>
+                  <strong>{submission?.student_name || submission?.username || submission?.student_id || 'Student'}</strong> • {submission?.assignment_title || submission?.assignment_id || 'Assignment'} • {normalizeCurriculumStatus(submission?.status)}
+                </p>
+              </button>
+              {isExpanded ? (
+                <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}>
+                    {JSON.stringify(submission?.answers || submission?.submission || submission, null, 2)}
+                  </pre>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      placeholder="Score"
+                      value={manualScoreBySubmission[submissionId] || ''}
+                      onChange={(event) => setManualScoreBySubmission((prev) => ({ ...prev, [submissionId]: event.target.value }))}
+                      style={{ width: 120 }}
+                      disabled={actionLoading}
+                    />
+                    <button
+                      disabled={actionLoading}
+                      onClick={() => onGradeSubmission({ submission, score: manualScoreBySubmission[submissionId] })}
+                    >
+                      Grade submission
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        {(!submissions || submissions.length === 0) ? <p className="note">No submission records available yet.</p> : null}
       </div>
     </div>
   );

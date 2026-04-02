@@ -826,6 +826,8 @@ const Dashboard = () => {
     const [curriculumSubmissionState, setCurriculumSubmissionState] = useState({
         submittedByAssignmentId: {},
     });
+    const [curriculumInstructorSubmissions, setCurriculumInstructorSubmissions] = useState([]);
+    const [curriculumInstructorMessage, setCurriculumInstructorMessage] = useState('');
     const [currentUserId, setCurrentUserId] = useState('');
 
     // =========================================
@@ -2202,6 +2204,8 @@ const Dashboard = () => {
             setCurriculumModules([]);
             setCurriculumGradeSummary(null);
             setCurriculumInstructorSummary(null);
+            setCurriculumInstructorSubmissions([]);
+            setCurriculumInstructorMessage('');
             setCurriculumError('');
             setCurriculumGradesMessage('');
             setCurriculumDebugState({
@@ -2344,6 +2348,7 @@ const Dashboard = () => {
                     setCurriculumModules([]);
                     setCurriculumGradeSummary(null);
                     setCurriculumInstructorSummary(null);
+                    setCurriculumInstructorSubmissions([]);
                     setCurriculumError('Curriculum is not enabled for this competition.');
                     setCurriculumDebugState((previous) => ({
                         ...previous,
@@ -2357,6 +2362,7 @@ const Dashboard = () => {
                 let modulesData = [];
                 let gradesData = null;
                 let instructorData = null;
+                let instructorSubmissionsData = [];
 
                 try {
                     const modulesResponse = await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`);
@@ -2459,6 +2465,27 @@ const Dashboard = () => {
                 } catch (error) {
                     instructorData = null;
                 }
+                try {
+                    const instructorSubmissionEndpoints = [
+                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor/submissions')}`,
+                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'submissions')}`,
+                        `${BASE_URL}/curriculum/submissions`,
+                    ];
+                    for (const endpoint of instructorSubmissionEndpoints) {
+                        try {
+                            const response = await axios.get(endpoint, { params: { competition_id: selectedCompetitionId } });
+                            const resolved = response?.data?.submissions || response?.data?.items || response?.data || [];
+                            if (Array.isArray(resolved)) {
+                                instructorSubmissionsData = resolved;
+                                break;
+                            }
+                        } catch (error) {
+                            // keep trying alternate instructor endpoints
+                        }
+                    }
+                } catch (error) {
+                    instructorSubmissionsData = [];
+                }
                 if (cancelled) return;
 
                 const resolvedModules = Array.isArray(modulesData?.modules) ? modulesData.modules : (Array.isArray(modulesData) ? modulesData : []);
@@ -2468,6 +2495,8 @@ const Dashboard = () => {
                 setCurriculumModules(resolvedModules);
                 setCurriculumGradeSummary(resolvedGradeSummary);
                 setCurriculumInstructorSummary(resolvedInstructorSummary);
+                setCurriculumInstructorSubmissions(Array.isArray(instructorSubmissionsData) ? instructorSubmissionsData : []);
+                setCurriculumInstructorMessage('');
 
                 if (resolvedModules.length === 0 && !resolvedGradeSummary && !resolvedInstructorSummary) {
                     setCurriculumError(`Curriculum is enabled, but no curriculum records were returned yet for competition_id=${selectedCompetitionId}.`);
@@ -2488,6 +2517,7 @@ const Dashboard = () => {
                 setCurriculumModules([]);
                 setCurriculumGradeSummary(null);
                 setCurriculumInstructorSummary(null);
+                setCurriculumInstructorSubmissions([]);
                 setCurriculumGradesMessage('');
                 setCurriculumError(getApiErrorMessage(error, 'Unable to load curriculum data right now.'));
                 const statusCode = error?.response?.status ?? null;
@@ -2566,6 +2596,95 @@ const Dashboard = () => {
         } catch (error) {
             console.error('Error submitting curriculum item:', error);
             setTradeMessage(`Could not submit assignment: ${item?.title || 'Unknown assignment'}`);
+        } finally {
+            setCurriculumActionLoading(false);
+        }
+    };
+
+    const postToFirstSuccessfulEndpoint = async (candidateRequests) => {
+        let lastError = null;
+        for (const candidate of candidateRequests) {
+            try {
+                const response = await axios({
+                    method: candidate.method || 'post',
+                    url: candidate.url,
+                    data: candidate.data,
+                    params: candidate.params,
+                });
+                return response;
+            } catch (error) {
+                lastError = error;
+            }
+        }
+        throw lastError || new Error('No endpoint candidates provided.');
+    };
+
+    const handleRefreshInstructorData = () => {
+        setCurriculumRefreshTick((value) => value + 1);
+    };
+
+    const handleGradeSubmission = async ({ submission, score }) => {
+        const submissionId = submission?.submission_id || submission?.id;
+        const assignmentId = submission?.assignment_id || submission?.assignmentId;
+        const effectiveScore = Number(score);
+        if (!submissionId || !Number.isFinite(effectiveScore)) {
+            setCurriculumInstructorMessage('Enter a valid score before grading.');
+            return;
+        }
+        setCurriculumActionLoading(true);
+        setCurriculumInstructorMessage('');
+        try {
+            await postToFirstSuccessfulEndpoint([
+                {
+                    method: 'post',
+                    url: `${BASE_URL}/curriculum/submissions/${encodeURIComponent(submissionId)}/grade`,
+                    data: { competition_id: selectedCompetitionId, score: effectiveScore, grader: username },
+                },
+                {
+                    method: 'post',
+                    url: `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `instructor/grade/${encodeURIComponent(submissionId)}`)}`,
+                    data: { score: effectiveScore, grader: username },
+                },
+                {
+                    method: 'post',
+                    url: `${BASE_URL}/curriculum/assignments/${encodeURIComponent(assignmentId || 'unknown')}/submissions/${encodeURIComponent(submissionId)}/grade`,
+                    data: { competition_id: selectedCompetitionId, score: effectiveScore, grader: username },
+                },
+            ]);
+            setCurriculumInstructorMessage('Submission graded successfully.');
+            setCurriculumRefreshTick((value) => value + 1);
+        } catch (error) {
+            setCurriculumInstructorMessage('Unable to grade submission right now. Curriculum remains usable.');
+        } finally {
+            setCurriculumActionLoading(false);
+        }
+    };
+
+    const handleOverrideCurriculumScore = async ({ studentId, score }) => {
+        const effectiveScore = Number(score);
+        if (!studentId || !Number.isFinite(effectiveScore)) {
+            setCurriculumInstructorMessage('Enter a valid override score.');
+            return;
+        }
+        setCurriculumActionLoading(true);
+        setCurriculumInstructorMessage('');
+        try {
+            await postToFirstSuccessfulEndpoint([
+                {
+                    method: 'post',
+                    url: `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor/override-score')}`,
+                    data: { student_id: studentId, score: effectiveScore, competition_id: selectedCompetitionId, grader: username },
+                },
+                {
+                    method: 'post',
+                    url: `${BASE_URL}/curriculum/grades/override`,
+                    data: { student_id: studentId, score: effectiveScore, competition_id: selectedCompetitionId, grader: username },
+                },
+            ]);
+            setCurriculumInstructorMessage('Student score override submitted.');
+            setCurriculumRefreshTick((value) => value + 1);
+        } catch (error) {
+            setCurriculumInstructorMessage('Unable to override score right now. Curriculum remains usable.');
         } finally {
             setCurriculumActionLoading(false);
         }
@@ -3634,6 +3753,12 @@ const Dashboard = () => {
                                 <InstructorCurriculumPanel
                                     overview={curriculumOverview}
                                     instructorSummary={curriculumInstructorSummary}
+                                    submissions={curriculumInstructorSubmissions}
+                                    actionLoading={curriculumActionLoading}
+                                    onRefresh={handleRefreshInstructorData}
+                                    onGradeSubmission={handleGradeSubmission}
+                                    onOverrideScore={handleOverrideCurriculumScore}
+                                    instructorMessage={curriculumInstructorMessage}
                                 />
                             )}
                             {showTrading && selectedCompetitionCode && (!curriculumOverview?.curriculum_enabled && (curriculumError || curriculumDebugState?.hasError)) && (
