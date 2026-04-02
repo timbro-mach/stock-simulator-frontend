@@ -904,33 +904,73 @@ const Dashboard = () => {
     useEffect(() => {
         const competitionCode = String(selectedCompetitionCode || '').trim();
         if (!isLoggedIn || !showTrading || !competitionCode) {
-            setCompetitionHydration({
-                code: competitionCode,
-                attempted: false,
-                resolvedFromCode: false,
-                source: '',
-                idSource: '',
-                record: null,
-                rawResponseBody: null,
-                extractedId: '',
-                extractedIdKey: '',
-                selectedCompetitionUpdated: false,
+            setCompetitionHydration((previous) => {
+                const nextState = {
+                    code: competitionCode,
+                    attempted: false,
+                    resolvedFromCode: false,
+                    source: '',
+                    idSource: '',
+                    record: null,
+                    rawResponseBody: null,
+                    extractedId: '',
+                    extractedIdKey: '',
+                    selectedCompetitionUpdated: false,
+                };
+                if (
+                    previous?.code === nextState.code
+                    && previous?.attempted === nextState.attempted
+                    && previous?.resolvedFromCode === nextState.resolvedFromCode
+                    && previous?.source === nextState.source
+                    && previous?.idSource === nextState.idSource
+                    && previous?.record === nextState.record
+                    && previous?.rawResponseBody === nextState.rawResponseBody
+                    && previous?.extractedId === nextState.extractedId
+                    && previous?.extractedIdKey === nextState.extractedIdKey
+                    && previous?.selectedCompetitionUpdated === nextState.selectedCompetitionUpdated
+                ) {
+                    return previous;
+                }
+                return nextState;
             });
             return;
         }
 
         if (selectedCompetitionId) {
-            setCompetitionHydration({
-                code: competitionCode,
-                attempted: false,
-                resolvedFromCode: false,
-                source: 'direct',
-                idSource: 'list payload',
-                record: null,
-                rawResponseBody: null,
-                extractedId: '',
-                extractedIdKey: '',
-                selectedCompetitionUpdated: true,
+            setCompetitionHydration((previous) => {
+                const shouldPreserveHydratedRecord = Boolean(
+                    previous?.resolvedFromCode
+                    && previous?.source === 'by-code'
+                    && String(previous?.code || '') === competitionCode
+                    && previous?.record,
+                );
+                const nextState = {
+                    code: competitionCode,
+                    attempted: shouldPreserveHydratedRecord ? previous?.attempted || true : false,
+                    resolvedFromCode: shouldPreserveHydratedRecord ? true : false,
+                    source: shouldPreserveHydratedRecord ? previous?.source || 'by-code' : 'direct',
+                    idSource: shouldPreserveHydratedRecord ? previous?.idSource || 'by-code hydration' : 'list payload',
+                    record: shouldPreserveHydratedRecord ? previous?.record : null,
+                    rawResponseBody: shouldPreserveHydratedRecord ? previous?.rawResponseBody ?? null : null,
+                    extractedId: shouldPreserveHydratedRecord ? previous?.extractedId || selectedCompetitionId : selectedCompetitionId,
+                    extractedIdKey: shouldPreserveHydratedRecord ? previous?.extractedIdKey || 'normalized competition identity' : 'list payload',
+                    selectedCompetitionUpdated: true,
+                };
+                if (
+                    previous?.code === nextState.code
+                    && previous?.attempted === nextState.attempted
+                    && previous?.resolvedFromCode === nextState.resolvedFromCode
+                    && previous?.source === nextState.source
+                    && previous?.idSource === nextState.idSource
+                    && previous?.record === nextState.record
+                    && previous?.rawResponseBody === nextState.rawResponseBody
+                    && previous?.extractedId === nextState.extractedId
+                    && previous?.extractedIdKey === nextState.extractedIdKey
+                    && previous?.selectedCompetitionUpdated === nextState.selectedCompetitionUpdated
+                ) {
+                    return previous;
+                }
+                return nextState;
             });
             return;
         }
@@ -1029,7 +1069,6 @@ const Dashboard = () => {
         BASE_URL,
         allCompetitions,
         competitionAccounts,
-        isAdmin,
         isLoggedIn,
         selectedCompetitionCode,
         selectedCompetitionId,
