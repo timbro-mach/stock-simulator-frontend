@@ -27,10 +27,24 @@ const lessonShell = {
   border: '1px solid #cbd5e1',
   background: '#f8fafc',
   borderRadius: 8,
-  padding: 12,
-  maxHeight: 280,
+  padding: 16,
+  maxHeight: 420,
   overflowY: 'auto',
   whiteSpace: 'pre-wrap',
+  lineHeight: 1.6,
+};
+
+const gradeGrid = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))',
+  gap: 8,
+};
+
+const gradeTile = {
+  border: '1px solid #cbd5e1',
+  borderRadius: 8,
+  padding: 8,
+  background: '#f8fafc',
 };
 
 const getModuleId = (module) => module?.moduleId || module?.id || module?.week_number || module?.weekNumber;
@@ -94,6 +108,97 @@ const getItemStatus = (assignment, submittedMap) => {
   if (rawStatus) return normalizeCurriculumStatus(rawStatus);
   if (submittedMap?.[assignmentId]) return 'Submitted';
   return 'Not started';
+};
+
+const numberOrNull = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const pickNumber = (...candidates) => {
+  for (const candidate of candidates) {
+    const parsed = numberOrNull(candidate);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+};
+
+const getModuleGradeBreakdown = (module) => {
+  const grade = module?.grade || module?.grading || module?.score_breakdown || module?.grades || {};
+  const quiz = pickNumber(grade?.quiz_score, grade?.quiz_points, grade?.quiz, module?.quiz_score, module?.quiz_points);
+  const writtenQ1 = pickNumber(
+    grade?.written_q1_score,
+    grade?.written_question_1,
+    grade?.assignment_q1_score,
+    grade?.question_1_score,
+    module?.written_q1_score,
+  );
+  const writtenQ2 = pickNumber(
+    grade?.written_q2_score,
+    grade?.written_question_2,
+    grade?.assignment_q2_score,
+    grade?.question_2_score,
+    module?.written_q2_score,
+  );
+  const writtenTotal = pickNumber(
+    grade?.written_total,
+    grade?.written_assignment_score,
+    grade?.assignment_score,
+    grade?.written,
+    module?.written_total,
+  );
+  const trading = pickNumber(
+    grade?.trade_participation_score,
+    grade?.trading_participation_score,
+    grade?.trade_points,
+    grade?.participation_score,
+    module?.trade_participation_score,
+  );
+  const moduleTotal = pickNumber(
+    grade?.module_total,
+    grade?.total,
+    grade?.total_score,
+    module?.module_total,
+    module?.total_score,
+  );
+  const tradesCompletedRaw = grade?.trade_activity_completed ?? grade?.trades_completed ?? module?.trade_activity_completed ?? module?.trades_completed;
+  const tradesCompleted = typeof tradesCompletedRaw === 'boolean'
+    ? tradesCompletedRaw
+    : (typeof tradesCompletedRaw === 'string'
+      ? ['true', 'yes', '1', 'completed'].includes(tradesCompletedRaw.toLowerCase())
+      : null);
+
+  const resolvedWrittenTotal = writtenTotal ?? ((writtenQ1 ?? 0) + (writtenQ2 ?? 0));
+  const resolvedModuleTotal = moduleTotal ?? ((quiz ?? 0) + (resolvedWrittenTotal ?? 0) + (trading ?? 0));
+
+  return {
+    quiz,
+    writtenQ1,
+    writtenQ2,
+    trading,
+    tradesCompleted,
+    resolvedWrittenTotal,
+    resolvedModuleTotal,
+  };
+};
+
+const getSubmissionQuestionResponses = (submission) => {
+  const answers = submission?.answers || submission?.submission?.answers || submission?.response?.answers || [];
+  if (Array.isArray(answers)) {
+    return answers.map((entry, idx) => ({
+      key: entry?.questionId || entry?.id || `q-${idx}`,
+      prompt: entry?.question || entry?.prompt || `Question ${idx + 1}`,
+      response: entry?.response || entry?.answer || entry?.text || '',
+    }));
+  }
+  if (answers && typeof answers === 'object') {
+    return Object.entries(answers).map(([key, value], idx) => ({
+      key,
+      prompt: `Question ${idx + 1}`,
+      response: typeof value === 'string' ? value : JSON.stringify(value),
+    }));
+  }
+  return [];
 };
 
 export const CurriculumSummaryCard = ({ overview }) => {
@@ -227,6 +332,7 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
                         checked={quizAnswers[questionId] === choiceValue}
                         onChange={() => setQuizAnswers((previous) => ({ ...previous, [questionId]: choiceValue }))}
                         disabled={moduleLocked || actionLoading}
+                        style={{ width: 16, height: 16, margin: 0 }}
                       />
                       <span>{choiceLabel}</span>
                     </label>
@@ -277,6 +383,13 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
           <p className="note" style={{ marginTop: 8 }}>
             Grade: <strong>{percentage.toFixed(1)}%</strong> ({letter})
           </p>
+          <div style={{ ...detailShell, marginBottom: 8 }}>
+            <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Overall Curriculum Grade Progress</strong></p>
+            <p className="note" style={{ margin: 0 }}>
+              Points earned: {gradeSummary?.total_points_earned ?? 0}/{gradeSummary?.total_points_possible ?? 0}
+              {' • '}Completed: {gradeSummary?.completed_items ?? 0}/{gradeSummary?.total_items ?? 0}
+            </p>
+          </div>
           <p className="note">
             Summary: {overview?.curriculum_weeks ?? overview?.totalWeeks ?? '-'} weeks • {formatDisplayDate(overview?.curriculum_start_date ?? overview?.startDate)} → {formatDisplayDate(overview?.curriculum_end_date ?? overview?.endDate)} • {overview?.module_count ?? overview?.moduleCount ?? 0} modules • {overview?.assignment_count ?? overview?.assignmentCount ?? 0} assignments
           </p>
@@ -292,6 +405,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               const unlockDate = module?.unlockDate ?? module?.unlock_date;
               const dueDate = module?.dueDate ?? module?.due_date;
               const lessonContent = module?.lesson_content || module?.lessonContent || module?.content?.lesson_content || module?.content?.lessonContent;
+              const moduleGrades = getModuleGradeBreakdown(module);
 
               return (
                 <div key={moduleId} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
@@ -304,6 +418,12 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
                     <p className="note">Unlocks: {formatDisplayDate(unlockDate)} • Due: {formatDisplayDate(dueDate)}</p>
                     <p className="note" style={{ marginBottom: 0 }}>Status: {module?.locked ? 'Locked' : 'Unlocked'} • {assignments.length} assignments • {isExpanded ? 'Click to collapse' : 'Click to open module'}</p>
                   </button>
+                  <div style={{ ...gradeGrid, marginTop: 10 }}>
+                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Quiz (20)</strong><br />{moduleGrades.quiz ?? '—'}/20</p></div>
+                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Written (20)</strong><br />{moduleGrades.resolvedWrittenTotal ?? '—'}/20 (Q1: {moduleGrades.writtenQ1 ?? '—'}/10, Q2: {moduleGrades.writtenQ2 ?? '—'}/10)</p></div>
+                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Trading (10)</strong><br />{moduleGrades.trading ?? '—'}/10 • {moduleGrades.tradesCompleted === null ? 'Activity: Unknown' : `Activity: ${moduleGrades.tradesCompleted ? 'Yes' : 'No'}`}</p></div>
+                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Module Total (50)</strong><br />{moduleGrades.resolvedModuleTotal ?? '—'}/50</p></div>
+                  </div>
 
                   {isExpanded ? (
                     <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
@@ -364,13 +484,16 @@ export const InstructorCurriculumPanel = ({ overview, instructorSummary, submiss
 
   const [expandedSubmissionId, setExpandedSubmissionId] = useState(null);
   const [manualScoreBySubmission, setManualScoreBySubmission] = useState({});
+  const [question1BySubmission, setQuestion1BySubmission] = useState({});
+  const [question2BySubmission, setQuestion2BySubmission] = useState({});
+  const [commentsBySubmission, setCommentsBySubmission] = useState({});
   const [overrideByStudent, setOverrideByStudent] = useState({});
 
   const students = instructorSummary?.students || instructorSummary?.student_grades || [];
 
   return (
     <div className="card section">
-      <h3>Instructor Curriculum View</h3>
+      <h3>Instructor / Organizer Curriculum Gradebook</h3>
       <p className="note">Average Grade: {Number(instructorSummary?.average_grade ?? 0).toFixed(1)}%</p>
       <p className="note">Student completion: {instructorSummary?.student_completion_summary || 'No submissions yet.'}</p>
       {instructorMessage ? <p className="note" style={{ color: '#b45309' }}>{instructorMessage}</p> : null}
@@ -391,11 +514,30 @@ export const InstructorCurriculumPanel = ({ overview, instructorSummary, submiss
         <p className="em" style={{ margin: 0 }}>Student Grades</p>
         {students.length > 0 ? students.map((student) => {
           const studentId = student?.user_id || student?.username || student?.id;
+          const modules = student?.modules || student?.module_grades || [];
           return (
             <div key={studentId} style={detailShell}>
               <p className="note" style={{ margin: 0 }}>
                 <strong>{student?.name || student?.username || studentId}</strong> • {Number(student?.grade_percentage ?? student?.percentage ?? 0).toFixed(1)}% • {normalizeCurriculumStatus(student?.status)}
               </p>
+              {modules.length > 0 ? (
+                <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+                  {modules.map((module) => {
+                    const moduleId = module?.module_id || module?.id || module?.week_number;
+                    const moduleGrades = getModuleGradeBreakdown(module);
+                    return (
+                      <div key={`${studentId}-${moduleId}`} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}>
+                        <p className="note" style={{ margin: 0 }}>
+                          <strong>Week {module?.week_number ?? module?.weekNumber ?? '-'}</strong> • Quiz: {moduleGrades.quiz ?? '—'}/20 • Written: {moduleGrades.resolvedWrittenTotal ?? '—'}/20 • Trade: {moduleGrades.trading ?? '—'}/10 • Total: {moduleGrades.resolvedModuleTotal ?? '—'}/50
+                        </p>
+                        <p className="note" style={{ margin: 0 }}>
+                          Trade activity completed: {moduleGrades.tradesCompleted === null ? 'Unknown' : (moduleGrades.tradesCompleted ? 'Yes' : 'No')} • Trade points: {moduleGrades.trading ?? '—'}/10
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
               <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center' }}>
                 <input
                   type="number"
@@ -434,21 +576,63 @@ export const InstructorCurriculumPanel = ({ overview, instructorSummary, submiss
               </button>
               {isExpanded ? (
                 <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+                  {getSubmissionQuestionResponses(submission).slice(0, 2).map((response, index) => (
+                    <div key={`${submissionId}-${response.key}`} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, background: '#f8fafc' }}>
+                      <p className="note" style={{ margin: 0 }}><strong>Question {index + 1}</strong></p>
+                      <p className="note" style={{ marginTop: 4, marginBottom: 4 }}>{response.prompt}</p>
+                      <p className="note" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{response.response || 'No response submitted.'}</p>
+                    </div>
+                  ))}
                   <pre style={{ margin: 0, whiteSpace: 'pre-wrap', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}>
                     {JSON.stringify(submission?.answers || submission?.submission || submission, null, 2)}
                   </pre>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 6, alignItems: 'center' }}>
                     <input
                       type="number"
-                      placeholder="Score"
-                      value={manualScoreBySubmission[submissionId] || ''}
-                      onChange={(event) => setManualScoreBySubmission((prev) => ({ ...prev, [submissionId]: event.target.value }))}
-                      style={{ width: 120 }}
+                      min="0"
+                      max="10"
+                      placeholder="Q1 score /10"
+                      value={question1BySubmission[submissionId] || ''}
+                      onChange={(event) => setQuestion1BySubmission((prev) => ({ ...prev, [submissionId]: event.target.value }))}
                       disabled={actionLoading}
                     />
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      placeholder="Q2 score /10"
+                      value={question2BySubmission[submissionId] || ''}
+                      onChange={(event) => setQuestion2BySubmission((prev) => ({ ...prev, [submissionId]: event.target.value }))}
+                      disabled={actionLoading}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      max="20"
+                      placeholder="Assignment total /20"
+                      value={manualScoreBySubmission[submissionId] || ''}
+                      onChange={(event) => setManualScoreBySubmission((prev) => ({ ...prev, [submissionId]: event.target.value }))}
+                      disabled={actionLoading}
+                    />
+                  </div>
+                  <textarea
+                    rows={2}
+                    placeholder="Optional feedback/comments"
+                    value={commentsBySubmission[submissionId] || ''}
+                    onChange={(event) => setCommentsBySubmission((prev) => ({ ...prev, [submissionId]: event.target.value }))}
+                    disabled={actionLoading}
+                    style={{ width: '100%' }}
+                  />
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <button
                       disabled={actionLoading}
-                      onClick={() => onGradeSubmission({ submission, score: manualScoreBySubmission[submissionId] })}
+                      onClick={() => onGradeSubmission({
+                        submission,
+                        score: manualScoreBySubmission[submissionId],
+                        question1Score: question1BySubmission[submissionId],
+                        question2Score: question2BySubmission[submissionId],
+                        comments: commentsBySubmission[submissionId],
+                      })}
                     >
                       Grade submission
                     </button>
