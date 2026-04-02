@@ -30,7 +30,7 @@ export const CurriculumSummaryCard = ({ overview }) => {
   );
 };
 
-export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, loading, error, debugState, onOpenItem, onSubmitItem, actionLoading }) => {
+export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradesMessage, loading, error, debugState, onOpenItem, onSubmitItem, actionLoading }) => {
   if (!overview?.curriculum_enabled) return null;
   const percentage = Number(gradeSummary?.percentage ?? overview?.grade_percentage ?? 0);
   const letter = gradeSummary?.letter_grade || getLetterGrade(percentage);
@@ -40,14 +40,18 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, loadin
       <h3>Curriculum</h3>
       {loading ? <p className="note">Loading curriculum...</p> : null}
       {error ? <p className="note" style={{ color: '#b91c1c' }}>{error}</p> : null}
+      {gradesMessage ? <p className="note" style={{ color: '#b45309' }}>{gradesMessage}</p> : null}
       <CurriculumDebugPanel debugState={debugState} />
 
-      {!loading && !error && (
+      {!loading && (
         <>
           <p className="note">Progress: {Math.round(Number(overview?.progress_percent ?? 0))}%</p>
           <div style={progressShell}><div style={progressFill(overview?.progress_percent)} /></div>
           <p className="note" style={{ marginTop: 8 }}>
             Grade: <strong>{percentage.toFixed(1)}%</strong> ({letter})
+          </p>
+          <p className="note">
+            Summary: {overview?.curriculum_weeks ?? overview?.totalWeeks ?? '-'} weeks • {formatDisplayDate(overview?.curriculum_start_date ?? overview?.startDate)} → {formatDisplayDate(overview?.curriculum_end_date ?? overview?.endDate)} • {overview?.module_count ?? overview?.moduleCount ?? 0} modules • {overview?.assignment_count ?? overview?.assignmentCount ?? 0} assignments
           </p>
 
           <div className="section" style={{ display: 'grid', gap: 12 }}>
@@ -131,6 +135,11 @@ export const CurriculumDebugPanel = ({ debugState }) => {
   const competitionFields = debugState?.competitionContext?.fields || {};
   const hydrationInfo = debugState?.hydrationInfo || {};
   const requestInfo = debugState?.requestInfo || {};
+  const requestStatus = requestInfo?.requestStatus || {};
+  const formatStatus = (entry) => {
+    if (!entry?.attempted) return 'not attempted';
+    return entry?.ok ? `ok (${entry?.status ?? 'n/a'})` : `failed (${entry?.status ?? 'n/a'})`;
+  };
 
   return (
     <div
@@ -161,6 +170,9 @@ export const CurriculumDebugPanel = ({ debugState }) => {
       <p className="note" style={{ margin: 0 }}><strong>Request made:</strong> {String(Boolean(requestInfo?.requestMade))}</p>
       <p className="note" style={{ margin: 0 }}><strong>HTTP status:</strong> {requestInfo?.httpStatus ?? '(n/a)'}</p>
       <p className="note" style={{ margin: 0 }}><strong>Backend message:</strong> {requestInfo?.responseMessage || '(n/a)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Overview status:</strong> {formatStatus(requestStatus?.overview)} {requestStatus?.overview?.message ? `• ${requestStatus?.overview?.message}` : ''}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Modules status:</strong> {formatStatus(requestStatus?.modules)} {requestStatus?.modules?.message ? `• ${requestStatus?.modules?.message}` : ''}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Grades status:</strong> {formatStatus(requestStatus?.grades)} {requestStatus?.grades?.message ? `• ${requestStatus?.grades?.message}` : ''}</p>
       <p className="note" style={{ margin: 0 }}><strong>Overview response body:</strong></p>
       <pre style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>
         {JSON.stringify(requestInfo?.rawOverviewBody ?? null, null, 2)}
