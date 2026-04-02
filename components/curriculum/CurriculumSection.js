@@ -1,6 +1,8 @@
 import React from 'react';
 import { formatDisplayDate, getLetterGrade, normalizeCurriculumStatus } from '../../lib/curriculum/helpers';
 
+const ENABLE_CURRICULUM_DEBUG = true;
+
 const progressShell = {
   width: '100%',
   background: '#e2e8f0',
@@ -28,7 +30,7 @@ export const CurriculumSummaryCard = ({ overview }) => {
   );
 };
 
-export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, loading, error, onOpenItem, onSubmitItem, actionLoading }) => {
+export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, loading, error, debugState, onOpenItem, onSubmitItem, actionLoading }) => {
   if (!overview?.curriculum_enabled) return null;
   const percentage = Number(gradeSummary?.percentage ?? overview?.grade_percentage ?? 0);
   const letter = gradeSummary?.letter_grade || getLetterGrade(percentage);
@@ -38,6 +40,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, loadin
       <h3>Curriculum</h3>
       {loading ? <p className="note">Loading curriculum...</p> : null}
       {error ? <p className="note" style={{ color: '#b91c1c' }}>{error}</p> : null}
+      <CurriculumDebugPanel debugState={debugState} />
 
       {!loading && !error && (
         <>
@@ -117,6 +120,41 @@ export const InstructorCurriculumPanel = ({ overview, instructorSummary }) => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+export const CurriculumDebugPanel = ({ debugState }) => {
+  if (!ENABLE_CURRICULUM_DEBUG) return null;
+  if (!debugState?.hasError) return null;
+
+  const competitionFields = debugState?.competitionContext?.fields || {};
+  const requestInfo = debugState?.requestInfo || {};
+
+  return (
+    <div
+      style={{
+        border: '1px solid #f59e0b',
+        background: '#fffbeb',
+        borderRadius: 8,
+        padding: 10,
+        marginTop: 10,
+        fontSize: 12,
+      }}
+    >
+      <p className="em" style={{ margin: 0, marginBottom: 6 }}>Curriculum Debug</p>
+      <p className="note" style={{ margin: 0 }}><strong>Render reason:</strong> {debugState?.renderReason || 'unknown'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Competition id:</strong> {debugState?.competitionContext?.id || '(none)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Competition name:</strong> {debugState?.competitionContext?.name || '(none)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Curriculum enabled (frontend):</strong> {String(Boolean(debugState?.competitionContext?.curriculumEnabled))}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Endpoint URL:</strong> {requestInfo?.endpointUrl || '(not set)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Request made:</strong> {String(Boolean(requestInfo?.requestMade))}</p>
+      <p className="note" style={{ margin: 0 }}><strong>HTTP status:</strong> {requestInfo?.httpStatus ?? '(n/a)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Response message:</strong> {requestInfo?.responseMessage || '(n/a)'}</p>
+      <p className="note" style={{ margin: 0 }}><strong>Curriculum fields:</strong></p>
+      <pre style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>
+        {JSON.stringify(competitionFields, null, 2)}
+      </pre>
     </div>
   );
 };
