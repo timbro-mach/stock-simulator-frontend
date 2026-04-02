@@ -57,7 +57,68 @@ const getAssignments = (module) => {
 
 const getQuestions = (content) => {
   if (Array.isArray(content?.questions)) return content.questions;
+  if (Array.isArray(content?.quiz_questions)) return content.quiz_questions;
+  if (Array.isArray(content?.quizQuestions)) return content.quizQuestions;
+  if (Array.isArray(content?.question_bank)) return content.question_bank;
+  if (Array.isArray(content?.questionBank)) return content.questionBank;
+  if (Array.isArray(content?.items)) return content.items;
+  if (Array.isArray(content?.quiz?.questions)) return content.quiz.questions;
+  if (Array.isArray(content?.assessment?.questions)) return content.assessment.questions;
+  if (content?.questions && typeof content.questions === 'object') {
+    const values = Object.values(content.questions);
+    if (values.length > 0) return values;
+  }
   return [];
+};
+
+const toTextContent = (value) => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => toTextContent(entry))
+      .filter(Boolean)
+      .join('\n\n');
+  }
+  if (value && typeof value === 'object') {
+    return (
+      value?.text
+      || value?.content
+      || value?.body
+      || value?.value
+      || ''
+    );
+  }
+  return '';
+};
+
+const resolveLessonContent = (module) => {
+  const candidates = [
+    module?.lesson_content,
+    module?.lessonContent,
+    module?.eText,
+    module?.etext,
+    module?.lesson_text,
+    module?.lessonText,
+    module?.lesson?.content,
+    module?.lesson?.text,
+    module?.lesson?.body,
+    module?.content?.lesson_content,
+    module?.content?.lessonContent,
+    module?.content?.eText,
+    module?.content?.etext,
+    module?.content?.lesson_text,
+    module?.content?.lessonText,
+    module?.content?.lesson?.content,
+    module?.content?.lesson?.text,
+    module?.content?.lesson?.body,
+    module?.content?.text,
+    module?.content?.body,
+  ];
+  for (const candidate of candidates) {
+    const normalized = String(toTextContent(candidate) || '').trim();
+    if (normalized) return normalized;
+  }
+  return '';
 };
 
 const getQuestionPrompt = (question) => {
@@ -433,18 +494,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               const moduleDescription = module?.description || 'No description provided.';
               const unlockDate = module?.unlockDate ?? module?.unlock_date;
               const dueDate = module?.dueDate ?? module?.due_date;
-              const lessonContent = module?.lesson_content
-                || module?.lessonContent
-                || module?.eText
-                || module?.etext
-                || module?.lesson_text
-                || module?.lessonText
-                || module?.content?.lesson_content
-                || module?.content?.lessonContent
-                || module?.content?.eText
-                || module?.content?.etext
-                || module?.content?.lesson_text
-                || module?.content?.lessonText;
+              const lessonContent = resolveLessonContent(module);
               const moduleGrades = getModuleGradeBreakdown(module);
 
               return (
@@ -617,7 +667,7 @@ export const InstructorCurriculumPanel = ({ overview, instructorSummary, submiss
               </button>
               {isExpanded ? (
                 <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
-                  {getSubmissionQuestionResponses(submission).slice(0, 2).map((response, index) => (
+                  {getSubmissionQuestionResponses(submission).map((response, index) => (
                     <div key={`${submissionId}-${response.key}`} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, background: '#f8fafc' }}>
                       <p className="note" style={{ margin: 0 }}><strong>Question {index + 1}</strong></p>
                       <p className="note" style={{ marginTop: 4, marginBottom: 4 }}>{response.prompt}</p>
