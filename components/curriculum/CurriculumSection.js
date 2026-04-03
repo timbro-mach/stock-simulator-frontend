@@ -596,14 +596,21 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               return (
                 <div key={moduleKey || String(moduleTitle)} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
                   <button
-                    style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 0, padding: 0, cursor: 'pointer' }}
-                    onClick={() => setExpandedModuleId(isExpanded ? null : moduleKey)}
+                    style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 0, padding: 0, cursor: isExpanded ? 'default' : 'pointer' }}
+                    onClick={() => {
+                      if (!isExpanded) setExpandedModuleId(moduleKey);
+                    }}
                   >
                     <p className="em" style={{ marginBottom: 6 }}>Week {weekNumber}: {moduleTitle}</p>
                     <p className="note">{moduleDescription}</p>
                     <p className="note">Unlocks: {formatDisplayDate(unlockDate)} • Due: {formatDisplayDate(dueDate)}</p>
-                    <p className="note" style={{ marginBottom: 0 }}>Status: {module?.locked ? 'Locked' : 'Unlocked'} • {assignments.length} assignments • {isExpanded ? 'Click to collapse' : 'Click to open module'}</p>
+                    <p className="note" style={{ marginBottom: 0 }}>Status: {module?.locked ? 'Locked' : 'Unlocked'} • {assignments.length} assignments • {isExpanded ? 'Open' : 'Click to open module'}</p>
                   </button>
+                  {isExpanded ? (
+                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                      <button type="button" onClick={() => setExpandedModuleId(null)}>Collapse module</button>
+                    </div>
+                  ) : null}
                   <div style={{ ...gradeGrid, marginTop: 10 }}>
                     <div style={gradeTile}>
                       <p className="note" style={{ margin: 0 }}>
