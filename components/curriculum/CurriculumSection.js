@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { formatDisplayDate, getLetterGrade, normalizeCurriculumStatus } from '../../lib/curriculum/helpers';
+import { formatDisplayDate, normalizeCurriculumStatus } from '../../lib/curriculum/helpers';
 import { buildAssignmentSubmissionPayload, normalizeAssignmentIdKey } from '../../lib/curriculum/submission';
-import { asPercent } from '../../lib/teacherDashboard';
+import { asLetter, asPercent, asPoints } from '../../lib/teacherDashboard';
 
 const progressShell = {
   width: '100%',
@@ -444,8 +444,8 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
 
 export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeSummaryByModule, gradesMessage, loading, error, onSubmitItem, actionLoading, submissionState }) => {
   if (!overview?.curriculum_enabled) return null;
-  const percentage = Number(gradeSummary?.percentage ?? overview?.grade_percentage ?? 0);
-  const letter = gradeSummary?.letter_grade || getLetterGrade(percentage);
+  const percentage = gradeSummary?.percentage ?? overview?.grade_percentage ?? null;
+  const letter = gradeSummary?.letterGrade || gradeSummary?.letter_grade || 'N/A';
   const [expandedModuleId, setExpandedModuleId] = useState(null);
 
   return (
@@ -472,7 +472,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
           <p className="note">Progress: {Math.round(Number(overview?.progress_percent ?? 0))}%</p>
           <div style={progressShell}><div style={progressFill(overview?.progress_percent)} /></div>
           <p className="note" style={{ marginTop: 8 }}>
-            Grade: <strong>{percentage.toFixed(1)}%</strong> ({letter})
+            Grade: <strong>{asPercent(percentage)}</strong> ({asLetter(letter)})
           </p>
           <div style={{ ...detailShell, marginBottom: 8 }}>
             <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Overall Curriculum Grade Progress</strong></p>
@@ -490,9 +490,9 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
                     <p className="note" style={{ margin: 0 }}>
                       <strong>Week {moduleSummary.weekNumber || moduleSummary.week_number || '-'}</strong>
                       {' • '}{moduleSummary.moduleTitle || moduleSummary.module_title || 'Untitled module'}
-                      {' • '}Points: {Number(moduleSummary.totalPointsEarned || moduleSummary.total_points_earned || 0)}/{Number(moduleSummary.totalPointsPossible || moduleSummary.total_points_possible || 0)}
+                      {' • '}Points: {asPoints(moduleSummary.totalPointsEarned || moduleSummary.total_points_earned, moduleSummary.totalPointsPossible || moduleSummary.total_points_possible)}
                       {' • '}Percent: {asPercent(moduleSummary.percentage)}
-                      {' • '}Letter: {moduleSummary.letterGrade || moduleSummary.letter_grade || '—'}
+                      {' • '}Letter: {asLetter(moduleSummary.letterGrade || moduleSummary.letter_grade)}
                     </p>
                   </div>
                 ))}
@@ -567,14 +567,14 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
 
 export const GradeSummaryCard = ({ gradeSummary }) => {
   if (!gradeSummary) return null;
-  const percentage = Number(gradeSummary.percentage || 0);
+  const percentage = gradeSummary?.percentage;
 
   return (
     <div className="card section">
       <h3>Grade Summary</h3>
-      <p className="note">Points: {gradeSummary.totalPointsEarned ?? gradeSummary.total_points_earned ?? 0} / {gradeSummary.totalPointsPossible ?? gradeSummary.total_points_possible ?? 0}</p>
-      <p className="note">Percentage: {percentage.toFixed(1)}%</p>
-      <p className="note">Letter Grade: {gradeSummary.letter_grade || getLetterGrade(percentage)}</p>
+      <p className="note">Points: {asPoints(gradeSummary.totalPointsEarned ?? gradeSummary.total_points_earned, gradeSummary.totalPointsPossible ?? gradeSummary.total_points_possible)}</p>
+      <p className="note">Percentage: {asPercent(percentage)}</p>
+      <p className="note">Letter Grade: {asLetter(gradeSummary.letterGrade || gradeSummary.letter_grade)}</p>
       <p className="note">Completed {gradeSummary.completed_items ?? 0} of {gradeSummary.total_items ?? 0} items</p>
       <div className="section" style={{ display: 'grid', gap: 8 }}>
         {(gradeSummary.items || []).map((item) => (

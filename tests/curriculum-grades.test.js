@@ -9,7 +9,11 @@ import {
 import {
   applyGradeResponse,
   canShowManualGradeAction,
+  getQuestionGradeRows,
+  toQuestionGradePayload,
+  validateQuestionGrades,
 } from '../lib/curriculum/teacherDetail.js';
+import { asPercent, normalizeGradingStatus } from '../lib/teacherDashboard.js';
 
 test('grade summary mapping prefers new keys with legacy fallback', () => {
   const withNewKeys = resolveGradeSummaryOverall({
@@ -85,3 +89,50 @@ test('percentage normalization handles ratio and percent values consistently for
   assert.equal(normalizePercentageValue(95), 95);
 });
 
+test('null-safe percentage rendering returns Not graded', () => {
+  assert.equal(asPercent(null), 'Not graded');
+  assert.equal(asPercent(undefined), 'Not graded');
+  assert.equal(asPercent(0.8), '80.0%');
+});
+
+test('question grade helper prefers authoritative questionGrades and supports fallback rows', () => {
+  const authoritative = getQuestionGradeRows({
+    questionGrades: [{ questionId: 'a1', pointsAwarded: 8, pointsPossible: 10, feedback: 'Nice job' }],
+  });
+  const fallback = getQuestionGradeRows({
+    submissionContent: { answers: [{ questionId: 'a1' }, { questionId: 'a2', pointsPossible: 12 }] },
+  });
+
+  assert.equal(authoritative.length, 1);
+  assert.deepEqual(authoritative[0], { questionId: 'a1', pointsAwarded: 8, pointsPossible: 10, feedback: 'Nice job' });
+  assert.equal(fallback.length, 2);
+  assert.equal(fallback[0].pointsPossible, 10);
+  assert.equal(fallback[1].pointsPossible, 12);
+});
+
+test('question grade validation catches numeric and range constraints', () => {
+  assert.equal(validateQuestionGrades([]), 'Add at least one question grade.');
+  assert.match(validateQuestionGrades([{ pointsAwarded: 'x', pointsPossible: 10 }]), /numeric/);
+  assert.match(validateQuestionGrades([{ pointsAwarded: 11, pointsPossible: 10 }]), /cannot exceed/);
+  assert.equal(validateQuestionGrades([{ pointsAwarded: 8, pointsPossible: 10 }]), '');
+});
+
+test('question grade payload maps overall and rubric feedback fields', () => {
+  const payload = toQuestionGradePayload({
+    username: 'teacher1',
+    grades: [{ questionId: 'a1', pointsAwarded: '8', pointsPossible: '10', feedback: 'Great work' }],
+    finalFeedback: 'Overall comments',
+    rubricNotes: 'Rubric notes',
+  });
+
+  assert.deepEqual(payload, {
+    username: 'teacher1',
+    grades: [{ questionId: 'a1', pointsAwarded: 8, pointsPossible: 10, feedback: 'Great work' }],
+    finalFeedback: 'Overall comments',
+    rubricNotes: 'Rubric notes',
+  });
+});
+
+test('partial grading statuses are treated as graded', () => {
+  assert.equal(normalizeGradingStatus('partially_graded'), 'graded');
+});
