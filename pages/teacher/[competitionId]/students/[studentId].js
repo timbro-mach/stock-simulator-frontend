@@ -196,7 +196,7 @@ export default function TeacherStudentDetailPage() {
       const updatedSummary = updatedGradeData.gradeSummary;
       const updatedSummaryByModule = updatedGradeData.gradeSummaryByModule;
       if (updatedSummary) setGradeSummary(updatedSummary);
-      if (updatedSummaryByModule.length > 0) setGradeSummaryByModule(updatedSummaryByModule);
+      setGradeSummaryByModule(updatedSummaryByModule);
       if (updatedGradeData.items.length > 0) setItems(updatedGradeData.items);
 
       await loadStudentDetail(username);
@@ -273,9 +273,9 @@ export default function TeacherStudentDetailPage() {
 
             <div className="section" style={{ border: '1px solid #d7dde2', borderRadius: 10, padding: 12 }}>
               <h3 style={{ marginBottom: 8 }}>Grade Summary</h3>
-              <p className="note">Percentage: {asPercent(gradeSummary?.percentage)}</p>
-              <p className="note">Letter: {asLetter(gradeSummary?.letterGrade || gradeSummary?.letter_grade)}</p>
-              <p className="note">Points: {asPoints(gradeSummary?.totalPointsEarned || gradeSummary?.total_points_earned, gradeSummary?.totalPointsPossible || gradeSummary?.total_points_possible)}</p>
+              <p className="note">Percentage: {asPercent(gradeSummary?.percentage, { pointsPossible: gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible })}</p>
+              <p className="note">Letter: {asLetter(gradeSummary?.letterGrade ?? gradeSummary?.letter_grade, { percentage: gradeSummary?.percentage, pointsPossible: gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible })}</p>
+              <p className="note">Points: {asPoints(gradeSummary?.totalPointsEarned ?? gradeSummary?.total_points_earned, gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible)}</p>
             </div>
             <div className="section" style={{ border: '1px solid #d7dde2', borderRadius: 10, padding: 12 }}>
               <h3 style={{ marginBottom: 8 }}>Per-Module Grade Breakdown</h3>
@@ -296,9 +296,9 @@ export default function TeacherStudentDetailPage() {
                         <tr key={`${moduleSummary.moduleId || moduleSummary.module_id}-${moduleSummary.weekNumber || moduleSummary.week_number}`}>
                           <td>{moduleSummary.weekNumber || moduleSummary.week_number || '—'}</td>
                           <td>{moduleSummary.moduleTitle || moduleSummary.module_title || '—'}</td>
-                          <td>{asPoints(moduleSummary.totalPointsEarned || moduleSummary.total_points_earned, moduleSummary.totalPointsPossible || moduleSummary.total_points_possible)}</td>
-                          <td>{asPercent(moduleSummary.percentage)}</td>
-                          <td>{asLetter(moduleSummary.letterGrade || moduleSummary.letter_grade)}</td>
+                          <td>{asPoints(moduleSummary.totalPointsEarned ?? moduleSummary.total_points_earned, moduleSummary.totalPointsPossible ?? moduleSummary.total_points_possible)}</td>
+                          <td>{asPercent(moduleSummary.percentage, { pointsPossible: moduleSummary.totalPointsPossible ?? moduleSummary.total_points_possible })}</td>
+                          <td>{asLetter(moduleSummary.letterGrade ?? moduleSummary.letter_grade, { percentage: moduleSummary.percentage, pointsPossible: moduleSummary.totalPointsPossible ?? moduleSummary.total_points_possible })}</td>
                         </tr>
                       ))}
                     </tbody>
