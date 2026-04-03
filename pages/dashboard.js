@@ -25,7 +25,6 @@ import {
     normalizeAssignmentIdKey,
 } from '../lib/curriculum/submission';
 import {
-    resolveGradeSummaryByModule,
     resolveGradeSummaryOverall,
 } from '../lib/curriculum/grades';
 import { refetchCurriculumGradeQueries } from '../lib/curriculum/queryKeys';
@@ -838,7 +837,6 @@ const Dashboard = () => {
     const [curriculumOverview, setCurriculumOverview] = useState(null);
     const [curriculumModules, setCurriculumModules] = useState([]);
     const [curriculumGradeSummary, setCurriculumGradeSummary] = useState(null);
-    const [curriculumGradeSummaryByModule, setCurriculumGradeSummaryByModule] = useState([]);
     const [curriculumInstructorSummary, setCurriculumInstructorSummary] = useState(null);
     const [curriculumLoading, setCurriculumLoading] = useState(false);
     const [curriculumError, setCurriculumError] = useState('');
@@ -2167,6 +2165,30 @@ const Dashboard = () => {
         return { endpoint, payload };
     }, [username]);
 
+    const refreshCurriculumGradeSummary = useCallback(async () => {
+        const parsedCurrentUserId = Number.parseInt(String(currentUserId || '').trim(), 10);
+        const effectiveUserId = Number.isInteger(parsedCurrentUserId) && parsedCurrentUserId > 0
+            ? String(parsedCurrentUserId)
+            : '';
+        if (!selectedCompetitionId || !effectiveUserId || !username) return null;
+        const response = await axios.get(
+            `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`,
+            { params: { username } },
+        );
+        const refreshedSummary = resolveGradeSummaryOverall(response?.data ?? null);
+        setCurriculumGradeSummary(refreshedSummary);
+        return refreshedSummary;
+    }, [BASE_URL, currentUserId, selectedCompetitionId, username]);
+
+    const applyImmediateCurriculumGradeSummary = useCallback(async (mutationPayload) => {
+        const responseSummary = resolveGradeSummaryOverall(mutationPayload);
+        if (responseSummary) {
+            setCurriculumGradeSummary(responseSummary);
+            return responseSummary;
+        }
+        return refreshCurriculumGradeSummary();
+    }, [refreshCurriculumGradeSummary]);
+
     const executeTrade = async (action) => {
         const cleanSymbol = stockSymbol.trim().toUpperCase();
         const normalizedLimit = Number(limitPrice);
@@ -2209,6 +2231,7 @@ const Dashboard = () => {
             console.log('🔹 Sending trade:', endpoint, payload);
             const res = await axios.post(`${BASE_URL}${endpoint}`, payload);
             setTradeMessage(res.data.message || 'Trade successful.');
+            await applyImmediateCurriculumGradeSummary(res?.data);
             await fetchUserData();
             if (showTradeBlotterModal) {
                 await fetchTradeBlotterRows();
@@ -2240,6 +2263,7 @@ const Dashboard = () => {
 
                     setPendingLimitOrders((prev) => prev.filter((pending) => pending.id !== order.id));
                     setTradeMessage(tradeResponse.data.message || `Limit ${order.action} filled for ${order.symbol} at ${formatMoney(currentPrice)}.`);
+                    await applyImmediateCurriculumGradeSummary(tradeResponse?.data);
                     await fetchUserData();
                     if (showTradeBlotterModal) {
                         await fetchTradeBlotterRows();
@@ -2251,14 +2275,13 @@ const Dashboard = () => {
         }, 15000);
 
         return () => clearInterval(interval);
-    }, [BASE_URL, buildTradeRequest, fetchTradeBlotterRows, fetchUserData, isLoggedIn, pendingLimitOrders, showTradeBlotterModal, username]);
+    }, [BASE_URL, applyImmediateCurriculumGradeSummary, buildTradeRequest, fetchTradeBlotterRows, fetchUserData, isLoggedIn, pendingLimitOrders, showTradeBlotterModal, username]);
 
     useEffect(() => {
         if (!isLoggedIn || !showTrading || !selectedCompetitionCode || !username) {
             setCurriculumOverview(null);
             setCurriculumModules([]);
             setCurriculumGradeSummary(null);
-            setCurriculumGradeSummaryByModule([]);
             setCurriculumInstructorSummary(null);
             setCurriculumInstructorSubmissions([]);
             setCurriculumInstructorMessage('');
@@ -2405,7 +2428,6 @@ const Dashboard = () => {
                 if (!normalizedOverview.curriculum_enabled) {
                     setCurriculumModules([]);
                     setCurriculumGradeSummary(null);
-                    setCurriculumGradeSummaryByModule([]);
                     setCurriculumInstructorSummary(null);
                     setCurriculumInstructorSubmissions([]);
                     setCurriculumError('Curriculum is not enabled for this competition.');
@@ -2582,12 +2604,10 @@ const Dashboard = () => {
 
                 const resolvedModules = Array.isArray(modulesData?.modules) ? modulesData.modules : (Array.isArray(modulesData) ? modulesData : []);
                 const resolvedGradeSummary = resolveGradeSummaryOverall(gradesData);
-                const resolvedGradeSummaryByModule = resolveGradeSummaryByModule(gradesData);
                 const resolvedInstructorSummary = resolveInstructorSummaryPayload(instructorData);
 
                 setCurriculumModules(resolvedModules);
                 setCurriculumGradeSummary(resolvedGradeSummary);
-                setCurriculumGradeSummaryByModule(resolvedGradeSummaryByModule);
                 setCurriculumInstructorSummary(resolvedInstructorSummary);
                 setCurriculumInstructorSubmissions(Array.isArray(instructorSubmissionsData) ? instructorSubmissionsData : []);
                 setCurriculumInstructorMessage('');
@@ -2610,7 +2630,6 @@ const Dashboard = () => {
                 if (cancelled) return;
                 setCurriculumModules([]);
                 setCurriculumGradeSummary(null);
-                setCurriculumGradeSummaryByModule([]);
                 setCurriculumInstructorSummary(null);
                 setCurriculumInstructorSubmissions([]);
                 setCurriculumGradesMessage('');
@@ -2665,9 +2684,37 @@ const Dashboard = () => {
     ]);
 
     useEffect(() => {
+        if (!isLoggedIn || !showTrading || !selectedCompetitionCode || !username || !curriculumOverview?.curriculum_enabled) return undefined;
+
+        const handleFocusRefresh = () => {
+            setCurriculumRefreshTick((value) => value + 1);
+        };
+
+        const handleVisibilityRefresh = () => {
+            if (document.visibilityState === 'visible') handleFocusRefresh();
+        };
+
+        window.addEventListener('focus', handleFocusRefresh);
+        document.addEventListener('visibilitychange', handleVisibilityRefresh);
+        const pollTimer = window.setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                setCurriculumRefreshTick((value) => value + 1);
+            }
+        }, 30000);
+
+        return () => {
+            window.removeEventListener('focus', handleFocusRefresh);
+            document.removeEventListener('visibilitychange', handleVisibilityRefresh);
+            window.clearInterval(pollTimer);
+        };
+    }, [curriculumOverview?.curriculum_enabled, isLoggedIn, selectedCompetitionCode, showTrading, username]);
+
+    useEffect(() => {
         const latestSubmission = curriculumSubmissionState?.lastSubmissionResult;
         if (!latestSubmission) return;
-        const summaries = Array.isArray(curriculumGradeSummaryByModule) ? curriculumGradeSummaryByModule : [];
+        const summaries = Array.isArray(curriculumGradeSummary?.moduleGrades)
+            ? curriculumGradeSummary.moduleGrades
+            : (Array.isArray(curriculumGradeSummary?.module_grades) ? curriculumGradeSummary.module_grades : []);
         const moduleId = String(latestSubmission?.moduleId ?? '').trim();
         const weekNumber = String(latestSubmission?.weekNumber ?? '').trim();
         const matchedSummary = summaries.find((summary) => {
@@ -2703,7 +2750,7 @@ const Dashboard = () => {
             ...previous,
             submitVsGradesComparison: comparison,
         }));
-    }, [curriculumGradeSummaryByModule, curriculumSubmissionState?.lastSubmissionResult]);
+    }, [curriculumGradeSummary, curriculumSubmissionState?.lastSubmissionResult]);
 
 
     // =========================================
@@ -2768,6 +2815,7 @@ const Dashboard = () => {
                     feedback: immediateResult?.feedback ?? null,
                 },
             }));
+            await applyImmediateCurriculumGradeSummary(immediateResult);
             await refetchCurriculumGradeQueries({
                 refetchStudentGradesSummary: async () => setCurriculumRefreshTick((value) => value + 1),
             });
@@ -3971,7 +4019,6 @@ const Dashboard = () => {
                                     overview={curriculumOverview}
                                     modules={curriculumModules}
                                     gradeSummary={curriculumGradeSummary}
-                                    gradeSummaryByModule={curriculumGradeSummaryByModule}
                                     gradesMessage={curriculumGradesMessage}
                                     loading={curriculumLoading}
                                     error={curriculumError}
