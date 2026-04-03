@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { formatDisplayDate, getLetterGrade, normalizeCurriculumStatus } from '../../lib/curriculum/helpers';
 import { buildAssignmentSubmissionPayload, normalizeAssignmentIdKey } from '../../lib/curriculum/submission';
+import { asPercent } from '../../lib/teacherDashboard';
 
 const progressShell = {
   width: '100%',
@@ -441,7 +442,7 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
   );
 };
 
-export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradesMessage, loading, error, onSubmitItem, actionLoading, submissionState }) => {
+export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeSummaryByModule, gradesMessage, loading, error, onSubmitItem, actionLoading, submissionState }) => {
   if (!overview?.curriculum_enabled) return null;
   const percentage = Number(gradeSummary?.percentage ?? overview?.grade_percentage ?? 0);
   const letter = gradeSummary?.letter_grade || getLetterGrade(percentage);
@@ -476,9 +477,27 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
           <div style={{ ...detailShell, marginBottom: 8 }}>
             <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Overall Curriculum Grade Progress</strong></p>
             <p className="note" style={{ margin: 0 }}>
-              Points earned: {gradeSummary?.total_points_earned ?? 0}/{gradeSummary?.total_points_possible ?? 0}
+              Points earned: {gradeSummary?.totalPointsEarned ?? gradeSummary?.total_points_earned ?? 0}/{gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible ?? 0}
               {' • '}Completed: {gradeSummary?.completed_items ?? 0}/{gradeSummary?.total_items ?? 0}
             </p>
+          </div>
+          <div style={{ ...detailShell, marginBottom: 8 }}>
+            <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Per-Module Grade Breakdown</strong></p>
+            {Array.isArray(gradeSummaryByModule) && gradeSummaryByModule.length > 0 ? (
+              <div style={{ display: 'grid', gap: 6 }}>
+                {gradeSummaryByModule.map((moduleSummary) => (
+                  <div key={`${moduleSummary.moduleId || moduleSummary.module_id}-${moduleSummary.weekNumber || moduleSummary.week_number}`} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}>
+                    <p className="note" style={{ margin: 0 }}>
+                      <strong>Week {moduleSummary.weekNumber || moduleSummary.week_number || '-'}</strong>
+                      {' • '}{moduleSummary.moduleTitle || moduleSummary.module_title || 'Untitled module'}
+                      {' • '}Points: {Number(moduleSummary.totalPointsEarned || moduleSummary.total_points_earned || 0)}/{Number(moduleSummary.totalPointsPossible || moduleSummary.total_points_possible || 0)}
+                      {' • '}Percent: {asPercent(moduleSummary.percentage)}
+                      {' • '}Letter: {moduleSummary.letterGrade || moduleSummary.letter_grade || '—'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="note" style={{ margin: 0 }}>No module summaries yet.</p>}
           </div>
           <p className="note">
             Summary: {overview?.curriculum_weeks ?? overview?.totalWeeks ?? '-'} weeks • {formatDisplayDate(overview?.curriculum_start_date ?? overview?.startDate)} → {formatDisplayDate(overview?.curriculum_end_date ?? overview?.endDate)} • {overview?.module_count ?? overview?.moduleCount ?? 0} modules • {overview?.assignment_count ?? overview?.assignmentCount ?? 0} assignments
@@ -553,7 +572,7 @@ export const GradeSummaryCard = ({ gradeSummary }) => {
   return (
     <div className="card section">
       <h3>Grade Summary</h3>
-      <p className="note">Points: {gradeSummary.total_points_earned ?? 0} / {gradeSummary.total_points_possible ?? 0}</p>
+      <p className="note">Points: {gradeSummary.totalPointsEarned ?? gradeSummary.total_points_earned ?? 0} / {gradeSummary.totalPointsPossible ?? gradeSummary.total_points_possible ?? 0}</p>
       <p className="note">Percentage: {percentage.toFixed(1)}%</p>
       <p className="note">Letter Grade: {gradeSummary.letter_grade || getLetterGrade(percentage)}</p>
       <p className="note">Completed {gradeSummary.completed_items ?? 0} of {gradeSummary.total_items ?? 0} items</p>

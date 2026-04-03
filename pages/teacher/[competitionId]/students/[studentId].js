@@ -9,12 +9,18 @@ import {
   getStoredUsername,
   normalizeGradingStatus,
 } from '../../../../lib/teacherDashboard';
+import {
+  resolveGradeSummaryByModule,
+  resolveGradeSummaryOverall,
+} from '../../../../lib/curriculum/grades';
+import { applyGradeResponse, canShowManualGradeAction } from '../../../../lib/curriculum/teacherDetail';
 
 const parseStudentResponse = (payload) => {
   const source = payload && typeof payload === 'object' ? payload : {};
   return {
     student: source.student || source.user || null,
-    gradeSummary: source.gradeSummary || source.grade_summary || null,
+    gradeSummary: resolveGradeSummaryOverall(source),
+    gradeSummaryByModule: resolveGradeSummaryByModule(source),
     items: Array.isArray(source.items) ? source.items : [],
   };
 };
@@ -58,6 +64,7 @@ export default function TeacherStudentDetailPage() {
   const [username, setUsername] = useState('');
   const [student, setStudent] = useState(null);
   const [gradeSummary, setGradeSummary] = useState(null);
+  const [gradeSummaryByModule, setGradeSummaryByModule] = useState([]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -99,6 +106,7 @@ export default function TeacherStudentDetailPage() {
       const parsed = parseStudentResponse(response?.data);
       setStudent(parsed.student);
       setGradeSummary(parsed.gradeSummary);
+      setGradeSummaryByModule(parsed.gradeSummaryByModule);
       setItems(parsed.items);
     } catch (requestError) {
       const status = requestError?.response?.status;
@@ -162,9 +170,12 @@ export default function TeacherStudentDetailPage() {
       );
 
       const payload = response?.data || {};
-      const updatedSummary = payload.gradeSummary || payload.grade_summary || null;
+      const updatedGradeData = applyGradeResponse(payload);
+      const updatedSummary = updatedGradeData.gradeSummary;
+      const updatedSummaryByModule = updatedGradeData.gradeSummaryByModule;
       if (updatedSummary) setGradeSummary(updatedSummary);
-      if (Array.isArray(payload.items)) setItems(payload.items);
+      if (updatedSummaryByModule.length > 0) setGradeSummaryByModule(updatedSummaryByModule);
+      if (updatedGradeData.items.length > 0) setItems(updatedGradeData.items);
 
       await loadStudentDetail(username);
       setGradeModalItem(null);
@@ -244,6 +255,35 @@ export default function TeacherStudentDetailPage() {
               <p className="note">Letter: {gradeSummary?.letterGrade || gradeSummary?.letter_grade || '—'}</p>
               <p className="note">Points: {Number(gradeSummary?.totalPointsEarned || gradeSummary?.total_points_earned || 0)}/{Number(gradeSummary?.totalPointsPossible || gradeSummary?.total_points_possible || 0)}</p>
             </div>
+            <div className="section" style={{ border: '1px solid #d7dde2', borderRadius: 10, padding: 12 }}>
+              <h3 style={{ marginBottom: 8 }}>Per-Module Grade Breakdown</h3>
+              {gradeSummaryByModule.length > 0 ? (
+                <div style={{ overflowX: 'auto' }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Week</th>
+                        <th>Module</th>
+                        <th>Points</th>
+                        <th>Percentage</th>
+                        <th>Letter</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gradeSummaryByModule.map((moduleSummary) => (
+                        <tr key={`${moduleSummary.moduleId || moduleSummary.module_id}-${moduleSummary.weekNumber || moduleSummary.week_number}`}>
+                          <td>{moduleSummary.weekNumber || moduleSummary.week_number || '—'}</td>
+                          <td>{moduleSummary.moduleTitle || moduleSummary.module_title || '—'}</td>
+                          <td>{Number(moduleSummary.totalPointsEarned || moduleSummary.total_points_earned || 0)}/{Number(moduleSummary.totalPointsPossible || moduleSummary.total_points_possible || 0)}</td>
+                          <td>{asPercent(moduleSummary.percentage)}</td>
+                          <td>{moduleSummary.letterGrade || moduleSummary.letter_grade || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="note">No module summaries yet.</p>}
+            </div>
 
             <div className="section" style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button type="button" onClick={openTradesModal}>View Trade Blotter</button>
@@ -269,7 +309,7 @@ export default function TeacherStudentDetailPage() {
                 <tbody>
                   {items.map((item) => {
                     const status = normalizeGradingStatus(item.gradingStatus);
-                    const canManualGrade = Boolean(item.isManuallyGradable) && Boolean(item.submissionContent) && Boolean(item.submissionId);
+                    const canManualGrade = canShowManualGradeAction(item);
                     return (
                       <tr key={`${item.assignmentId}-${item.moduleId}`}>
                         <td>{item.moduleWeek}</td>
