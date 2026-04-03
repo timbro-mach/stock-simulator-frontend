@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { formatDisplayDate, normalizeCurriculumStatus } from '../../lib/curriculum/helpers';
 import { buildAssignmentSubmissionPayload, normalizeAssignmentIdKey } from '../../lib/curriculum/submission';
-import { asLetter, asPercent, asPoints } from '../../lib/teacherDashboard';
+import { asLetter, asPercent, asPoints, getStatusBadgeStyles, normalizeGradingStatus } from '../../lib/teacherDashboard';
+import { getGradeItemDisplayText, getGradeItemStatus, shouldShowNoGradedItemsYet } from '../../lib/curriculum/statusDisplay';
 
 const progressShell = {
   width: '100%',
@@ -458,6 +459,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
   const percentage = gradeSummary?.percentage ?? overview?.grade_percentage ?? null;
   const totalPointsPossible = gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible ?? null;
   const letter = gradeSummary?.letterGrade ?? gradeSummary?.letter_grade ?? 'N/A';
+  const showNoGradedItemsYet = shouldShowNoGradedItemsYet(gradeSummary);
   const [expandedModuleId, setExpandedModuleId] = useState(null);
   const moduleSummaryLookup = useMemo(() => {
     const byId = new Map();
@@ -476,7 +478,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
       <h3>Curriculum</h3>
       {loading ? <p className="note">Loading curriculum...</p> : null}
       {error ? <p className="note" style={{ color: '#b91c1c' }}>{error}</p> : null}
-      {gradesMessage ? <p className="note" style={{ color: '#b45309' }}>{gradesMessage}</p> : null}
+      {gradesMessage && !showNoGradedItemsYet ? <p className="note" style={{ color: '#b45309' }}>{gradesMessage}</p> : null}
       {submissionState?.latestMessage ? (
         <p className="note" style={{ color: '#1d4ed8' }}>{submissionState.latestMessage}</p>
       ) : null}
@@ -489,20 +491,14 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
           {submissionState?.lastSubmissionResult?.status ? ` • ${submissionState.lastSubmissionResult.status}` : ''}
         </p>
       ) : null}
-      {submissionState?.lastSubmissionResult?.score !== null
-      && submissionState?.lastSubmissionResult?.score !== undefined
-      && (!Array.isArray(gradeSummaryByModule) || gradeSummaryByModule.length === 0) ? (
-        <p className="note" style={{ marginTop: 0, color: '#92400e' }}>
-          Latest result is from submit response. Module totals update when grades API summaries are available.
-        </p>
-      ) : null}
 
       {!loading && (
         <>
           <p className="note">Progress: {Math.round(Number(overview?.progress_percent ?? 0))}%</p>
           <div style={progressShell}><div style={progressFill(overview?.progress_percent)} /></div>
           <p className="note" style={{ marginTop: 8 }}>
-            Grade: <strong>{asPercent(percentage, { pointsPossible: totalPointsPossible })}</strong> ({asLetter(letter, { percentage, pointsPossible: totalPointsPossible })})
+            Grade: <strong>{showNoGradedItemsYet ? 'No graded items yet' : asPercent(percentage, { pointsPossible: totalPointsPossible })}</strong>
+            {showNoGradedItemsYet ? '' : ` (${asLetter(letter, { percentage, pointsPossible: totalPointsPossible })})`}
           </p>
           <div style={{ ...detailShell, marginBottom: 8 }}>
             <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Overall Curriculum Grade Progress</strong></p>
@@ -604,22 +600,28 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
 export const GradeSummaryCard = ({ gradeSummary }) => {
   if (!gradeSummary) return null;
   const percentage = gradeSummary?.percentage;
+  const showNoGradedItemsYet = shouldShowNoGradedItemsYet(gradeSummary);
 
   return (
     <div className="card section">
       <h3>Grade Summary</h3>
       <p className="note">Points: {asPoints(gradeSummary.totalPointsEarned ?? gradeSummary.total_points_earned, gradeSummary.totalPointsPossible ?? gradeSummary.total_points_possible)}</p>
-      <p className="note">Percentage: {asPercent(percentage, { pointsPossible: gradeSummary.totalPointsPossible ?? gradeSummary.total_points_possible })}</p>
-      <p className="note">Letter Grade: {asLetter(gradeSummary.letterGrade ?? gradeSummary.letter_grade, { percentage, pointsPossible: gradeSummary.totalPointsPossible ?? gradeSummary.total_points_possible })}</p>
+      <p className="note">Percentage: {showNoGradedItemsYet ? 'No graded items yet' : asPercent(percentage, { pointsPossible: gradeSummary.totalPointsPossible ?? gradeSummary.total_points_possible })}</p>
+      <p className="note">Letter Grade: {showNoGradedItemsYet ? 'N/A' : asLetter(gradeSummary.letterGrade ?? gradeSummary.letter_grade, { percentage, pointsPossible: gradeSummary.totalPointsPossible ?? gradeSummary.total_points_possible })}</p>
       <p className="note">Completed {gradeSummary.completed_items ?? 0} of {gradeSummary.total_items ?? 0} items</p>
       <div className="section" style={{ display: 'grid', gap: 8 }}>
-        {(gradeSummary.items || []).map((item) => (
-          <div key={item.id || item.title} style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 8 }}>
-            <p className="note" style={{ margin: 0 }}>
-              {item.title}: {item.points_earned ?? 0}/{item.points_possible ?? 0} ({normalizeCurriculumStatus(item.status)})
-            </p>
-          </div>
-        ))}
+        {(gradeSummary.items || []).map((item) => {
+          const itemStatus = getGradeItemStatus(item);
+          return (
+            <div key={item.id || item.assignmentId || item.title} style={{ border: '1px solid var(--border-color)', borderRadius: 8, padding: 8 }}>
+              <p className="note" style={{ margin: 0, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                <strong>{item.title || 'Curriculum item'}</strong>
+                <span className="pill" style={getStatusBadgeStyles(itemStatus)}>{normalizeGradingStatus(itemStatus)}</span>
+                <span>{getGradeItemDisplayText(item)}</span>
+              </p>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

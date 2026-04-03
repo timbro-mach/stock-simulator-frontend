@@ -45,7 +45,7 @@ const parseRosterResponse = (payload) => {
 const resolveRosterSummary = (row) => resolveGradeSummaryOverall({
   gradeSummaryOverall: row?.gradeSummaryOverall ?? row?.grade_summary_overall,
   gradeSummary: row?.gradeSummary ?? row?.grade_summary,
-  percentage: row?.curriculumPercentage ?? row?.grade_percentage ?? row?.percentage,
+  percentage: row?.curriculumPercentage,
   letterGrade: row?.letterGrade ?? row?.letter_grade,
   totalPointsEarned: row?.totalPointsEarned ?? row?.total_points_earned,
   totalPointsPossible: row?.totalPointsPossible ?? row?.total_points_possible,
