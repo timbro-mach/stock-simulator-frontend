@@ -32,6 +32,9 @@ test('grade summary mapping prefers new keys with legacy fallback', () => {
       total_points_possible: 10,
       letter_grade: 'F',
     },
+    moduleGrades: [
+      { moduleId: 'm-1', quiz: 18, writtenAssignment: 17, tradeParticipation: 10, moduleTotalPoints: 45 },
+    ],
   });
   const withLegacyOnly = resolveGradeSummaryOverall({
     grade_summary: {
@@ -48,6 +51,10 @@ test('grade summary mapping prefers new keys with legacy fallback', () => {
   assert.equal(withNewKeys?.letterGrade, 'A');
   assert.equal(withLegacyOnly?.percentage, 87.5);
   assert.equal(withLegacyOnly?.letterGrade, 'B');
+  assert.equal(withNewKeys?.moduleGrades?.[0]?.quiz, 18);
+  assert.equal(withNewKeys?.moduleGrades?.[0]?.writtenAssignment, 17);
+  assert.equal(withNewKeys?.moduleGrades?.[0]?.tradeParticipation, 10);
+  assert.equal(withNewKeys?.moduleGrades?.[0]?.moduleTotalPoints, 45);
 });
 
 test('module breakdown mapping supports new and fallback keys', () => {
