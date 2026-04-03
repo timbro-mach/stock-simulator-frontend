@@ -158,9 +158,9 @@ export default function TeacherRosterPage() {
                   >
                     <td>{row.displayName || `Student ${row.userId}`}</td>
                     <td>{row.email || '—'}</td>
-                    <td>{asPercent(rowSummary?.percentage)}</td>
-                    <td>{asLetter(rowSummary?.letterGrade || rowSummary?.letter_grade)}</td>
-                    <td>{asPoints(rowSummary?.totalPointsEarned || rowSummary?.total_points_earned, rowSummary?.totalPointsPossible || rowSummary?.total_points_possible)}</td>
+                    <td>{asPercent(rowSummary?.percentage, { pointsPossible: rowSummary?.totalPointsPossible ?? rowSummary?.total_points_possible })}</td>
+                    <td>{asLetter(rowSummary?.letterGrade ?? rowSummary?.letter_grade, { percentage: rowSummary?.percentage, pointsPossible: rowSummary?.totalPointsPossible ?? rowSummary?.total_points_possible })}</td>
+                    <td>{asPoints(rowSummary?.totalPointsEarned ?? rowSummary?.total_points_earned, rowSummary?.totalPointsPossible ?? rowSummary?.total_points_possible)}</td>
                     <td>{row.completedQuizzes ?? 0}</td>
                     <td>{row.completedAssignments ?? 0}</td>
                     <td>{row.totalCurriculumItems ?? 0}</td>

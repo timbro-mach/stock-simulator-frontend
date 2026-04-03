@@ -13,7 +13,7 @@ import {
   toQuestionGradePayload,
   validateQuestionGrades,
 } from '../lib/curriculum/teacherDetail.js';
-import { asPercent, normalizeGradingStatus } from '../lib/teacherDashboard.js';
+import { asLetter, asPercent, normalizeGradingStatus } from '../lib/teacherDashboard.js';
 
 test('grade summary mapping prefers new keys with legacy fallback', () => {
   const withNewKeys = resolveGradeSummaryOverall({
@@ -89,10 +89,18 @@ test('percentage normalization handles ratio and percent values consistently for
   assert.equal(normalizePercentageValue(95), 95);
 });
 
-test('null-safe percentage rendering returns Not graded', () => {
-  assert.equal(asPercent(null), 'Not graded');
-  assert.equal(asPercent(undefined), 'Not graded');
+test('null-safe percentage rendering returns N/A', () => {
+  assert.equal(asPercent(null), 'N/A');
+  assert.equal(asPercent(undefined), 'N/A');
   assert.equal(asPercent(0.8), '80.0%');
+});
+
+test('zero-denominator summaries do not display derived percent or letter grades', () => {
+  assert.equal(asPercent(100, { pointsPossible: 0 }), 'N/A');
+  assert.equal(asPercent(null, { pointsPossible: 0 }), 'N/A');
+  assert.equal(asLetter('A', { percentage: null, pointsPossible: 0 }), 'N/A');
+  assert.equal(asLetter('A', { percentage: null }), 'N/A');
+  assert.equal(asLetter('A', { percentage: 95, pointsPossible: 100 }), 'A');
 });
 
 test('question grade helper prefers authoritative questionGrades and supports fallback rows', () => {
