@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  getSummaryByModule,
+  getSummaryOverall,
   normalizePercentageValue,
+  resolveProgressPercentage,
   resolveGradeSummaryByModule,
   resolveGradeSummaryOverall,
 } from '../lib/curriculum/grades.js';
@@ -66,6 +69,26 @@ test('module breakdown mapping supports new and fallback keys', () => {
   assert.equal(withLegacyKeys[0].percentage, 80);
 });
 
+test('summary helper supports camelCase and snake_case keys', () => {
+  const camelModules = getSummaryByModule({
+    gradeSummaryByModule: [{ moduleId: 'm-1' }],
+  });
+  const snakeModules = getSummaryByModule({
+    grade_summary_by_module: [{ module_id: 'm-2' }],
+  });
+  const camelOverall = getSummaryOverall({
+    gradeSummaryOverall: { totalPointsEarned: 10 },
+  });
+  const snakeOverall = getSummaryOverall({
+    grade_summary_overall: { total_points_earned: 12 },
+  });
+
+  assert.equal(camelModules.length, 1);
+  assert.equal(snakeModules.length, 1);
+  assert.equal(camelOverall.totalPointsEarned, 10);
+  assert.equal(snakeOverall.total_points_earned, 12);
+});
+
 test('manual grade action visibility respects manual gradable + submission id', () => {
   assert.equal(canShowManualGradeAction({ isManuallyGradable: true, submissionId: 'sub-1' }), true);
   assert.equal(canShowManualGradeAction({ isManuallyGradable: true }), false);
@@ -87,6 +110,12 @@ test('post-grade response mapping can update status + summaries', () => {
 test('percentage normalization handles ratio and percent values consistently for cross-view totals', () => {
   assert.equal(normalizePercentageValue(0.95), 95);
   assert.equal(normalizePercentageValue(95), 95);
+});
+
+test('progress percentage prefers explicit payload then falls back to completion ratio', () => {
+  assert.equal(resolveProgressPercentage({ progressPercentage: 0.25, completedItems: 0, totalItems: 0 }), 25);
+  assert.equal(resolveProgressPercentage({ completedItems: 3, totalItems: 4 }), 75);
+  assert.equal(resolveProgressPercentage({ completedItems: 2, totalItems: 0 }), 0);
 });
 
 test('null-safe percentage rendering returns N/A', () => {

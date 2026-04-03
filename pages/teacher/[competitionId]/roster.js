@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import axios from 'axios';
-import { getApiBaseUrl } from '../../../lib/api';
+import { getApiBaseUrl, getApiErrorMessage } from '../../../lib/api';
 import { asLetter, asPercent, asPoints, getStoredUsername } from '../../../lib/teacherDashboard';
-import { resolveGradeSummaryOverall } from '../../../lib/curriculum/grades';
+import { resolveGradeSummaryOverall, resolveProgressPercentage } from '../../../lib/curriculum/grades';
 
 const buildRosterUrls = (baseUrl, competitionId) => {
   const encodedId = encodeURIComponent(competitionId);
@@ -49,6 +49,9 @@ const resolveRosterSummary = (row) => resolveGradeSummaryOverall({
   letterGrade: row?.letterGrade ?? row?.letter_grade,
   totalPointsEarned: row?.totalPointsEarned ?? row?.total_points_earned,
   totalPointsPossible: row?.totalPointsPossible ?? row?.total_points_possible,
+  completedCurriculumItems: row?.completedCurriculumItems ?? row?.completed_curriculum_items,
+  totalCurriculumItems: row?.totalCurriculumItems ?? row?.total_curriculum_items,
+  progressPercentage: row?.progressPercentage ?? row?.progress_percentage,
 });
 
 export default function TeacherRosterPage() {
@@ -110,7 +113,7 @@ export default function TeacherRosterPage() {
           router.replace('/not-authorized');
           return;
         }
-        setError(mapRosterError(status));
+        setError(getApiErrorMessage(requestError, mapRosterError(status)));
       } finally {
         setLoading(false);
       }
@@ -141,15 +144,21 @@ export default function TeacherRosterPage() {
                   <th>Grade %</th>
                   <th>Letter</th>
                   <th>Points</th>
-                  <th>Completed quizzes</th>
-                  <th>Completed assignments</th>
-                  <th>Total items</th>
+                  <th>Completed</th>
+                  <th>Progress</th>
                   <th>Trades</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => {
                   const rowSummary = resolveRosterSummary(row);
+                  const completedCurriculumItems = rowSummary?.completedCurriculumItems ?? rowSummary?.completed_items ?? 0;
+                  const totalCurriculumItems = rowSummary?.totalCurriculumItems ?? rowSummary?.total_items ?? 0;
+                  const progressPercentage = resolveProgressPercentage({
+                    progressPercentage: rowSummary?.progressPercentage ?? rowSummary?.progress_percentage,
+                    completedItems: completedCurriculumItems,
+                    totalItems: totalCurriculumItems,
+                  });
                   return (
                   <tr
                     key={row.userId}
@@ -161,9 +170,8 @@ export default function TeacherRosterPage() {
                     <td>{asPercent(rowSummary?.percentage, { pointsPossible: rowSummary?.totalPointsPossible ?? rowSummary?.total_points_possible })}</td>
                     <td>{asLetter(rowSummary?.letterGrade ?? rowSummary?.letter_grade, { percentage: rowSummary?.percentage, pointsPossible: rowSummary?.totalPointsPossible ?? rowSummary?.total_points_possible })}</td>
                     <td>{asPoints(rowSummary?.totalPointsEarned ?? rowSummary?.total_points_earned, rowSummary?.totalPointsPossible ?? rowSummary?.total_points_possible)}</td>
-                    <td>{row.completedQuizzes ?? 0}</td>
-                    <td>{row.completedAssignments ?? 0}</td>
-                    <td>{row.totalCurriculumItems ?? 0}</td>
+                    <td>{completedCurriculumItems}/{totalCurriculumItems}</td>
+                    <td>{Math.round(progressPercentage)}%</td>
                     <td>{row.hasTrades ? `Yes (${row.tradeCount ?? 0})` : 'No'}</td>
                   </tr>
                   );

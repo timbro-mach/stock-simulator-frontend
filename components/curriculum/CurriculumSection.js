@@ -3,6 +3,7 @@ import { formatDisplayDate, normalizeCurriculumStatus } from '../../lib/curricul
 import { buildAssignmentSubmissionPayload, normalizeAssignmentIdKey } from '../../lib/curriculum/submission';
 import { asLetter, asPercent, asPoints, getStatusBadgeStyles, normalizeGradingStatus } from '../../lib/teacherDashboard';
 import { getGradeItemDisplayText, getGradeItemStatus, shouldShowNoGradedItemsYet } from '../../lib/curriculum/statusDisplay';
+import { resolveProgressPercentage } from '../../lib/curriculum/grades';
 
 const progressShell = {
   width: '100%',
@@ -459,6 +460,13 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
   const percentage = gradeSummary?.percentage ?? overview?.grade_percentage ?? null;
   const totalPointsPossible = gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible ?? null;
   const letter = gradeSummary?.letterGrade ?? gradeSummary?.letter_grade ?? 'N/A';
+  const completedItems = gradeSummary?.completedItems ?? gradeSummary?.completed_items ?? 0;
+  const totalItems = gradeSummary?.totalItems ?? gradeSummary?.total_items ?? 0;
+  const progressPercentage = resolveProgressPercentage({
+    progressPercentage: gradeSummary?.progressPercentage ?? gradeSummary?.progress_percentage ?? overview?.progress_percent,
+    completedItems,
+    totalItems,
+  });
   const showNoGradedItemsYet = shouldShowNoGradedItemsYet(gradeSummary);
   const [expandedModuleId, setExpandedModuleId] = useState(null);
   const moduleSummaryLookup = useMemo(() => {
@@ -494,8 +502,8 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
 
       {!loading && (
         <>
-          <p className="note">Progress: {Math.round(Number(overview?.progress_percent ?? 0))}%</p>
-          <div style={progressShell}><div style={progressFill(overview?.progress_percent)} /></div>
+          <p className="note">Progress: {Math.round(Number(progressPercentage ?? 0))}%</p>
+          <div style={progressShell}><div style={progressFill(progressPercentage)} /></div>
           <p className="note" style={{ marginTop: 8 }}>
             Grade: <strong>{showNoGradedItemsYet ? 'No graded items yet' : asPercent(percentage, { pointsPossible: totalPointsPossible })}</strong>
             {showNoGradedItemsYet ? '' : ` (${asLetter(letter, { percentage, pointsPossible: totalPointsPossible })})`}
@@ -503,8 +511,8 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
           <div style={{ ...detailShell, marginBottom: 8 }}>
             <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Overall Curriculum Grade Progress</strong></p>
             <p className="note" style={{ margin: 0 }}>
-              Points earned: {gradeSummary?.totalPointsEarned ?? gradeSummary?.total_points_earned ?? 0}/{gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible ?? 0}
-              {' • '}Completed: {gradeSummary?.completed_items ?? 0}/{gradeSummary?.total_items ?? 0}
+              Points earned: {asPoints(gradeSummary?.totalPointsEarned ?? gradeSummary?.total_points_earned, gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible)}
+              {' • '}Completed: {completedItems}/{totalItems}
             </p>
           </div>
           <div style={{ ...detailShell, marginBottom: 8 }}>
