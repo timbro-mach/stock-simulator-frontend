@@ -28,6 +28,7 @@ import {
     resolveGradeSummaryByModule,
     resolveGradeSummaryOverall,
 } from '../lib/curriculum/grades';
+import { refetchCurriculumGradeQueries } from '../lib/curriculum/queryKeys';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -2469,7 +2470,10 @@ const Dashboard = () => {
 
                 if (effectiveUserId) {
                     try {
-                        const gradesResponse = await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`);
+                        const gradesResponse = await axios.get(
+                            `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`,
+                            { params: { username } },
+                        );
                         gradesData = gradesResponse?.data ?? null;
                         if (!cancelled) {
                             setCurriculumDebugState((previous) => ({
@@ -2764,7 +2768,9 @@ const Dashboard = () => {
                     feedback: immediateResult?.feedback ?? null,
                 },
             }));
-            setCurriculumRefreshTick((value) => value + 1);
+            await refetchCurriculumGradeQueries({
+                refetchStudentGradesSummary: async () => setCurriculumRefreshTick((value) => value + 1),
+            });
         } catch (error) {
             console.error('Error submitting curriculum item:', error);
             const errorMessage = getApiErrorMessage(error, `Could not submit assignment: ${item?.title || 'Unknown assignment'}`);
@@ -2870,7 +2876,9 @@ const Dashboard = () => {
                 },
             ]);
             setCurriculumInstructorMessage('Submission graded successfully.');
-            setCurriculumRefreshTick((value) => value + 1);
+            await refetchCurriculumGradeQueries({
+                refetchStudentGradesSummary: async () => setCurriculumRefreshTick((value) => value + 1),
+            });
         } catch (error) {
             setCurriculumInstructorMessage('Unable to grade submission right now. Curriculum remains usable.');
         } finally {

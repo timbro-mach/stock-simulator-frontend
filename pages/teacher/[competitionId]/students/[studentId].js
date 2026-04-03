@@ -12,6 +12,9 @@ import {
   normalizeGradingStatus,
 } from '../../../../lib/teacherDashboard';
 import {
+  getSummaryByModule,
+  getSummaryOverall,
+  resolveProgressPercentage,
   resolveGradeSummaryByModule,
   resolveGradeSummaryOverall,
 } from '../../../../lib/curriculum/grades';
@@ -22,12 +25,16 @@ import {
   toQuestionGradePayload,
   validateQuestionGrades,
 } from '../../../../lib/curriculum/teacherDetail';
+import { refetchCurriculumGradeQueries } from '../../../../lib/curriculum/queryKeys';
 
 const parseStudentResponse = (payload) => {
   const source = payload && typeof payload === 'object' ? payload : {};
   const student = source.student || source.user || null;
+  const summaryOverall = getSummaryOverall(source);
   const summarySource = {
     ...source,
+    gradeSummaryOverall: summaryOverall,
+    gradeSummary: source?.gradeSummary ?? source?.grade_summary,
     percentage: source?.curriculumPercentage ?? student?.curriculumPercentage,
     letterGrade: source?.letterGrade ?? source?.letter_grade ?? student?.letterGrade ?? student?.letter_grade,
     totalPointsEarned: source?.totalPointsEarned ?? source?.total_points_earned ?? student?.totalPointsEarned ?? student?.total_points_earned,
@@ -36,7 +43,7 @@ const parseStudentResponse = (payload) => {
   return {
     student,
     gradeSummary: resolveGradeSummaryOverall(summarySource),
-    gradeSummaryByModule: resolveGradeSummaryByModule(source),
+    gradeSummaryByModule: resolveGradeSummaryByModule({ ...source, gradeSummaryByModule: getSummaryByModule(source) }),
     items: Array.isArray(source.items) ? source.items : [],
   };
 };
@@ -207,7 +214,9 @@ export default function TeacherStudentDetailPage() {
       setGradeSummaryByModule(updatedSummaryByModule);
       if (updatedGradeData.items.length > 0) setItems(updatedGradeData.items);
 
-      await loadStudentDetail(username);
+      await refetchCurriculumGradeQueries({
+        refetchTeacherStudentDetail: async () => loadStudentDetail(username),
+      });
       setGradeModalItem(null);
     } catch (requestError) {
       if (requestError?.response?.status === 422) {
@@ -284,6 +293,16 @@ export default function TeacherStudentDetailPage() {
               <p className="note">Percentage: {asPercent(gradeSummary?.percentage, { pointsPossible: gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible })}</p>
               <p className="note">Letter: {asLetter(gradeSummary?.letterGrade ?? gradeSummary?.letter_grade, { percentage: gradeSummary?.percentage, pointsPossible: gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible })}</p>
               <p className="note">Points: {asPoints(gradeSummary?.totalPointsEarned ?? gradeSummary?.total_points_earned, gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible)}</p>
+              <p className="note">
+                Completed: {gradeSummary?.completedCurriculumItems ?? gradeSummary?.completed_items ?? 0}/{gradeSummary?.totalCurriculumItems ?? gradeSummary?.total_items ?? 0}
+              </p>
+              <p className="note">
+                Progress: {Math.round(resolveProgressPercentage({
+                  progressPercentage: gradeSummary?.progressPercentage ?? gradeSummary?.progress_percentage,
+                  completedItems: gradeSummary?.completedCurriculumItems ?? gradeSummary?.completed_items,
+                  totalItems: gradeSummary?.totalCurriculumItems ?? gradeSummary?.total_items,
+                }))}%
+              </p>
             </div>
             <div className="section" style={{ border: '1px solid #d7dde2', borderRadius: 10, padding: 12 }}>
               <h3 style={{ marginBottom: 8 }}>Per-Module Grade Breakdown</h3>
