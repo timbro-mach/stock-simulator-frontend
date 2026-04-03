@@ -546,24 +546,6 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               {' • '}Letter: {letter || 'N/A'}
             </p>
           </div>
-          <div style={{ ...detailShell, marginBottom: 8 }}>
-            <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Per-Module Grade Breakdown</strong></p>
-            {normalizedModuleSummaries.length > 0 ? (
-              <div style={{ display: 'grid', gap: 6 }}>
-                {normalizedModuleSummaries.map((moduleSummary) => (
-                  <div key={`${moduleSummary.moduleId || moduleSummary.module_id}-${moduleSummary.weekNumber || moduleSummary.week_number}`} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 8 }}>
-                    <p className="note" style={{ margin: 0 }}>
-                      <strong>Week {moduleSummary.weekNumber || moduleSummary.week_number || '-'}</strong>
-                      {' • '}{moduleSummary.moduleTitle || moduleSummary.module_title || 'Untitled module'}
-                      {' • '}Points: {asPoints(moduleSummary.totalPointsEarned ?? moduleSummary.total_points_earned, moduleSummary.totalPointsPossible ?? moduleSummary.total_points_possible)}
-                      {' • '}Percent: {asPercent(moduleSummary.percentage, { pointsPossible: moduleSummary.totalPointsPossible ?? moduleSummary.total_points_possible })}
-                      {' • '}Letter: {asLetter(moduleSummary.letterGrade ?? moduleSummary.letter_grade, { percentage: moduleSummary.percentage, pointsPossible: moduleSummary.totalPointsPossible ?? moduleSummary.total_points_possible })}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="note" style={{ margin: 0 }}>No module summaries yet.</p>}
-          </div>
           <p className="note">
             Summary: {overview?.curriculum_weeks ?? overview?.totalWeeks ?? '-'} weeks • {formatDisplayDate(overview?.curriculum_start_date ?? overview?.startDate)} → {formatDisplayDate(overview?.curriculum_end_date ?? overview?.endDate)} • {overview?.module_count ?? overview?.moduleCount ?? 0} modules • {overview?.assignment_count ?? overview?.assignmentCount ?? 0} assignments
           </p>

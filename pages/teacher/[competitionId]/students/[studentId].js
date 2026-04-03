@@ -12,10 +12,8 @@ import {
   normalizeGradingStatus,
 } from '../../../../lib/teacherDashboard';
 import {
-  getSummaryByModule,
   getSummaryOverall,
   resolveProgressPercentage,
-  resolveGradeSummaryByModule,
   resolveGradeSummaryOverall,
 } from '../../../../lib/curriculum/grades';
 import {
@@ -43,7 +41,6 @@ const parseStudentResponse = (payload) => {
   return {
     student,
     gradeSummary: resolveGradeSummaryOverall(summarySource),
-    gradeSummaryByModule: resolveGradeSummaryByModule({ ...source, gradeSummaryByModule: getSummaryByModule(source) }),
     items: Array.isArray(source.items) ? source.items : [],
   };
 };
@@ -87,7 +84,6 @@ export default function TeacherStudentDetailPage() {
   const [username, setUsername] = useState('');
   const [student, setStudent] = useState(null);
   const [gradeSummary, setGradeSummary] = useState(null);
-  const [gradeSummaryByModule, setGradeSummaryByModule] = useState([]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -129,7 +125,6 @@ export default function TeacherStudentDetailPage() {
       const parsed = parseStudentResponse(response?.data);
       setStudent(parsed.student);
       setGradeSummary(parsed.gradeSummary);
-      setGradeSummaryByModule(parsed.gradeSummaryByModule);
       setItems(parsed.items);
     } catch (requestError) {
       const status = requestError?.response?.status;
@@ -209,9 +204,7 @@ export default function TeacherStudentDetailPage() {
       const responsePayload = response?.data || {};
       const updatedGradeData = applyGradeResponse(responsePayload);
       const updatedSummary = updatedGradeData.gradeSummary;
-      const updatedSummaryByModule = updatedGradeData.gradeSummaryByModule;
       if (updatedSummary) setGradeSummary(updatedSummary);
-      setGradeSummaryByModule(updatedSummaryByModule);
       if (updatedGradeData.items.length > 0) setItems(updatedGradeData.items);
 
       await refetchCurriculumGradeQueries({
@@ -304,36 +297,6 @@ export default function TeacherStudentDetailPage() {
                 }))}%
               </p>
             </div>
-            <div className="section" style={{ border: '1px solid #d7dde2', borderRadius: 10, padding: 12 }}>
-              <h3 style={{ marginBottom: 8 }}>Per-Module Grade Breakdown</h3>
-              {gradeSummaryByModule.length > 0 ? (
-                <div style={{ overflowX: 'auto' }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Week</th>
-                        <th>Module</th>
-                        <th>Points</th>
-                        <th>Percentage</th>
-                        <th>Letter</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {gradeSummaryByModule.map((moduleSummary) => (
-                        <tr key={`${moduleSummary.moduleId || moduleSummary.module_id}-${moduleSummary.weekNumber || moduleSummary.week_number}`}>
-                          <td>{moduleSummary.weekNumber || moduleSummary.week_number || '—'}</td>
-                          <td>{moduleSummary.moduleTitle || moduleSummary.module_title || '—'}</td>
-                          <td>{asPoints(moduleSummary.totalPointsEarned ?? moduleSummary.total_points_earned, moduleSummary.totalPointsPossible ?? moduleSummary.total_points_possible)}</td>
-                          <td>{asPercent(moduleSummary.percentage, { pointsPossible: moduleSummary.totalPointsPossible ?? moduleSummary.total_points_possible })}</td>
-                          <td>{asLetter(moduleSummary.letterGrade ?? moduleSummary.letter_grade, { percentage: moduleSummary.percentage, pointsPossible: moduleSummary.totalPointsPossible ?? moduleSummary.total_points_possible })}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : <p className="note">No module summaries yet.</p>}
-            </div>
-
             <div className="section" style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button type="button" onClick={openTradesModal}>View Trade Blotter</button>
             </div>
