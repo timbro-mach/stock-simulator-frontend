@@ -105,6 +105,27 @@ test('module breakdown supports week + points snake_case aliases', () => {
   assert.equal(summary[0].totalPointsPossible, 20);
 });
 
+test('module breakdown maps alternate component-score aliases for quiz/written/trading tiles', () => {
+  const summary = resolveGradeSummaryByModule({
+    module_grade_summary: [
+      {
+        module_id: 'm-2',
+        week_number: 2,
+        quiz_points_earned: 17,
+        assignment_points_earned: 16,
+        trade_points: 8,
+        total_points_earned: 41,
+        total_points_possible: 50,
+      },
+    ],
+  });
+
+  assert.equal(summary.length, 1);
+  assert.equal(summary[0].quiz, 17);
+  assert.equal(summary[0].writtenAssignment, 16);
+  assert.equal(summary[0].tradeParticipation, 8);
+});
+
 test('summary helper supports camelCase and snake_case keys', () => {
   const camelModules = getSummaryByModule({
     gradeSummaryByModule: [{ moduleId: 'm-1' }],
