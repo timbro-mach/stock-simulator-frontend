@@ -49,6 +49,8 @@ const gradeTile = {
 
 const getModuleId = (module) => module?.moduleId || module?.id || module?.week_number || module?.weekNumber;
 const getAssignmentId = (assignment) => normalizeAssignmentIdKey(assignment?.assignmentId || assignment?.id);
+const getModuleSummaryId = (moduleSummary) => moduleSummary?.moduleId || moduleSummary?.module_id || moduleSummary?.id;
+const getModuleSummaryWeek = (moduleSummary) => moduleSummary?.weekNumber ?? moduleSummary?.week_number;
 
 const getAssignments = (module) => {
   if (Array.isArray(module?.assignments)) return module.assignments;
@@ -229,8 +231,10 @@ const getModuleGradeBreakdown = (module) => {
       ? ['true', 'yes', '1', 'completed'].includes(tradesCompletedRaw.toLowerCase())
       : null);
 
-  const resolvedWrittenTotal = writtenTotal ?? ((writtenQ1 ?? 0) + (writtenQ2 ?? 0));
-  const resolvedModuleTotal = moduleTotal ?? ((quiz ?? 0) + (resolvedWrittenTotal ?? 0) + (trading ?? 0));
+  const hasWrittenParts = writtenQ1 !== null || writtenQ2 !== null;
+  const hasAnyComponent = quiz !== null || writtenTotal !== null || hasWrittenParts || trading !== null;
+  const resolvedWrittenTotal = writtenTotal ?? (hasWrittenParts ? ((writtenQ1 ?? 0) + (writtenQ2 ?? 0)) : null);
+  const resolvedModuleTotal = moduleTotal ?? (hasAnyComponent ? ((quiz ?? 0) + (resolvedWrittenTotal ?? 0) + (trading ?? 0)) : null);
 
   return {
     quiz,
@@ -447,6 +451,17 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
   const percentage = gradeSummary?.percentage ?? overview?.grade_percentage ?? null;
   const letter = gradeSummary?.letterGrade || gradeSummary?.letter_grade || 'N/A';
   const [expandedModuleId, setExpandedModuleId] = useState(null);
+  const moduleSummaryLookup = useMemo(() => {
+    const byId = new Map();
+    const byWeek = new Map();
+    (Array.isArray(gradeSummaryByModule) ? gradeSummaryByModule : []).forEach((moduleSummary) => {
+      const summaryId = String(getModuleSummaryId(moduleSummary) ?? '').trim();
+      const summaryWeek = String(getModuleSummaryWeek(moduleSummary) ?? '').trim();
+      if (summaryId) byId.set(summaryId, moduleSummary);
+      if (summaryWeek) byWeek.set(summaryWeek, moduleSummary);
+    });
+    return { byId, byWeek };
+  }, [gradeSummaryByModule]);
 
   return (
     <div className="card section">
@@ -464,6 +479,13 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
             ? ` (${Number(submissionState.lastSubmissionResult.percentage).toFixed(1)}%)`
             : ''}
           {submissionState?.lastSubmissionResult?.status ? ` • ${submissionState.lastSubmissionResult.status}` : ''}
+        </p>
+      ) : null}
+      {submissionState?.lastSubmissionResult?.score !== null
+      && submissionState?.lastSubmissionResult?.score !== undefined
+      && (!Array.isArray(gradeSummaryByModule) || gradeSummaryByModule.length === 0) ? (
+        <p className="note" style={{ marginTop: 0, color: '#92400e' }}>
+          Latest result is from the submit response. Module totals update when the grades API returns per-module summaries.
         </p>
       ) : null}
 
@@ -515,6 +537,12 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
               const dueDate = module?.dueDate ?? module?.due_date;
               const lessonContent = resolveLessonContent(module);
               const moduleGrades = getModuleGradeBreakdown(module);
+              const moduleSummaryById = moduleSummaryLookup.byId.get(String(moduleId ?? '').trim());
+              const moduleSummaryByWeek = moduleSummaryLookup.byWeek.get(String(weekNumber ?? '').trim());
+              const moduleSummary = moduleSummaryById || moduleSummaryByWeek || null;
+              const moduleTotalEarned = moduleSummary?.totalPointsEarned ?? moduleSummary?.total_points_earned ?? null;
+              const moduleTotalPossible = moduleSummary?.totalPointsPossible ?? moduleSummary?.total_points_possible ?? 50;
+              const displayedModuleTotal = moduleGrades.resolvedModuleTotal ?? moduleTotalEarned;
 
               return (
                 <div key={moduleId} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
@@ -531,7 +559,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
                     <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Quiz (20)</strong><br />{moduleGrades.quiz ?? '—'}/20</p></div>
                     <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Written (20)</strong><br />{moduleGrades.resolvedWrittenTotal ?? '—'}/20 (Q1: {moduleGrades.writtenQ1 ?? '—'}/10, Q2: {moduleGrades.writtenQ2 ?? '—'}/10)</p></div>
                     <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Trading (10)</strong><br />{moduleGrades.trading ?? '—'}/10 • {moduleGrades.tradesCompleted === null ? 'Activity: Unknown' : `Activity: ${moduleGrades.tradesCompleted ? 'Yes' : 'No'}`}</p></div>
-                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Module Total (50)</strong><br />{moduleGrades.resolvedModuleTotal ?? '—'}/50</p></div>
+                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Module Total ({moduleTotalPossible})</strong><br />{displayedModuleTotal ?? '—'}/{moduleTotalPossible}</p></div>
                   </div>
 
                   {isExpanded ? (
