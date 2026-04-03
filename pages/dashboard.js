@@ -2778,6 +2778,9 @@ const Dashboard = () => {
             setCurriculumInstructorMessage('Scores must be within range (Q1/Q2: 0-10, total: 0-20).');
             return;
         }
+        const questionGrades = [];
+        if (hasQ1) questionGrades.push({ questionId: 'q1', pointsAwarded: q1, pointsPossible: 10, feedback: '' });
+        if (hasQ2) questionGrades.push({ questionId: 'q2', pointsAwarded: q2, pointsPossible: 10, feedback: '' });
         const gradePayload = {
             competition_id: selectedCompetitionId,
             score: effectiveScore,
@@ -2794,6 +2797,16 @@ const Dashboard = () => {
         setCurriculumInstructorMessage('');
         try {
             await postToFirstSuccessfulEndpoint([
+                {
+                    method: 'post',
+                    url: `${BASE_URL}/teacher/submissions/${encodeURIComponent(submissionId)}/question-grades`,
+                    data: {
+                        username,
+                        grades: questionGrades,
+                        finalFeedback: comments || '',
+                        rubricNotes: '',
+                    },
+                },
                 {
                     method: 'post',
                     url: `${BASE_URL}/curriculum/submissions/${encodeURIComponent(submissionId)}/grade`,

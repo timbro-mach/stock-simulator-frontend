@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import axios from 'axios';
 import { getApiBaseUrl } from '../../../lib/api';
-import { asPercent, getStoredUsername } from '../../../lib/teacherDashboard';
+import { asLetter, asPercent, asPoints, getStoredUsername } from '../../../lib/teacherDashboard';
 import { resolveGradeSummaryOverall } from '../../../lib/curriculum/grades';
 
 const buildRosterUrls = (baseUrl, competitionId) => {
@@ -159,8 +159,8 @@ export default function TeacherRosterPage() {
                     <td>{row.displayName || `Student ${row.userId}`}</td>
                     <td>{row.email || '—'}</td>
                     <td>{asPercent(rowSummary?.percentage)}</td>
-                    <td>{rowSummary?.letterGrade || rowSummary?.letter_grade || '—'}</td>
-                    <td>{Number(rowSummary?.totalPointsEarned || rowSummary?.total_points_earned || 0)}/{Number(rowSummary?.totalPointsPossible || rowSummary?.total_points_possible || 0)}</td>
+                    <td>{asLetter(rowSummary?.letterGrade || rowSummary?.letter_grade)}</td>
+                    <td>{asPoints(rowSummary?.totalPointsEarned || rowSummary?.total_points_earned, rowSummary?.totalPointsPossible || rowSummary?.total_points_possible)}</td>
                     <td>{row.completedQuizzes ?? 0}</td>
                     <td>{row.completedAssignments ?? 0}</td>
                     <td>{row.totalCurriculumItems ?? 0}</td>

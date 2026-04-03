@@ -5,6 +5,8 @@ import axios from 'axios';
 import { getApiBaseUrl, getApiErrorMessage } from '../../../../lib/api';
 import {
   asPercent,
+  asLetter,
+  asPoints,
   getStatusBadgeStyles,
   getStoredUsername,
   normalizeGradingStatus,
@@ -13,7 +15,13 @@ import {
   resolveGradeSummaryByModule,
   resolveGradeSummaryOverall,
 } from '../../../../lib/curriculum/grades';
-import { applyGradeResponse, canShowManualGradeAction } from '../../../../lib/curriculum/teacherDetail';
+import {
+  applyGradeResponse,
+  canShowManualGradeAction,
+  getQuestionGradeRows,
+  toQuestionGradePayload,
+  validateQuestionGrades,
+} from '../../../../lib/curriculum/teacherDetail';
 
 const parseStudentResponse = (payload) => {
   const source = payload && typeof payload === 'object' ? payload : {};
@@ -70,7 +78,7 @@ export default function TeacherStudentDetailPage() {
   const [error, setError] = useState('');
 
   const [gradeModalItem, setGradeModalItem] = useState(null);
-  const [gradeForm, setGradeForm] = useState({ score: '', percentage: '', feedback: '', rubric_notes: '' });
+  const [gradeForm, setGradeForm] = useState({ grades: [], finalFeedback: '', rubricNotes: '' });
   const [gradeError, setGradeError] = useState('');
   const [gradeLoading, setGradeLoading] = useState(false);
 
@@ -142,14 +150,21 @@ export default function TeacherStudentDetailPage() {
   }, [competitionId, studentId, username]);
 
   const openGradeModal = (item) => {
+    const gradeRows = getQuestionGradeRows(item);
     setGradeModalItem(item);
     setGradeForm({
-      score: item?.pointsEarned ?? '',
-      percentage: item?.percentage ?? '',
-      feedback: item?.feedback?.comment || '',
-      rubric_notes: item?.rubricNotes || '',
+      grades: gradeRows,
+      finalFeedback: item?.feedback?.comment || item?.feedback || '',
+      rubricNotes: item?.rubricNotes || '',
     });
     setGradeError('');
+  };
+
+  const updateQuestionGrade = (index, key, value) => {
+    setGradeForm((prev) => ({
+      ...prev,
+      grades: prev.grades.map((grade, gradeIndex) => (gradeIndex === index ? { ...grade, [key]: value } : grade)),
+    }));
   };
 
   const handleSubmitGrade = async () => {
@@ -158,19 +173,26 @@ export default function TeacherStudentDetailPage() {
     setGradeError('');
 
     try {
+      const validationMessage = validateQuestionGrades(gradeForm.grades);
+      if (validationMessage) {
+        setGradeError(validationMessage);
+        return;
+      }
+
+      const payload = toQuestionGradePayload({
+        username,
+        grades: gradeForm.grades,
+        finalFeedback: gradeForm.finalFeedback,
+        rubricNotes: gradeForm.rubricNotes,
+      });
+
       const response = await axios.post(
-        `${BASE_URL}/curriculum/submissions/${encodeURIComponent(gradeModalItem.submissionId)}/grade`,
-        {
-          username,
-          score: Number(gradeForm.score),
-          feedback: gradeForm.feedback,
-          rubric_notes: gradeForm.rubric_notes,
-          percentage: Number(gradeForm.percentage),
-        },
+        `${BASE_URL}/teacher/submissions/${encodeURIComponent(gradeModalItem.submissionId)}/question-grades`,
+        payload,
       );
 
-      const payload = response?.data || {};
-      const updatedGradeData = applyGradeResponse(payload);
+      const responsePayload = response?.data || {};
+      const updatedGradeData = applyGradeResponse(responsePayload);
       const updatedSummary = updatedGradeData.gradeSummary;
       const updatedSummaryByModule = updatedGradeData.gradeSummaryByModule;
       if (updatedSummary) setGradeSummary(updatedSummary);
@@ -252,8 +274,8 @@ export default function TeacherStudentDetailPage() {
             <div className="section" style={{ border: '1px solid #d7dde2', borderRadius: 10, padding: 12 }}>
               <h3 style={{ marginBottom: 8 }}>Grade Summary</h3>
               <p className="note">Percentage: {asPercent(gradeSummary?.percentage)}</p>
-              <p className="note">Letter: {gradeSummary?.letterGrade || gradeSummary?.letter_grade || '—'}</p>
-              <p className="note">Points: {Number(gradeSummary?.totalPointsEarned || gradeSummary?.total_points_earned || 0)}/{Number(gradeSummary?.totalPointsPossible || gradeSummary?.total_points_possible || 0)}</p>
+              <p className="note">Letter: {asLetter(gradeSummary?.letterGrade || gradeSummary?.letter_grade)}</p>
+              <p className="note">Points: {asPoints(gradeSummary?.totalPointsEarned || gradeSummary?.total_points_earned, gradeSummary?.totalPointsPossible || gradeSummary?.total_points_possible)}</p>
             </div>
             <div className="section" style={{ border: '1px solid #d7dde2', borderRadius: 10, padding: 12 }}>
               <h3 style={{ marginBottom: 8 }}>Per-Module Grade Breakdown</h3>
@@ -274,9 +296,9 @@ export default function TeacherStudentDetailPage() {
                         <tr key={`${moduleSummary.moduleId || moduleSummary.module_id}-${moduleSummary.weekNumber || moduleSummary.week_number}`}>
                           <td>{moduleSummary.weekNumber || moduleSummary.week_number || '—'}</td>
                           <td>{moduleSummary.moduleTitle || moduleSummary.module_title || '—'}</td>
-                          <td>{Number(moduleSummary.totalPointsEarned || moduleSummary.total_points_earned || 0)}/{Number(moduleSummary.totalPointsPossible || moduleSummary.total_points_possible || 0)}</td>
+                          <td>{asPoints(moduleSummary.totalPointsEarned || moduleSummary.total_points_earned, moduleSummary.totalPointsPossible || moduleSummary.total_points_possible)}</td>
                           <td>{asPercent(moduleSummary.percentage)}</td>
-                          <td>{moduleSummary.letterGrade || moduleSummary.letter_grade || '—'}</td>
+                          <td>{asLetter(moduleSummary.letterGrade || moduleSummary.letter_grade)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -316,13 +338,22 @@ export default function TeacherStudentDetailPage() {
                         <td>{item.moduleTitle}</td>
                         <td>{item.assignmentType}</td>
                         <td>{item.title}</td>
-                        <td>{Number(item.pointsEarned || 0)}/{Number(item.pointsPossible || 0)}</td>
+                        <td>{asPoints(item.pointsEarned, item.pointsPossible)}</td>
                         <td>{asPercent(item.percentage)}</td>
                         <td>
                           <span className="pill" style={getStatusBadgeStyles(status)}>{status}</span>
                         </td>
                         <td>
                           <div className="note">{item.submittedAt || '—'}</div>
+                          {Array.isArray(item?.questionGrades) && item.questionGrades.length > 0 ? (
+                            <div className="note" style={{ marginTop: 8 }}>
+                              {item.questionGrades.map((questionGrade) => (
+                                <div key={`${item.assignmentId}-${questionGrade.questionId}`}>
+                                  {questionGrade.questionId}: {asPoints(questionGrade.pointsAwarded, questionGrade.pointsPossible)}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                           <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 12 }}>{JSON.stringify(item.submissionContent || null, null, 2)}</pre>
                         </td>
                         <td>
@@ -352,14 +383,30 @@ export default function TeacherStudentDetailPage() {
         <div className="modal-overlay">
           <div className="card" style={{ maxWidth: 560 }}>
             <h3>Manual Grade: {gradeModalItem.title}</h3>
-            <label>Score</label>
-            <input value={gradeForm.score} onChange={(event) => setGradeForm((prev) => ({ ...prev, score: event.target.value }))} />
-            <label>Percentage</label>
-            <input value={gradeForm.percentage} onChange={(event) => setGradeForm((prev) => ({ ...prev, percentage: event.target.value }))} />
-            <label>Feedback</label>
-            <input value={gradeForm.feedback} onChange={(event) => setGradeForm((prev) => ({ ...prev, feedback: event.target.value }))} />
+            <p className="note">Submission is marked graded as soon as at least one question grade is saved.</p>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {gradeForm.grades.map((grade, index) => (
+                <div key={`${grade.questionId}-${index}`} style={{ border: '1px solid #d7dde2', borderRadius: 8, padding: 8 }}>
+                  <p className="note" style={{ marginTop: 0 }}><strong>{grade.questionId}</strong></p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(120px, 1fr))', gap: 8 }}>
+                    <div>
+                      <label>Points Awarded</label>
+                      <input type="number" min="0" value={grade.pointsAwarded ?? ''} onChange={(event) => updateQuestionGrade(index, 'pointsAwarded', event.target.value)} />
+                    </div>
+                    <div>
+                      <label>Points Possible</label>
+                      <input type="number" min="0" value={grade.pointsPossible ?? ''} onChange={(event) => updateQuestionGrade(index, 'pointsPossible', event.target.value)} />
+                    </div>
+                  </div>
+                  <label>Question Feedback (optional)</label>
+                  <textarea rows={2} style={{ width: '100%' }} value={grade.feedback || ''} onChange={(event) => updateQuestionGrade(index, 'feedback', event.target.value)} />
+                </div>
+              ))}
+            </div>
+            <label>Overall Feedback</label>
+            <textarea rows={3} style={{ width: '100%' }} value={gradeForm.finalFeedback} onChange={(event) => setGradeForm((prev) => ({ ...prev, finalFeedback: event.target.value }))} />
             <label>Rubric Notes</label>
-            <input value={gradeForm.rubric_notes} onChange={(event) => setGradeForm((prev) => ({ ...prev, rubric_notes: event.target.value }))} />
+            <textarea rows={2} style={{ width: '100%' }} value={gradeForm.rubricNotes} onChange={(event) => setGradeForm((prev) => ({ ...prev, rubricNotes: event.target.value }))} />
             {gradeError ? <p className="note">{gradeError}</p> : null}
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button type="button" onClick={handleSubmitGrade} disabled={gradeLoading}>{gradeLoading ? 'Saving...' : 'Submit Grade'}</button>
