@@ -51,9 +51,9 @@ test('grade summary mapping prefers new keys with legacy fallback', () => {
   assert.equal(withNewKeys?.letterGrade, 'A');
   assert.equal(withLegacyOnly?.percentage, 87.5);
   assert.equal(withLegacyOnly?.letterGrade, 'B');
-  assert.equal(withNewKeys?.moduleGrades?.[0]?.quiz, 18);
-  assert.equal(withNewKeys?.moduleGrades?.[0]?.writtenAssignment, 17);
-  assert.equal(withNewKeys?.moduleGrades?.[0]?.tradeParticipation, 10);
+  assert.equal(withNewKeys?.moduleGrades?.[0]?.quiz?.score, 18);
+  assert.equal(withNewKeys?.moduleGrades?.[0]?.writtenAssignment?.totalScore, 17);
+  assert.equal(withNewKeys?.moduleGrades?.[0]?.tradeParticipation?.tradePoints, 10);
   assert.equal(withNewKeys?.moduleGrades?.[0]?.moduleTotalPoints, 45);
 });
 
@@ -121,9 +121,35 @@ test('module breakdown maps alternate component-score aliases for quiz/written/t
   });
 
   assert.equal(summary.length, 1);
-  assert.equal(summary[0].quiz, 17);
-  assert.equal(summary[0].writtenAssignment, 16);
-  assert.equal(summary[0].tradeParticipation, 8);
+  assert.equal(summary[0].quizScore, 17);
+  assert.equal(summary[0].writtenAssignmentScore, 16);
+  assert.equal(summary[0].tradeParticipationScore, 8);
+});
+
+test('resolveGradeSummaryOverall prefers moduleGrades over gradeSummaryByModule for module card data', () => {
+  const summary = resolveGradeSummaryOverall({
+    gradeSummaryOverall: { percentage: 80, points_earned: 112, points_possible: 140, letter: 'B' },
+    gradeSummaryByModule: [
+      { moduleId: 'm-1', moduleTotalPoints: 9, modulePointsPossible: 20 },
+    ],
+    moduleGrades: [
+      {
+        moduleId: 'm-1',
+        quiz: { score: 7, pointsPossible: 10, gradingStatus: 'graded' },
+        writtenAssignment: { totalScore: 2, pointsPossible: 10, question1Score: 1, question2Score: 1, gradingStatus: 'graded' },
+        tradeParticipation: { tradePoints: 0, pointsPossible: 0, gradingStatus: 'not_submitted' },
+        moduleTotalPoints: 9,
+        modulePointsPossible: 20,
+        modulePercentage: 45,
+      },
+    ],
+  });
+
+  assert.equal(summary?.moduleGrades?.length, 1);
+  assert.equal(summary?.moduleGrades?.[0]?.quiz?.score, 7);
+  assert.equal(summary?.moduleGrades?.[0]?.writtenAssignment?.question1Score, 1);
+  assert.equal(summary?.moduleGrades?.[0]?.tradeParticipation?.tradePoints, 0);
+  assert.equal(summary?.moduleGrades?.[0]?.modulePointsPossible, 20);
 });
 
 test('summary helper supports camelCase and snake_case keys', () => {
