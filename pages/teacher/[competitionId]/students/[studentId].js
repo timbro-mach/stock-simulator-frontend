@@ -25,9 +25,17 @@ import {
 
 const parseStudentResponse = (payload) => {
   const source = payload && typeof payload === 'object' ? payload : {};
+  const student = source.student || source.user || null;
+  const summarySource = {
+    ...source,
+    percentage: source?.curriculumPercentage ?? student?.curriculumPercentage,
+    letterGrade: source?.letterGrade ?? source?.letter_grade ?? student?.letterGrade ?? student?.letter_grade,
+    totalPointsEarned: source?.totalPointsEarned ?? source?.total_points_earned ?? student?.totalPointsEarned ?? student?.total_points_earned,
+    totalPointsPossible: source?.totalPointsPossible ?? source?.total_points_possible ?? student?.totalPointsPossible ?? student?.total_points_possible,
+  };
   return {
-    student: source.student || source.user || null,
-    gradeSummary: resolveGradeSummaryOverall(source),
+    student,
+    gradeSummary: resolveGradeSummaryOverall(summarySource),
     gradeSummaryByModule: resolveGradeSummaryByModule(source),
     items: Array.isArray(source.items) ? source.items : [],
   };
