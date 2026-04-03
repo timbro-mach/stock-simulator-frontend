@@ -232,9 +232,15 @@ const getModuleGradeBreakdown = (module) => {
       : null);
 
   const hasWrittenParts = writtenQ1 !== null || writtenQ2 !== null;
-  const hasAnyComponent = quiz !== null || writtenTotal !== null || hasWrittenParts || trading !== null;
-  const resolvedWrittenTotal = writtenTotal ?? (hasWrittenParts ? ((writtenQ1 ?? 0) + (writtenQ2 ?? 0)) : null);
-  const resolvedModuleTotal = moduleTotal ?? (hasAnyComponent ? ((quiz ?? 0) + (resolvedWrittenTotal ?? 0) + (trading ?? 0)) : null);
+  const resolvedWrittenTotal = writtenTotal ?? (
+    hasWrittenParts
+      ? [writtenQ1, writtenQ2].filter((value) => value !== null).reduce((sum, value) => sum + value, 0)
+      : null
+  );
+  const componentValues = [quiz, resolvedWrittenTotal, trading].filter((value) => value !== null);
+  const resolvedModuleTotal = moduleTotal ?? (componentValues.length > 0
+    ? componentValues.reduce((sum, value) => sum + value, 0)
+    : null);
 
   return {
     quiz,
@@ -244,6 +250,7 @@ const getModuleGradeBreakdown = (module) => {
     tradesCompleted,
     resolvedWrittenTotal,
     resolvedModuleTotal,
+    hasComponentDerivedTotal: componentValues.length > 0,
   };
 };
 
@@ -485,7 +492,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
       && submissionState?.lastSubmissionResult?.score !== undefined
       && (!Array.isArray(gradeSummaryByModule) || gradeSummaryByModule.length === 0) ? (
         <p className="note" style={{ marginTop: 0, color: '#92400e' }}>
-          Latest result is from the submit response. Module totals update when the grades API returns per-module summaries.
+          Latest result is from submit response. Module totals update when grades API summaries are available.
         </p>
       ) : null}
 
@@ -542,7 +549,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradeS
               const moduleSummary = moduleSummaryById || moduleSummaryByWeek || null;
               const moduleTotalEarned = moduleSummary?.totalPointsEarned ?? moduleSummary?.total_points_earned ?? null;
               const moduleTotalPossible = moduleSummary?.totalPointsPossible ?? moduleSummary?.total_points_possible ?? 50;
-              const displayedModuleTotal = moduleGrades.resolvedModuleTotal ?? moduleTotalEarned;
+              const displayedModuleTotal = moduleTotalEarned ?? (moduleGrades.hasComponentDerivedTotal ? moduleGrades.resolvedModuleTotal : null);
 
               return (
                 <div key={moduleId} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
