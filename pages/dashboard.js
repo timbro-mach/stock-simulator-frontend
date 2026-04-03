@@ -24,6 +24,10 @@ import {
     canManageCurriculumGradesForCompetition,
     normalizeAssignmentIdKey,
 } from '../lib/curriculum/submission';
+import {
+    resolveGradeSummaryByModule,
+    resolveGradeSummaryOverall,
+} from '../lib/curriculum/grades';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -833,6 +837,7 @@ const Dashboard = () => {
     const [curriculumOverview, setCurriculumOverview] = useState(null);
     const [curriculumModules, setCurriculumModules] = useState([]);
     const [curriculumGradeSummary, setCurriculumGradeSummary] = useState(null);
+    const [curriculumGradeSummaryByModule, setCurriculumGradeSummaryByModule] = useState([]);
     const [curriculumInstructorSummary, setCurriculumInstructorSummary] = useState(null);
     const [curriculumLoading, setCurriculumLoading] = useState(false);
     const [curriculumError, setCurriculumError] = useState('');
@@ -2251,6 +2256,7 @@ const Dashboard = () => {
             setCurriculumOverview(null);
             setCurriculumModules([]);
             setCurriculumGradeSummary(null);
+            setCurriculumGradeSummaryByModule([]);
             setCurriculumInstructorSummary(null);
             setCurriculumInstructorSubmissions([]);
             setCurriculumInstructorMessage('');
@@ -2395,6 +2401,7 @@ const Dashboard = () => {
                 if (!normalizedOverview.curriculum_enabled) {
                     setCurriculumModules([]);
                     setCurriculumGradeSummary(null);
+                    setCurriculumGradeSummaryByModule([]);
                     setCurriculumInstructorSummary(null);
                     setCurriculumInstructorSubmissions([]);
                     setCurriculumError('Curriculum is not enabled for this competition.');
@@ -2567,11 +2574,13 @@ const Dashboard = () => {
                 if (cancelled) return;
 
                 const resolvedModules = Array.isArray(modulesData?.modules) ? modulesData.modules : (Array.isArray(modulesData) ? modulesData : []);
-                const resolvedGradeSummary = gradesData?.grade_summary || gradesData || null;
+                const resolvedGradeSummary = resolveGradeSummaryOverall(gradesData);
+                const resolvedGradeSummaryByModule = resolveGradeSummaryByModule(gradesData);
                 const resolvedInstructorSummary = resolveInstructorSummaryPayload(instructorData);
 
                 setCurriculumModules(resolvedModules);
                 setCurriculumGradeSummary(resolvedGradeSummary);
+                setCurriculumGradeSummaryByModule(resolvedGradeSummaryByModule);
                 setCurriculumInstructorSummary(resolvedInstructorSummary);
                 setCurriculumInstructorSubmissions(Array.isArray(instructorSubmissionsData) ? instructorSubmissionsData : []);
                 setCurriculumInstructorMessage('');
@@ -2594,6 +2603,7 @@ const Dashboard = () => {
                 if (cancelled) return;
                 setCurriculumModules([]);
                 setCurriculumGradeSummary(null);
+                setCurriculumGradeSummaryByModule([]);
                 setCurriculumInstructorSummary(null);
                 setCurriculumInstructorSubmissions([]);
                 setCurriculumGradesMessage('');
@@ -3894,6 +3904,7 @@ const Dashboard = () => {
                                     overview={curriculumOverview}
                                     modules={curriculumModules}
                                     gradeSummary={curriculumGradeSummary}
+                                    gradeSummaryByModule={curriculumGradeSummaryByModule}
                                     gradesMessage={curriculumGradesMessage}
                                     loading={curriculumLoading}
                                     error={curriculumError}

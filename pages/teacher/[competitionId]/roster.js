@@ -4,6 +4,7 @@ import Link from 'next/link';
 import axios from 'axios';
 import { getApiBaseUrl } from '../../../lib/api';
 import { asPercent, getStoredUsername } from '../../../lib/teacherDashboard';
+import { resolveGradeSummaryOverall } from '../../../lib/curriculum/grades';
 
 const buildRosterUrls = (baseUrl, competitionId) => {
   const encodedId = encodeURIComponent(competitionId);
@@ -40,6 +41,15 @@ const parseRosterResponse = (payload) => {
     isInstructor: source.is_instructor_for_competition ?? source.isInstructorForCompetition ?? true,
   };
 };
+
+const resolveRosterSummary = (row) => resolveGradeSummaryOverall({
+  gradeSummaryOverall: row?.gradeSummaryOverall ?? row?.grade_summary_overall,
+  gradeSummary: row?.gradeSummary ?? row?.grade_summary,
+  percentage: row?.curriculumPercentage ?? row?.grade_percentage ?? row?.percentage,
+  letterGrade: row?.letterGrade ?? row?.letter_grade,
+  totalPointsEarned: row?.totalPointsEarned ?? row?.total_points_earned,
+  totalPointsPossible: row?.totalPointsPossible ?? row?.total_points_possible,
+});
 
 export default function TeacherRosterPage() {
   const router = useRouter();
@@ -138,7 +148,9 @@ export default function TeacherRosterPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {rows.map((row) => {
+                  const rowSummary = resolveRosterSummary(row);
+                  return (
                   <tr
                     key={row.userId}
                     style={{ cursor: 'pointer' }}
@@ -146,15 +158,16 @@ export default function TeacherRosterPage() {
                   >
                     <td>{row.displayName || `Student ${row.userId}`}</td>
                     <td>{row.email || '—'}</td>
-                    <td>{asPercent(row.curriculumPercentage)}</td>
-                    <td>{row.letterGrade || '—'}</td>
-                    <td>{Number(row.totalPointsEarned || 0)}/{Number(row.totalPointsPossible || 0)}</td>
+                    <td>{asPercent(rowSummary?.percentage)}</td>
+                    <td>{rowSummary?.letterGrade || rowSummary?.letter_grade || '—'}</td>
+                    <td>{Number(rowSummary?.totalPointsEarned || rowSummary?.total_points_earned || 0)}/{Number(rowSummary?.totalPointsPossible || rowSummary?.total_points_possible || 0)}</td>
                     <td>{row.completedQuizzes ?? 0}</td>
                     <td>{row.completedAssignments ?? 0}</td>
                     <td>{row.totalCurriculumItems ?? 0}</td>
                     <td>{row.hasTrades ? `Yes (${row.tradeCount ?? 0})` : 'No'}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
