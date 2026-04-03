@@ -848,6 +848,7 @@ const Dashboard = () => {
         competitionContext: null,
         hydrationInfo: null,
         requestInfo: null,
+        submitVsGradesComparison: null,
     });
     const [competitionHydration, setCompetitionHydration] = useState({
         code: '',
@@ -2294,6 +2295,7 @@ const Dashboard = () => {
                         grades: { attempted: false, ok: false, status: null, message: '' },
                     },
                 },
+                submitVsGradesComparison: null,
             });
             return;
         }
@@ -2335,6 +2337,7 @@ const Dashboard = () => {
                         grades: { attempted: false, ok: false, status: null, message: '' },
                     },
                 },
+                submitVsGradesComparison: null,
             };
             setCurriculumDebugState(baseDebugState);
             try {
@@ -2657,6 +2660,47 @@ const Dashboard = () => {
         username,
     ]);
 
+    useEffect(() => {
+        const latestSubmission = curriculumSubmissionState?.lastSubmissionResult;
+        if (!latestSubmission) return;
+        const summaries = Array.isArray(curriculumGradeSummaryByModule) ? curriculumGradeSummaryByModule : [];
+        const moduleId = String(latestSubmission?.moduleId ?? '').trim();
+        const weekNumber = String(latestSubmission?.weekNumber ?? '').trim();
+        const matchedSummary = summaries.find((summary) => {
+            const summaryModuleId = String(summary?.moduleId ?? summary?.module_id ?? '').trim();
+            const summaryWeek = String(summary?.weekNumber ?? summary?.week_number ?? '').trim();
+            if (moduleId && summaryModuleId && summaryModuleId === moduleId) return true;
+            if (weekNumber && summaryWeek && summaryWeek === weekNumber) return true;
+            return false;
+        }) || null;
+        const comparison = {
+            assignmentId: latestSubmission?.assignmentId ?? '',
+            moduleId: moduleId || null,
+            weekNumber: weekNumber || null,
+            immediateSubmit: {
+                score: latestSubmission?.score ?? null,
+                percentage: latestSubmission?.percentage ?? null,
+                status: latestSubmission?.status ?? null,
+            },
+            gradesSummary: matchedSummary
+                ? {
+                    moduleId: matchedSummary?.moduleId ?? matchedSummary?.module_id ?? null,
+                    weekNumber: matchedSummary?.weekNumber ?? matchedSummary?.week_number ?? null,
+                    totalPointsEarned: matchedSummary?.totalPointsEarned ?? matchedSummary?.total_points_earned ?? null,
+                    totalPointsPossible: matchedSummary?.totalPointsPossible ?? matchedSummary?.total_points_possible ?? null,
+                    percentage: matchedSummary?.percentage ?? null,
+                }
+                : null,
+            hasModuleSummaries: summaries.length > 0,
+        };
+
+        console.debug('[curriculum][submit-vs-grades]', comparison);
+        setCurriculumDebugState((previous) => ({
+            ...previous,
+            submitVsGradesComparison: comparison,
+        }));
+    }, [curriculumGradeSummaryByModule, curriculumSubmissionState?.lastSubmissionResult]);
+
 
     // =========================================
     // Teams & Competitions
@@ -2710,6 +2754,8 @@ const Dashboard = () => {
                 latestMessage: successMessage,
                 lastSubmissionResult: {
                     assignmentId,
+                    moduleId: item?.moduleId ?? item?.module_id ?? null,
+                    weekNumber: item?.weekNumber ?? item?.week_number ?? null,
                     score: immediateResult?.score ?? null,
                     pointsEarned: immediateResult?.pointsEarned ?? immediateResult?.points_earned ?? null,
                     pointsPossible: immediateResult?.pointsPossible ?? immediateResult?.points_possible ?? null,
