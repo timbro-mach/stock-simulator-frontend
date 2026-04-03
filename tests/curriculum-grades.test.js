@@ -76,6 +76,35 @@ test('module breakdown mapping supports new and fallback keys', () => {
   assert.equal(withLegacyKeys[0].percentage, 80);
 });
 
+test('overall grade summary falls back to item point totals when aggregate totals are omitted', () => {
+  const summary = resolveGradeSummaryOverall({
+    grade_summary_overall: {
+      completed_items: 1,
+      total_items: 18,
+      items: [
+        { gradingStatus: 'graded', points_earned: 14, points_possible: 20 },
+      ],
+    },
+  });
+
+  assert.equal(summary?.totalPointsEarned, 14);
+  assert.equal(summary?.totalPointsPossible, 20);
+  assert.equal(summary?.percentage, 70);
+});
+
+test('module breakdown supports week + points snake_case aliases', () => {
+  const summary = resolveGradeSummaryByModule({
+    module_grade_summary: [
+      { module_id: 'm-1', week: 1, module_title: 'Week 1: Intro', points_earned: 14, points_possible: 20 },
+    ],
+  });
+
+  assert.equal(summary.length, 1);
+  assert.equal(summary[0].weekNumber, 1);
+  assert.equal(summary[0].totalPointsEarned, 14);
+  assert.equal(summary[0].totalPointsPossible, 20);
+});
+
 test('summary helper supports camelCase and snake_case keys', () => {
   const camelModules = getSummaryByModule({
     gradeSummaryByModule: [{ moduleId: 'm-1' }],
