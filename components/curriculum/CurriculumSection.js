@@ -288,9 +288,18 @@ export const CurriculumSummaryCard = ({ overview }) => {
   );
 };
 
-const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem, submittedMap, submissionState }) => {
-  const [quizAnswers, setQuizAnswers] = useState({});
-  const [writtenAnswers, setWrittenAnswers] = useState({});
+const AssignmentCard = ({
+  assignment,
+  moduleLocked,
+  actionLoading,
+  onSubmitItem,
+  submittedMap,
+  submissionState,
+  quizAnswers,
+  writtenAnswers,
+  onQuizAnswersChange,
+  onWrittenAnswersChange,
+}) => {
   const [quizScore, setQuizScore] = useState(null);
   const assignmentType = getAssignmentType(assignment);
   const assignmentId = getAssignmentId(assignment);
@@ -369,7 +378,7 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
                           <textarea
                             rows={3}
                             value={writtenAnswers[partKey] || ''}
-                            onChange={(event) => setWrittenAnswers((previous) => ({ ...previous, [partKey]: event.target.value }))}
+                            onChange={(event) => onWrittenAnswersChange((previous) => ({ ...previous, [partKey]: event.target.value }))}
                             style={{ width: '100%' }}
                             disabled={moduleLocked || actionLoading}
                             placeholder="Write your response here..."
@@ -382,7 +391,7 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
                   <textarea
                     rows={4}
                     value={writtenAnswers[questionId] || ''}
-                    onChange={(event) => setWrittenAnswers((previous) => ({ ...previous, [questionId]: event.target.value }))}
+                    onChange={(event) => onWrittenAnswersChange((previous) => ({ ...previous, [questionId]: event.target.value }))}
                     style={{ width: '100%' }}
                     disabled={moduleLocked || actionLoading}
                     placeholder="Write your response here..."
@@ -407,7 +416,7 @@ const AssignmentCard = ({ assignment, moduleLocked, actionLoading, onSubmitItem,
                         name={`${assignmentId}-${questionId}`}
                         value={choiceValue}
                         checked={quizAnswers[questionId] === choiceValue}
-                        onChange={() => setQuizAnswers((previous) => ({ ...previous, [questionId]: choiceValue }))}
+                        onChange={() => onQuizAnswersChange((previous) => ({ ...previous, [questionId]: choiceValue }))}
                         disabled={moduleLocked || actionLoading}
                         style={{ width: 16, height: 16, margin: 0 }}
                       />
@@ -469,6 +478,8 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
   });
   const showNoGradedItemsYet = shouldShowNoGradedItemsYet(gradeSummary);
   const [expandedModuleId, setExpandedModuleId] = useState(null);
+  const [quizAnswersByAssignment, setQuizAnswersByAssignment] = useState({});
+  const [writtenAnswersByAssignment, setWrittenAnswersByAssignment] = useState({});
   const normalizedModuleSummaries = useMemo(() => (
     Array.isArray(gradeSummary?.moduleGrades)
       ? gradeSummary.moduleGrades
@@ -546,7 +557,8 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
             {Array.isArray(modules) && modules.length > 0 ? modules.map((module) => {
               const moduleId = getModuleId(module);
               const assignments = getAssignments(module);
-              const isExpanded = expandedModuleId === moduleId;
+              const moduleKey = String(moduleId ?? module?.weekNumber ?? module?.week_number ?? module?.title ?? '').trim();
+              const isExpanded = expandedModuleId === moduleKey;
               const moduleTitle = module?.title || 'Untitled module';
               const weekNumber = module?.weekNumber ?? module?.week_number;
               const moduleDescription = module?.description || 'No description provided.';
@@ -566,10 +578,10 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               const displayedModuleTotal = moduleTotalEarned ?? moduleTotalFromSummary ?? null;
 
               return (
-                <div key={moduleId} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
+                <div key={moduleKey || String(moduleTitle)} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
                   <button
                     style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 0, padding: 0, cursor: 'pointer' }}
-                    onClick={() => setExpandedModuleId(isExpanded ? null : moduleId)}
+                    onClick={() => setExpandedModuleId(isExpanded ? null : moduleKey)}
                   >
                     <p className="em" style={{ marginBottom: 6 }}>Week {weekNumber}: {moduleTitle}</p>
                     <p className="note">{moduleDescription}</p>
@@ -591,17 +603,36 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
                           {lessonContent || 'Lesson content has not been published yet.'}
                         </div>
                       </div>
-                      {assignments.length > 0 ? assignments.map((assignment) => (
-                        <AssignmentCard
-                          key={getAssignmentId(assignment) || assignment?.title}
-                          assignment={assignment}
-                          moduleLocked={module?.locked}
-                          actionLoading={actionLoading}
-                          onSubmitItem={onSubmitItem}
-                          submittedMap={submissionState?.submittedByAssignmentId}
-                          submissionState={submissionState}
-                        />
-                      )) : <p className="note">No assignments in this module yet.</p>}
+                      {assignments.length > 0 ? assignments.map((assignment, assignmentIndex) => {
+                        const assignmentId = getAssignmentId(assignment) || `${moduleKey}-assignment-${assignmentIndex}`;
+                        return (
+                          <AssignmentCard
+                            key={assignmentId}
+                            assignment={assignment}
+                            moduleLocked={module?.locked}
+                            actionLoading={actionLoading}
+                            onSubmitItem={onSubmitItem}
+                            submittedMap={submissionState?.submittedByAssignmentId}
+                            submissionState={submissionState}
+                            quizAnswers={quizAnswersByAssignment?.[assignmentId] || {}}
+                            writtenAnswers={writtenAnswersByAssignment?.[assignmentId] || {}}
+                            onQuizAnswersChange={(updater) => {
+                              setQuizAnswersByAssignment((previous) => {
+                                const previousValue = previous?.[assignmentId] || {};
+                                const nextValue = typeof updater === 'function' ? updater(previousValue) : updater;
+                                return { ...previous, [assignmentId]: nextValue };
+                              });
+                            }}
+                            onWrittenAnswersChange={(updater) => {
+                              setWrittenAnswersByAssignment((previous) => {
+                                const previousValue = previous?.[assignmentId] || {};
+                                const nextValue = typeof updater === 'function' ? updater(previousValue) : updater;
+                                return { ...previous, [assignmentId]: nextValue };
+                              });
+                            }}
+                          />
+                        );
+                      }) : <p className="note">No assignments in this module yet.</p>}
                     </div>
                   ) : null}
                 </div>
