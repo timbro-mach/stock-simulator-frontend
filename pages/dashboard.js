@@ -21,6 +21,12 @@ import {
     getCompetitionCode,
 } from '../lib/curriculum/competitionId';
 import {
+    buildCanonicalCurriculumEndpoints,
+    logCurriculumRequestFailure,
+    mapCurriculumRequestError,
+    normalizeCurriculumRouteParams,
+} from '../lib/curriculum/endpoints';
+import {
     canManageCurriculumGradesForCompetition,
     normalizeAssignmentIdKey,
 } from '../lib/curriculum/submission';
@@ -2165,56 +2171,30 @@ const Dashboard = () => {
         return { endpoint, payload };
     }, [username]);
 
-    const curriculumGradesUserId = useMemo(() => {
-        const candidateIds = [
-            currentUserId,
-            selectedCompetitionRecord?.competition_member_id,
-            selectedCompetitionRecord?.competitionMemberId,
-            selectedCompetitionRecord?.member_id,
-            selectedCompetitionRecord?.memberId,
-            selectedCompetitionRecord?.membership_id,
-            selectedCompetitionRecord?.membershipId,
-            selectedCompetitionRecord?.user_id,
-            selectedCompetitionRecord?.userId,
-            selectedCompetitionRecord?.participant_id,
-            selectedCompetitionRecord?.participantId,
-            selectedAccount?.competition_member_id,
-            selectedAccount?.competitionMemberId,
-            selectedAccount?.member_id,
-            selectedAccount?.memberId,
-            selectedAccount?.membership_id,
-            selectedAccount?.membershipId,
-            selectedAccount?.user_id,
-            selectedAccount?.userId,
-        ];
-        for (const candidate of candidateIds) {
-            const trimmed = String(candidate ?? '').trim();
-            if (!trimmed) continue;
-            const parsedNumeric = Number.parseInt(trimmed, 10);
-            if (Number.isInteger(parsedNumeric) && parsedNumeric > 0) return String(parsedNumeric);
-        }
-        return '';
-    }, [currentUserId, selectedAccount, selectedCompetitionRecord]);
+    const curriculumRouteParams = useMemo(() => normalizeCurriculumRouteParams({
+        competitionSources: [{ competition_id: selectedCompetitionId }, selectedCompetitionRecord, selectedAccount],
+        userSources: [{ user_id: currentUserId }, selectedCompetitionRecord, selectedAccount],
+        username,
+    }), [currentUserId, selectedAccount, selectedCompetitionId, selectedCompetitionRecord, username]);
 
-    const getCurriculumGradesEndpoint = useCallback((userId) => {
-        const normalizedCompetitionId = String(selectedCompetitionId || '').trim();
-        const normalizedUserId = String(userId || '').trim();
-        const normalizedUsername = String(username || '').trim();
-        if (!normalizedCompetitionId || !normalizedUserId || !normalizedUsername) return null;
-        return {
-            url: `${BASE_URL}${buildCurriculumPath(normalizedCompetitionId, `grades/${encodeURIComponent(normalizedUserId)}`)}`,
-            params: { username: normalizedUsername },
-        };
-    }, [BASE_URL, selectedCompetitionId, username]);
+    const curriculumCanonicalEndpoints = useMemo(() => {
+        if (!curriculumRouteParams?.competition_id || !curriculumRouteParams?.username) return null;
+        return buildCanonicalCurriculumEndpoints({
+            baseUrl: BASE_URL,
+            competition_id: curriculumRouteParams.competition_id,
+            user_id: curriculumRouteParams.user_id,
+            username: curriculumRouteParams.username,
+        });
+    }, [BASE_URL, curriculumRouteParams?.competition_id, curriculumRouteParams?.user_id, curriculumRouteParams?.username]);
 
     const refreshCurriculumGradeSummary = useCallback(async () => {
-        const gradesRequest = getCurriculumGradesEndpoint(curriculumGradesUserId);
-        if (!gradesRequest) return null;
+        if (!curriculumRouteParams?.isReady || !curriculumCanonicalEndpoints?.studentGrades) return null;
+        const gradesRequest = curriculumCanonicalEndpoints.studentGrades;
         const response = await axios.get(gradesRequest.url, { params: gradesRequest.params });
         const refreshedSummary = resolveGradeSummaryOverall(response?.data ?? null);
         setCurriculumGradeSummary(refreshedSummary);
         return refreshedSummary;
-    }, [curriculumGradesUserId, getCurriculumGradesEndpoint]);
+    }, [curriculumCanonicalEndpoints, curriculumRouteParams?.isReady]);
 
     const applyImmediateCurriculumGradeSummary = useCallback(async (mutationPayload) => {
         const responseSummary = resolveGradeSummaryOverall(mutationPayload);
@@ -2475,7 +2455,6 @@ const Dashboard = () => {
                     return;
                 }
 
-                const effectiveUserId = String(curriculumGradesUserId || '').trim();
                 let modulesData = [];
                 let gradesData = null;
                 let instructorData = null;
@@ -2523,8 +2502,8 @@ const Dashboard = () => {
                     }
                 }
 
-                const gradesRequest = getCurriculumGradesEndpoint(effectiveUserId);
-                if (gradesRequest) {
+                if (curriculumRouteParams?.isReady && curriculumCanonicalEndpoints?.studentGrades) {
+                    const gradesRequest = curriculumCanonicalEndpoints.studentGrades;
                     try {
                         const gradesResponse = await axios.get(gradesRequest.url, { params: gradesRequest.params });
                         gradesData = gradesResponse?.data ?? null;
@@ -2549,24 +2528,18 @@ const Dashboard = () => {
                         if (!cancelled) {
                             const statusCode = error?.response?.status ?? null;
                             const responseMessage = getCurriculumResponseMessage(error);
-                            console.error('[curriculum][grades] Failed to fetch grades summary', {
-                                statusCode,
-                                competitionId: selectedCompetitionId,
-                                userId: effectiveUserId,
-                                username,
-                                responseMessage,
+                            logCurriculumRequestFailure({
+                                endpoint: gradesRequest.endpoint,
+                                competition_id: curriculumRouteParams.competition_id,
+                                user_id: curriculumRouteParams.user_id,
+                                username: curriculumRouteParams.username,
+                                status: statusCode,
+                                response_message: responseMessage,
                             });
-                            const details = [
-                                statusCode ? `HTTP ${statusCode}` : '',
-                                responseMessage || '',
-                            ]
-                                .filter(Boolean)
-                                .join(' — ');
-                            setCurriculumGradesMessage(
-                                details
-                                    ? `Grades are temporarily unavailable (${details}).`
-                                    : 'Grades are temporarily unavailable.',
-                            );
+                            setCurriculumGradesMessage(mapCurriculumRequestError({
+                                status: statusCode,
+                                responseMessage,
+                            }));
                             setCurriculumDebugState((previous) => ({
                                 ...previous,
                                 requestInfo: {
@@ -2585,12 +2558,6 @@ const Dashboard = () => {
                         }
                     }
                 } else if (!cancelled) {
-                    console.error('[curriculum][grades] Missing required route params for grades fetch', {
-                        competitionId: selectedCompetitionId,
-                        userId: effectiveUserId || null,
-                        username: username || null,
-                    });
-                    setCurriculumGradesMessage('Grades are temporarily unavailable (missing competition/user route params).');
                     setCurriculumDebugState((previous) => ({
                         ...previous,
                         requestInfo: {
@@ -2603,46 +2570,36 @@ const Dashboard = () => {
                     }));
                 }
 
-                try {
-                    const instructorOverviewEndpoints = [
-                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor-overview')}`,
-                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'teacher-overview')}`,
-                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor/overview')}`,
-                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'teacher/overview')}`,
-                    ];
-                    for (const endpoint of instructorOverviewEndpoints) {
-                        try {
-                            instructorData = (await axios.get(endpoint, { params: { competition_id: selectedCompetitionId } }))?.data ?? null;
-                            if (instructorData) break;
-                        } catch (error) {
-                            const status = error?.response?.status;
-                            if (status === 404) continue;
-                        }
+                if (canManageCurriculumGrades && curriculumCanonicalEndpoints?.instructorOverview && curriculumCanonicalEndpoints?.writtenSubmissions) {
+                    try {
+                        const overviewRequest = curriculumCanonicalEndpoints.instructorOverview;
+                        instructorData = (await axios.get(overviewRequest.url, { params: overviewRequest.params }))?.data ?? null;
+                    } catch (error) {
+                        logCurriculumRequestFailure({
+                            endpoint: curriculumCanonicalEndpoints.instructorOverview.endpoint,
+                            competition_id: curriculumRouteParams.competition_id,
+                            user_id: curriculumRouteParams.user_id,
+                            username: curriculumRouteParams.username,
+                            status: error?.response?.status ?? null,
+                            response_message: getCurriculumResponseMessage(error),
+                        });
+                        instructorData = null;
                     }
-                } catch (error) {
-                    instructorData = null;
-                }
-                try {
-                    const instructorSubmissionEndpoints = [
-                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'instructor/submissions')}`,
-                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'teacher/submissions')}`,
-                        `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'submissions')}`,
-                        `${BASE_URL}/curriculum/submissions`,
-                    ];
-                    for (const endpoint of instructorSubmissionEndpoints) {
-                        try {
-                            const response = await axios.get(endpoint, { params: { competition_id: selectedCompetitionId } });
-                            const resolved = normalizeCollectionPayload(response?.data, ['submissions', 'items']);
-                            if (Array.isArray(resolved)) {
-                                instructorSubmissionsData = resolved;
-                                break;
-                            }
-                        } catch (error) {
-                            // keep trying alternate instructor endpoints
-                        }
+                    try {
+                        const submissionsRequest = curriculumCanonicalEndpoints.writtenSubmissions;
+                        const response = await axios.get(submissionsRequest.url, { params: submissionsRequest.params });
+                        instructorSubmissionsData = normalizeCollectionPayload(response?.data, ['submissions', 'items']);
+                    } catch (error) {
+                        logCurriculumRequestFailure({
+                            endpoint: curriculumCanonicalEndpoints.writtenSubmissions.endpoint,
+                            competition_id: curriculumRouteParams.competition_id,
+                            user_id: curriculumRouteParams.user_id,
+                            username: curriculumRouteParams.username,
+                            status: error?.response?.status ?? null,
+                            response_message: getCurriculumResponseMessage(error),
+                        });
+                        instructorSubmissionsData = [];
                     }
-                } catch (error) {
-                    instructorSubmissionsData = [];
                 }
                 if (cancelled) return;
 
@@ -2651,7 +2608,7 @@ const Dashboard = () => {
                 const resolvedInstructorSummary = resolveInstructorSummaryPayload(instructorData);
 
                 setCurriculumModules(resolvedModules);
-                setCurriculumGradeSummary(resolvedGradeSummary);
+                setCurriculumGradeSummary((previous) => resolvedGradeSummary || previous || null);
                 setCurriculumInstructorSummary(resolvedInstructorSummary);
                 setCurriculumInstructorSubmissions(Array.isArray(instructorSubmissionsData) ? instructorSubmissionsData : []);
                 setCurriculumInstructorMessage('');
@@ -2723,8 +2680,9 @@ const Dashboard = () => {
         competitionHydration,
         curriculumRefreshTick,
         showTrading,
-        curriculumGradesUserId,
-        getCurriculumGradesEndpoint,
+        canManageCurriculumGrades,
+        curriculumCanonicalEndpoints,
+        curriculumRouteParams,
         username,
     ]);
 
