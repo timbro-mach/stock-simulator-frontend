@@ -53,6 +53,8 @@ const getModuleId = (module) => module?.moduleId || module?.id || module?.week_n
 const getAssignmentId = (assignment) => normalizeAssignmentIdKey(assignment?.assignmentId || assignment?.id);
 const getModuleSummaryId = (moduleSummary) => moduleSummary?.moduleId || moduleSummary?.module_id || moduleSummary?.id;
 const getModuleSummaryWeek = (moduleSummary) => moduleSummary?.weekNumber ?? moduleSummary?.week_number;
+const getGradeItemModuleId = (item) => item?.moduleId || item?.module_id || item?.curriculumModuleId || item?.curriculum_module_id;
+const getGradeItemWeekNumber = (item) => item?.weekNumber ?? item?.week_number ?? item?.week;
 
 const getAssignments = (module) => {
   if (Array.isArray(module?.assignments)) return module.assignments;
@@ -194,12 +196,39 @@ const getGradeItemPoints = (item) => ({
   possible: numberOrNull(item?.pointsPossible ?? item?.points_possible ?? item?.maxPoints ?? item?.max_points),
 });
 
+const getGradeItemType = (item) => {
+  const explicitType = String(
+    item?.assignmentType
+    || item?.assignment_type
+    || item?.type
+    || item?.itemType
+    || item?.item_type
+    || '',
+  ).trim().toLowerCase();
+  if (explicitType) return explicitType;
+  const title = String(item?.assignmentTitle || item?.assignment_title || item?.title || '').trim().toLowerCase();
+  if (title.includes('quiz')) return 'quiz';
+  if (title.includes('trade')) return 'trading';
+  if (title.includes('written') || title.includes('assignment')) return 'assignment';
+  return '';
+};
+
 const pickNumber = (...candidates) => {
   for (const candidate of candidates) {
     const parsed = numberOrNull(candidate);
     if (parsed !== null) return parsed;
   }
   return null;
+};
+
+const resolveComponentDisplayValue = ({ moduleValue, breakdownValue, derivedValue }) => {
+  if (derivedValue !== null && derivedValue !== undefined) {
+    if (moduleValue === null || moduleValue === undefined) return derivedValue;
+    if (Number(moduleValue) === 0 && Number(derivedValue) > 0) return derivedValue;
+  }
+  if (moduleValue !== null && moduleValue !== undefined) return moduleValue;
+  if (breakdownValue !== null && breakdownValue !== undefined) return breakdownValue;
+  return derivedValue ?? null;
 };
 
 const getModuleGradeBreakdown = (module) => {
@@ -625,29 +654,62 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
                 }
                 return accumulator;
               }, { quiz: null, written: null, trading: null });
+              const moduleLinkedGradeItems = normalizedGradeItems.filter((item) => {
+                const itemModuleId = String(getGradeItemModuleId(item) ?? '').trim();
+                const itemWeek = String(getGradeItemWeekNumber(item) ?? '').trim();
+                const normalizedModuleId = String(moduleId ?? '').trim();
+                const normalizedWeek = String(weekNumber ?? '').trim();
+                if (normalizedModuleId && itemModuleId && itemModuleId === normalizedModuleId) return true;
+                if (normalizedWeek && itemWeek && itemWeek === normalizedWeek) return true;
+                return false;
+              });
+              const fallbackComponentScores = moduleLinkedGradeItems.reduce((accumulator, item) => {
+                const points = getGradeItemPoints(item);
+                if (points.earned === null) return accumulator;
+                const type = getGradeItemType(item);
+                if (['quiz', 'exam', 'test', 'final_exam', 'final-exam'].includes(type)) {
+                  return { ...accumulator, quiz: (accumulator.quiz ?? 0) + points.earned };
+                }
+                if (['assignment', 'written'].includes(type)) {
+                  return { ...accumulator, written: (accumulator.written ?? 0) + points.earned };
+                }
+                if (['trading', 'trade', 'trading_activity', 'trade_activity', 'participation'].includes(type)) {
+                  return { ...accumulator, trading: (accumulator.trading ?? 0) + points.earned };
+                }
+                return accumulator;
+              }, { quiz: null, written: null, trading: null });
               const quizDisplay = moduleSummary?.quiz
                 ?? moduleSummary?.quizScore
                 ?? moduleSummary?.quiz_score
-                ?? moduleGrades.quiz
-                ?? derivedComponentScores.quiz
                 ?? null;
               const writtenDisplay = moduleSummary?.writtenAssignment
                 ?? moduleSummary?.written_assignment
                 ?? moduleSummary?.writtenTotal
                 ?? moduleSummary?.written_total
-                ?? moduleGrades.resolvedWrittenTotal
-                ?? derivedComponentScores.written
                 ?? null;
               const tradingDisplay = moduleSummary?.tradeParticipation
                 ?? moduleSummary?.trade_participation
                 ?? moduleSummary?.trading
-                ?? moduleGrades.trading
-                ?? derivedComponentScores.trading
                 ?? null;
               const moduleTotalEarned = moduleSummary?.totalPointsEarned ?? moduleSummary?.total_points_earned ?? null;
               const moduleTotalPossible = moduleSummary?.totalPointsPossible ?? moduleSummary?.total_points_possible ?? 50;
               const moduleTotalFromSummary = moduleSummary?.moduleTotalPoints ?? moduleSummary?.module_total_points ?? moduleSummary?.moduleTotal ?? moduleSummary?.module_total ?? null;
               const displayedModuleTotal = moduleTotalEarned ?? moduleTotalFromSummary ?? moduleGrades.resolvedModuleTotal ?? null;
+              const displayedQuiz = resolveComponentDisplayValue({
+                moduleValue: quizDisplay,
+                breakdownValue: moduleGrades.quiz,
+                derivedValue: derivedComponentScores.quiz ?? fallbackComponentScores.quiz,
+              });
+              const displayedWritten = resolveComponentDisplayValue({
+                moduleValue: writtenDisplay,
+                breakdownValue: moduleGrades.resolvedWrittenTotal,
+                derivedValue: derivedComponentScores.written ?? fallbackComponentScores.written,
+              });
+              const displayedTrading = resolveComponentDisplayValue({
+                moduleValue: tradingDisplay,
+                breakdownValue: moduleGrades.trading,
+                derivedValue: derivedComponentScores.trading ?? fallbackComponentScores.trading,
+              });
 
               return (
                 <div key={moduleKey || String(moduleTitle)} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
@@ -661,9 +723,9 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
                     <p className="note" style={{ marginBottom: 0 }}>Status: {module?.locked ? 'Locked' : 'Unlocked'} • {assignments.length} assignments • {isExpanded ? 'Click to collapse' : 'Click to open module'}</p>
                   </button>
                   <div style={{ ...gradeGrid, marginTop: 10 }}>
-                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Quiz (20)</strong><br />{quizDisplay ?? '—'}/20</p></div>
-                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Written (20)</strong><br />{writtenDisplay ?? '—'}/20 (Q1: {moduleGrades.writtenQ1 ?? '—'}/10, Q2: {moduleGrades.writtenQ2 ?? '—'}/10)</p></div>
-                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Trading (10)</strong><br />{tradingDisplay ?? '—'}/10 • {moduleGrades.tradesCompleted === null ? 'Activity: Unknown' : `Activity: ${moduleGrades.tradesCompleted ? 'Yes' : 'No'}`}</p></div>
+                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Quiz (20)</strong><br />{displayedQuiz ?? '—'}/20</p></div>
+                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Written (20)</strong><br />{displayedWritten ?? '—'}/20 (Q1: {moduleGrades.writtenQ1 ?? '—'}/10, Q2: {moduleGrades.writtenQ2 ?? '—'}/10)</p></div>
+                    <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Trading (10)</strong><br />{displayedTrading ?? '—'}/10 • {moduleGrades.tradesCompleted === null ? 'Activity: Unknown' : `Activity: ${moduleGrades.tradesCompleted ? 'Yes' : 'No'}`}</p></div>
                     <div style={gradeTile}><p className="note" style={{ margin: 0 }}><strong>Module Total ({moduleTotalPossible})</strong><br />{displayedModuleTotal ?? '—'}/{moduleTotalPossible}</p></div>
                   </div>
 
