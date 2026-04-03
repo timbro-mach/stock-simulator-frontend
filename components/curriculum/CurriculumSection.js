@@ -625,13 +625,29 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
                 }
                 return accumulator;
               }, { quiz: null, written: null, trading: null });
-              const quizDisplay = moduleSummary?.quiz ?? moduleSummary?.quizScore ?? moduleSummary?.quiz_score ?? derivedComponentScores.quiz ?? null;
-              const writtenDisplay = moduleSummary?.writtenAssignment ?? moduleSummary?.written_assignment ?? moduleSummary?.writtenTotal ?? moduleSummary?.written_total ?? derivedComponentScores.written ?? null;
-              const tradingDisplay = moduleSummary?.tradeParticipation ?? moduleSummary?.trade_participation ?? moduleSummary?.trading ?? derivedComponentScores.trading ?? null;
+              const quizDisplay = moduleSummary?.quiz
+                ?? moduleSummary?.quizScore
+                ?? moduleSummary?.quiz_score
+                ?? moduleGrades.quiz
+                ?? derivedComponentScores.quiz
+                ?? null;
+              const writtenDisplay = moduleSummary?.writtenAssignment
+                ?? moduleSummary?.written_assignment
+                ?? moduleSummary?.writtenTotal
+                ?? moduleSummary?.written_total
+                ?? moduleGrades.resolvedWrittenTotal
+                ?? derivedComponentScores.written
+                ?? null;
+              const tradingDisplay = moduleSummary?.tradeParticipation
+                ?? moduleSummary?.trade_participation
+                ?? moduleSummary?.trading
+                ?? moduleGrades.trading
+                ?? derivedComponentScores.trading
+                ?? null;
               const moduleTotalEarned = moduleSummary?.totalPointsEarned ?? moduleSummary?.total_points_earned ?? null;
               const moduleTotalPossible = moduleSummary?.totalPointsPossible ?? moduleSummary?.total_points_possible ?? 50;
               const moduleTotalFromSummary = moduleSummary?.moduleTotalPoints ?? moduleSummary?.module_total_points ?? moduleSummary?.moduleTotal ?? moduleSummary?.module_total ?? null;
-              const displayedModuleTotal = moduleTotalEarned ?? moduleTotalFromSummary ?? null;
+              const displayedModuleTotal = moduleTotalEarned ?? moduleTotalFromSummary ?? moduleGrades.resolvedModuleTotal ?? null;
 
               return (
                 <div key={moduleKey || String(moduleTitle)} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
