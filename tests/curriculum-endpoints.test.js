@@ -39,6 +39,20 @@ test('guards fetches when required identifiers are missing', () => {
   assert.equal(missingUser.user_id, '');
 });
 
+test('prefers competition membership identifiers over global user id when both exist', () => {
+  const params = normalizeCurriculumRouteParams({
+    competitionSources: [{ competition_id: '501' }],
+    userSources: [
+      { user_id: '12' },
+      { competition_member_id: '77' },
+    ],
+    username: 'student1',
+  });
+
+  assert.equal(params.user_id, '77');
+  assert.equal(params.isReady, true);
+});
+
 test('builds a single canonical request URL per dependency (no waterfall aliases)', () => {
   const endpoints = buildCanonicalCurriculumEndpoints({
     baseUrl: 'https://api.example.com',
