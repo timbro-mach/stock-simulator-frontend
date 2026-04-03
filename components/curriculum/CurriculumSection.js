@@ -161,6 +161,7 @@ const getCorrectChoice = (question) => (
 const getAssignmentType = (assignment) => String(assignment?.type || '').trim().toLowerCase();
 const isWrittenAssignment = (assignment) => getAssignmentType(assignment) === 'assignment';
 const isQuizAssignment = (assignment) => ['quiz', 'final_exam', 'final-exam', 'exam', 'test'].includes(getAssignmentType(assignment));
+const isTradingAssignment = (assignment) => ['trading', 'trade', 'trading_activity', 'trade_activity', 'participation'].includes(getAssignmentType(assignment));
 const isFinalExam = (assignment) => {
   const type = getAssignmentType(assignment);
   if (['final_exam', 'final-exam'].includes(type)) return true;
@@ -179,6 +180,19 @@ const numberOrNull = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+const getGradeItemAssignmentId = (item) => normalizeAssignmentIdKey(
+  item?.assignmentId
+  || item?.assignment_id
+  || item?.curriculumAssignmentId
+  || item?.curriculum_assignment_id
+  || item?.id,
+);
+
+const getGradeItemPoints = (item) => ({
+  earned: numberOrNull(item?.pointsEarned ?? item?.points_earned ?? item?.score),
+  possible: numberOrNull(item?.pointsPossible ?? item?.points_possible ?? item?.maxPoints ?? item?.max_points),
+});
 
 const pickNumber = (...candidates) => {
   for (const candidate of candidates) {
@@ -485,6 +499,21 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
       ? gradeSummary.moduleGrades
       : (Array.isArray(gradeSummary?.module_grades) ? gradeSummary.module_grades : [])
   ), [gradeSummary]);
+  const normalizedGradeItems = useMemo(() => (
+    Array.isArray(gradeSummary?.items)
+      ? gradeSummary.items
+      : (Array.isArray(gradeSummary?.gradeItems)
+        ? gradeSummary.gradeItems
+        : (Array.isArray(gradeSummary?.grade_items) ? gradeSummary.grade_items : []))
+  ), [gradeSummary]);
+  const gradeItemByAssignmentId = useMemo(() => {
+    const map = new Map();
+    normalizedGradeItems.forEach((item) => {
+      const assignmentId = getGradeItemAssignmentId(item);
+      if (assignmentId) map.set(assignmentId, item);
+    });
+    return map;
+  }, [normalizedGradeItems]);
   const moduleSummaryLookup = useMemo(() => {
     const byId = new Map();
     const byWeek = new Map();
@@ -569,9 +598,36 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               const moduleSummaryByWeek = moduleSummaryLookup.byWeek.get(String(weekNumber ?? '').trim());
               const moduleSummary = moduleSummaryById || moduleSummaryByWeek || null;
               const moduleGrades = getModuleGradeBreakdown(moduleSummary || {});
-              const quizDisplay = moduleSummary?.quiz ?? moduleSummary?.quizScore ?? moduleSummary?.quiz_score ?? null;
-              const writtenDisplay = moduleSummary?.writtenAssignment ?? moduleSummary?.written_assignment ?? moduleSummary?.writtenTotal ?? moduleSummary?.written_total ?? null;
-              const tradingDisplay = moduleSummary?.tradeParticipation ?? moduleSummary?.trade_participation ?? moduleSummary?.trading ?? null;
+              const derivedComponentScores = assignments.reduce((accumulator, assignment) => {
+                const assignmentId = getAssignmentId(assignment);
+                if (!assignmentId) return accumulator;
+                const matchedGradeItem = gradeItemByAssignmentId.get(assignmentId);
+                if (!matchedGradeItem) return accumulator;
+                const points = getGradeItemPoints(matchedGradeItem);
+                if (points.earned === null) return accumulator;
+                if (isQuizAssignment(assignment)) {
+                  return {
+                    ...accumulator,
+                    quiz: (accumulator.quiz ?? 0) + points.earned,
+                  };
+                }
+                if (isWrittenAssignment(assignment)) {
+                  return {
+                    ...accumulator,
+                    written: (accumulator.written ?? 0) + points.earned,
+                  };
+                }
+                if (isTradingAssignment(assignment)) {
+                  return {
+                    ...accumulator,
+                    trading: (accumulator.trading ?? 0) + points.earned,
+                  };
+                }
+                return accumulator;
+              }, { quiz: null, written: null, trading: null });
+              const quizDisplay = moduleSummary?.quiz ?? moduleSummary?.quizScore ?? moduleSummary?.quiz_score ?? derivedComponentScores.quiz ?? null;
+              const writtenDisplay = moduleSummary?.writtenAssignment ?? moduleSummary?.written_assignment ?? moduleSummary?.writtenTotal ?? moduleSummary?.written_total ?? derivedComponentScores.written ?? null;
+              const tradingDisplay = moduleSummary?.tradeParticipation ?? moduleSummary?.trade_participation ?? moduleSummary?.trading ?? derivedComponentScores.trading ?? null;
               const moduleTotalEarned = moduleSummary?.totalPointsEarned ?? moduleSummary?.total_points_earned ?? null;
               const moduleTotalPossible = moduleSummary?.totalPointsPossible ?? moduleSummary?.total_points_possible ?? 50;
               const moduleTotalFromSummary = moduleSummary?.moduleTotalPoints ?? moduleSummary?.module_total_points ?? moduleSummary?.moduleTotal ?? moduleSummary?.module_total ?? null;
