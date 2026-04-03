@@ -1532,7 +1532,7 @@ const Dashboard = () => {
         try {
             const response = await axios.get(`${BASE_URL}/user`, { params: { username } });
             const data = response?.data || {};
-            setCurrentUserId(String(data?.user_id ?? data?.id ?? data?.user?.id ?? username ?? '').trim());
+            setCurrentUserId(String(data?.user_id ?? data?.id ?? data?.user?.id ?? '').trim());
             const accountsCollection = pickFirstNonEmptyArray(
                 data?.accounts,
                 data?.user_accounts,
@@ -2192,7 +2192,6 @@ const Dashboard = () => {
             if (!trimmed) continue;
             const parsedNumeric = Number.parseInt(trimmed, 10);
             if (Number.isInteger(parsedNumeric) && parsedNumeric > 0) return String(parsedNumeric);
-            return trimmed;
         }
         return '';
     }, [currentUserId, selectedAccount, selectedCompetitionRecord]);
