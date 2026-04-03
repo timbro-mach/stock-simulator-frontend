@@ -2165,20 +2165,57 @@ const Dashboard = () => {
         return { endpoint, payload };
     }, [username]);
 
+    const curriculumGradesUserId = useMemo(() => {
+        const candidateIds = [
+            currentUserId,
+            selectedCompetitionRecord?.competition_member_id,
+            selectedCompetitionRecord?.competitionMemberId,
+            selectedCompetitionRecord?.member_id,
+            selectedCompetitionRecord?.memberId,
+            selectedCompetitionRecord?.membership_id,
+            selectedCompetitionRecord?.membershipId,
+            selectedCompetitionRecord?.user_id,
+            selectedCompetitionRecord?.userId,
+            selectedCompetitionRecord?.participant_id,
+            selectedCompetitionRecord?.participantId,
+            selectedAccount?.competition_member_id,
+            selectedAccount?.competitionMemberId,
+            selectedAccount?.member_id,
+            selectedAccount?.memberId,
+            selectedAccount?.membership_id,
+            selectedAccount?.membershipId,
+            selectedAccount?.user_id,
+            selectedAccount?.userId,
+        ];
+        for (const candidate of candidateIds) {
+            const trimmed = String(candidate ?? '').trim();
+            if (!trimmed) continue;
+            const parsedNumeric = Number.parseInt(trimmed, 10);
+            if (Number.isInteger(parsedNumeric) && parsedNumeric > 0) return String(parsedNumeric);
+            return trimmed;
+        }
+        return '';
+    }, [currentUserId, selectedAccount, selectedCompetitionRecord]);
+
+    const getCurriculumGradesEndpoint = useCallback((userId) => {
+        const normalizedCompetitionId = String(selectedCompetitionId || '').trim();
+        const normalizedUserId = String(userId || '').trim();
+        const normalizedUsername = String(username || '').trim();
+        if (!normalizedCompetitionId || !normalizedUserId || !normalizedUsername) return null;
+        return {
+            url: `${BASE_URL}${buildCurriculumPath(normalizedCompetitionId, `grades/${encodeURIComponent(normalizedUserId)}`)}`,
+            params: { username: normalizedUsername },
+        };
+    }, [BASE_URL, selectedCompetitionId, username]);
+
     const refreshCurriculumGradeSummary = useCallback(async () => {
-        const parsedCurrentUserId = Number.parseInt(String(currentUserId || '').trim(), 10);
-        const effectiveUserId = Number.isInteger(parsedCurrentUserId) && parsedCurrentUserId > 0
-            ? String(parsedCurrentUserId)
-            : '';
-        if (!selectedCompetitionId || !effectiveUserId || !username) return null;
-        const response = await axios.get(
-            `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`,
-            { params: { username } },
-        );
+        const gradesRequest = getCurriculumGradesEndpoint(curriculumGradesUserId);
+        if (!gradesRequest) return null;
+        const response = await axios.get(gradesRequest.url, { params: gradesRequest.params });
         const refreshedSummary = resolveGradeSummaryOverall(response?.data ?? null);
         setCurriculumGradeSummary(refreshedSummary);
         return refreshedSummary;
-    }, [BASE_URL, currentUserId, selectedCompetitionId, username]);
+    }, [curriculumGradesUserId, getCurriculumGradesEndpoint]);
 
     const applyImmediateCurriculumGradeSummary = useCallback(async (mutationPayload) => {
         const responseSummary = resolveGradeSummaryOverall(mutationPayload);
@@ -2439,10 +2476,7 @@ const Dashboard = () => {
                     return;
                 }
 
-                const parsedCurrentUserId = Number.parseInt(String(currentUserId || '').trim(), 10);
-                const effectiveUserId = Number.isInteger(parsedCurrentUserId) && parsedCurrentUserId > 0
-                    ? String(parsedCurrentUserId)
-                    : '';
+                const effectiveUserId = String(curriculumGradesUserId || '').trim();
                 let modulesData = [];
                 let gradesData = null;
                 let instructorData = null;
@@ -2490,12 +2524,10 @@ const Dashboard = () => {
                     }
                 }
 
-                if (effectiveUserId) {
+                const gradesRequest = getCurriculumGradesEndpoint(effectiveUserId);
+                if (gradesRequest) {
                     try {
-                        const gradesResponse = await axios.get(
-                            `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, `grades/${effectiveUserId}`)}`,
-                            { params: { username } },
-                        );
+                        const gradesResponse = await axios.get(gradesRequest.url, { params: gradesRequest.params });
                         gradesData = gradesResponse?.data ?? null;
                         if (!cancelled) {
                             setCurriculumDebugState((previous) => ({
@@ -2518,6 +2550,13 @@ const Dashboard = () => {
                         if (!cancelled) {
                             const statusCode = error?.response?.status ?? null;
                             const responseMessage = getCurriculumResponseMessage(error);
+                            console.error('[curriculum][grades] Failed to fetch grades summary', {
+                                statusCode,
+                                competitionId: selectedCompetitionId,
+                                userId: effectiveUserId,
+                                username,
+                                responseMessage,
+                            });
                             const details = [
                                 statusCode ? `HTTP ${statusCode}` : '',
                                 responseMessage || '',
@@ -2547,13 +2586,19 @@ const Dashboard = () => {
                         }
                     }
                 } else if (!cancelled) {
+                    console.error('[curriculum][grades] Missing required route params for grades fetch', {
+                        competitionId: selectedCompetitionId,
+                        userId: effectiveUserId || null,
+                        username: username || null,
+                    });
+                    setCurriculumGradesMessage('Grades are temporarily unavailable (missing competition/user route params).');
                     setCurriculumDebugState((previous) => ({
                         ...previous,
                         requestInfo: {
                             ...previous.requestInfo,
                             requestStatus: {
                                 ...previous.requestInfo?.requestStatus,
-                                grades: { attempted: false, ok: false, status: null, message: 'skipped (no user id)' },
+                                grades: { attempted: false, ok: false, status: null, message: 'skipped (missing competition/user route params)' },
                             },
                         },
                     }));
@@ -2679,7 +2724,8 @@ const Dashboard = () => {
         competitionHydration,
         curriculumRefreshTick,
         showTrading,
-        currentUserId,
+        curriculumGradesUserId,
+        getCurriculumGradesEndpoint,
         username,
     ]);
 
