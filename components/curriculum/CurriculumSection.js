@@ -4,6 +4,7 @@ import { buildAssignmentSubmissionPayload, normalizeAssignmentIdKey } from '../.
 import { asLetter, asPercent, asPoints, getStatusBadgeStyles, normalizeGradingStatus } from '../../lib/teacherDashboard';
 import { getGradeItemDisplayText, getGradeItemStatus, shouldShowNoGradedItemsYet } from '../../lib/curriculum/statusDisplay';
 import { resolveProgressPercentage } from '../../lib/curriculum/grades';
+import LessonContentRenderer from './LessonContentRenderer';
 
 const progressShell = {
   width: '100%',
@@ -23,17 +24,6 @@ const detailShell = {
   border: '1px solid var(--border-color)',
   borderRadius: 8,
   padding: 10,
-};
-
-const lessonShell = {
-  border: '1px solid #cbd5e1',
-  background: '#f8fafc',
-  borderRadius: 8,
-  padding: 16,
-  maxHeight: 420,
-  overflowY: 'auto',
-  whiteSpace: 'pre-wrap',
-  lineHeight: 1.6,
 };
 
 const gradeGrid = {
@@ -137,6 +127,58 @@ const resolveLessonContent = (module) => {
   }
 
   return '';
+};
+
+const resolveLessonContentHtml = (module) => {
+  const candidates = [
+    module?.lessonContentHtml,
+    module?.lesson_content_html,
+    module?.lesson?.contentHtml,
+    module?.lesson?.content_html,
+    module?.content?.lessonContentHtml,
+    module?.content?.lesson_content_html,
+    module?.content?.lesson?.contentHtml,
+    module?.content?.lesson?.content_html,
+  ];
+  const resolved = candidates.find((entry) => typeof entry === 'string' && entry.trim());
+  return typeof resolved === 'string' ? resolved : '';
+};
+
+const normalizeLessonBlocks = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((block) => {
+      if (!block || typeof block !== 'object') return null;
+      const type = String(block?.type || '').trim().toLowerCase();
+      if (type === 'heading') return { type: 'heading', level: block?.level, text: toTextContent(block?.text) };
+      if (type === 'paragraph') return { type: 'paragraph', text: toTextContent(block?.text) };
+      if (type === 'list') {
+        const items = Array.isArray(block?.items) ? block.items.map((item) => toTextContent(item)).filter(Boolean) : [];
+        return { type: 'list', items };
+      }
+      return null;
+    })
+    .filter(Boolean);
+};
+
+const resolveLessonContentBlocks = (module) => {
+  const blockCandidates = [
+    module?.lessonContentBlocks,
+    module?.lesson_content_blocks,
+    module?.lesson?.contentBlocks,
+    module?.lesson?.content_blocks,
+    module?.content?.lessonContentBlocks,
+    module?.content?.lesson_content_blocks,
+    module?.content?.lesson?.contentBlocks,
+    module?.content?.lesson?.content_blocks,
+  ];
+
+  for (const candidate of blockCandidates) {
+    const normalized = normalizeLessonBlocks(candidate);
+    if (normalized.length > 0) return normalized;
+  }
+
+  return [];
 };
 
 const getQuestionPrompt = (question) => {
@@ -575,6 +617,8 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               const unlockDate = module?.unlockDate ?? module?.unlock_date;
               const dueDate = module?.dueDate ?? module?.due_date;
               const lessonContent = resolveLessonContent(module);
+              const lessonContentBlocks = resolveLessonContentBlocks(module);
+              const lessonContentHtml = resolveLessonContentHtml(module);
               const moduleSummaryById = moduleSummaryLookup.byId.get(String(moduleId ?? '').trim());
               const moduleSummaryByWeek = moduleSummaryLookup.byWeek.get(String(weekNumber ?? '').trim());
               const moduleSummary = moduleSummaryById || moduleSummaryByWeek || null;
@@ -641,9 +685,7 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
                     <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
                       <div style={detailShell}>
                         <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Lesson (eText)</strong></p>
-                        <div style={lessonShell}>
-                          {lessonContent || 'Lesson content has not been published yet.'}
-                        </div>
+                        <LessonContentRenderer blocks={lessonContentBlocks} html={lessonContentHtml} raw={lessonContent} />
                       </div>
                       {assignments.length > 0 ? assignments.map((assignment, assignmentIndex) => {
                         const assignmentId = getAssignmentId(assignment) || `${moduleKey}-assignment-${assignmentIndex}`;
