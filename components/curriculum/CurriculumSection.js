@@ -98,31 +98,44 @@ const toTextContent = (value) => {
 
 const resolveLessonContent = (module) => {
   const candidates = [
-    module?.lesson_content,
-    module?.lessonContent,
-    module?.eText,
-    module?.etext,
-    module?.lesson_text,
-    module?.lessonText,
-    module?.lesson?.content,
-    module?.lesson?.text,
-    module?.lesson?.body,
-    module?.content?.lesson_content,
-    module?.content?.lessonContent,
-    module?.content?.eText,
-    module?.content?.etext,
-    module?.content?.lesson_text,
-    module?.content?.lessonText,
-    module?.content?.lesson?.content,
-    module?.content?.lesson?.text,
-    module?.content?.lesson?.body,
-    module?.content?.text,
-    module?.content?.body,
+    { key: 'module.lesson_content', value: module?.lesson_content },
+    { key: 'module.lessonContent', value: module?.lessonContent },
+    { key: 'module.eText', value: module?.eText },
+    { key: 'module.etext', value: module?.etext },
+    { key: 'module.lesson_text', value: module?.lesson_text },
+    { key: 'module.lessonText', value: module?.lessonText },
+    { key: 'module.lesson.content', value: module?.lesson?.content },
+    { key: 'module.lesson.text', value: module?.lesson?.text },
+    { key: 'module.lesson.body', value: module?.lesson?.body },
+    { key: 'module.content.lesson_content', value: module?.content?.lesson_content },
+    { key: 'module.content.lessonContent', value: module?.content?.lessonContent },
+    { key: 'module.content.eText', value: module?.content?.eText },
+    { key: 'module.content.etext', value: module?.content?.etext },
+    { key: 'module.content.lesson_text', value: module?.content?.lesson_text },
+    { key: 'module.content.lessonText', value: module?.content?.lessonText },
+    { key: 'module.content.lesson.content', value: module?.content?.lesson?.content },
+    { key: 'module.content.lesson.text', value: module?.content?.lesson?.text },
+    { key: 'module.content.lesson.body', value: module?.content?.lesson?.body },
+    { key: 'module.content.text', value: module?.content?.text },
+    { key: 'module.content.body', value: module?.content?.body },
   ];
-  for (const candidate of candidates) {
-    const normalized = String(toTextContent(candidate) || '').trim();
-    if (normalized) return normalized;
+  const scoredCandidates = candidates
+    .map(({ key, value }) => {
+      const normalized = String(toTextContent(value) || '').trim();
+      if (!normalized) return null;
+      const hasMarkdownHeading = normalized.includes('\n## ') || normalized.startsWith('## ');
+      const markdownBonus = hasMarkdownHeading ? 500 : 0;
+      const etextKeyBonus = key.toLowerCase().includes('etext') ? 250 : 0;
+      const score = normalized.length + markdownBonus + etextKeyBonus;
+      return { key, normalized, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score);
+
+  if (scoredCandidates.length > 0) {
+    return scoredCandidates[0].normalized;
   }
+
   return '';
 };
 
