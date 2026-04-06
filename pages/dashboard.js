@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import axios from 'axios';
 import Link from 'next/link';
 import { getApiBaseUrl, getApiErrorMessage } from '../lib/api';
@@ -876,6 +876,7 @@ const Dashboard = () => {
     });
     const [curriculumInstructorSubmissions, setCurriculumInstructorSubmissions] = useState([]);
     const [curriculumInstructorMessage, setCurriculumInstructorMessage] = useState('');
+    const pendingCurriculumScrollRestoreY = useRef(null);
     const [currentUserId, setCurrentUserId] = useState('');
 
     // =========================================
@@ -2819,6 +2820,9 @@ const Dashboard = () => {
                 },
             }));
             await applyImmediateCurriculumGradeSummary(immediateResult);
+            if (typeof window !== 'undefined') {
+                pendingCurriculumScrollRestoreY.current = window.scrollY;
+            }
             await refetchCurriculumGradeQueries({
                 refetchStudentGradesSummary: async () => setCurriculumRefreshTick((value) => value + 1),
             });
@@ -2841,6 +2845,16 @@ const Dashboard = () => {
             setCurriculumActionLoading(false);
         }
     };
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const restoreTarget = pendingCurriculumScrollRestoreY.current;
+        if (!Number.isFinite(restoreTarget) || curriculumLoading) return;
+        pendingCurriculumScrollRestoreY.current = null;
+        window.requestAnimationFrame(() => {
+            window.scrollTo({ top: restoreTarget, behavior: 'auto' });
+        });
+    }, [curriculumLoading]);
 
     const postToFirstSuccessfulEndpoint = async (candidateRequests) => {
         let lastError = null;
