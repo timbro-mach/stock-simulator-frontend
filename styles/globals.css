@@ -374,6 +374,90 @@ header {
   margin: 0;
 }
 
+.teacher-student-summary-card {
+  border: 1px solid #d7dde2;
+  border-radius: 10px;
+  padding: 14px;
+  background: #f8fafc;
+}
+
+.teacher-student-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.teacher-student-metric {
+  background: #fff;
+  border: 1px solid #d7dde2;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.teacher-student-metric-label {
+  margin: 0 0 3px;
+}
+
+.teacher-student-metric-value {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--brand-navy);
+  font-weight: 600;
+}
+
+.teacher-student-table {
+  table-layout: fixed;
+}
+
+.teacher-student-table th,
+.teacher-student-table td {
+  vertical-align: top;
+}
+
+.teacher-student-question-grades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.teacher-student-question-grade-pill {
+  border: 1px solid #d7dde2;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #fff;
+}
+
+.teacher-student-details {
+  margin-top: 8px;
+}
+
+.teacher-student-details summary {
+  cursor: pointer;
+  color: var(--brand-blue);
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.teacher-student-pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.45;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #d7dde2;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+}
+
+.teacher-student-rubric-note {
+  margin-top: 6px;
+}
+
 @media (max-width: 1024px) {
   .container,
   .dashboard-container {
