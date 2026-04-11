@@ -76,6 +76,26 @@ const mapValidationMessage = (message) => {
   return found || message || 'Unable to submit grade.';
 };
 
+const formatTimestamp = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
+};
+
+const getSubmissionPreview = (submissionContent) => {
+  if (submissionContent == null) return 'No submission payload';
+  if (typeof submissionContent === 'string') {
+    return submissionContent.length > 160 ? `${submissionContent.slice(0, 160)}…` : submissionContent;
+  }
+  try {
+    const compact = JSON.stringify(submissionContent);
+    return compact.length > 160 ? `${compact.slice(0, 160)}…` : compact;
+  } catch (error) {
+    return 'Submission payload available';
+  }
+};
+
 export default function TeacherStudentDetailPage() {
   const router = useRouter();
   const { competitionId, studentId } = router.query;
@@ -281,28 +301,45 @@ export default function TeacherStudentDetailPage() {
             <h3>{student?.displayName || `Student ${studentId}`}</h3>
             <p className="note">{student?.email || 'No email available'}</p>
 
-            <div className="section" style={{ border: '1px solid #d7dde2', borderRadius: 10, padding: 12 }}>
-              <h3 style={{ marginBottom: 8 }}>Grade Summary</h3>
-              <p className="note">Percentage: {asPercent(gradeSummary?.percentage, { pointsPossible: gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible })}</p>
-              <p className="note">Letter: {asLetter(gradeSummary?.letterGrade ?? gradeSummary?.letter_grade, { percentage: gradeSummary?.percentage, pointsPossible: gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible })}</p>
-              <p className="note">Points: {asPoints(gradeSummary?.totalPointsEarned ?? gradeSummary?.total_points_earned, gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible)}</p>
-              <p className="note">
-                Completed: {gradeSummary?.completedCurriculumItems ?? gradeSummary?.completed_items ?? 0}/{gradeSummary?.totalCurriculumItems ?? gradeSummary?.total_items ?? 0}
-              </p>
-              <p className="note">
-                Progress: {Math.round(resolveProgressPercentage({
-                  progressPercentage: gradeSummary?.progressPercentage ?? gradeSummary?.progress_percentage,
-                  completedItems: gradeSummary?.completedCurriculumItems ?? gradeSummary?.completed_items,
-                  totalItems: gradeSummary?.totalCurriculumItems ?? gradeSummary?.total_items,
-                }))}%
-              </p>
+            <div className="section teacher-student-summary-card">
+              <h3 style={{ marginBottom: 12 }}>Grade Summary</h3>
+              <div className="teacher-student-metrics-grid">
+                <div className="teacher-student-metric">
+                  <p className="note teacher-student-metric-label">Percentage</p>
+                  <p className="teacher-student-metric-value">{asPercent(gradeSummary?.percentage, { pointsPossible: gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible })}</p>
+                </div>
+                <div className="teacher-student-metric">
+                  <p className="note teacher-student-metric-label">Letter</p>
+                  <p className="teacher-student-metric-value">{asLetter(gradeSummary?.letterGrade ?? gradeSummary?.letter_grade, { percentage: gradeSummary?.percentage, pointsPossible: gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible })}</p>
+                </div>
+                <div className="teacher-student-metric">
+                  <p className="note teacher-student-metric-label">Points</p>
+                  <p className="teacher-student-metric-value">{asPoints(gradeSummary?.totalPointsEarned ?? gradeSummary?.total_points_earned, gradeSummary?.totalPointsPossible ?? gradeSummary?.total_points_possible)}</p>
+                </div>
+                <div className="teacher-student-metric">
+                  <p className="note teacher-student-metric-label">Completed</p>
+                  <p className="teacher-student-metric-value">
+                    {gradeSummary?.completedCurriculumItems ?? gradeSummary?.completed_items ?? 0}/{gradeSummary?.totalCurriculumItems ?? gradeSummary?.total_items ?? 0}
+                  </p>
+                </div>
+                <div className="teacher-student-metric">
+                  <p className="note teacher-student-metric-label">Progress</p>
+                  <p className="teacher-student-metric-value">
+                    {Math.round(resolveProgressPercentage({
+                      progressPercentage: gradeSummary?.progressPercentage ?? gradeSummary?.progress_percentage,
+                      completedItems: gradeSummary?.completedCurriculumItems ?? gradeSummary?.completed_items,
+                      totalItems: gradeSummary?.totalCurriculumItems ?? gradeSummary?.total_items,
+                    }))}%
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="section" style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button type="button" onClick={openTradesModal}>View Trade Blotter</button>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
-              <table>
+            <div style={{ overflowX: 'auto' }} className="teacher-student-table-wrap">
+              <table className="teacher-student-table">
                 <thead>
                   <tr>
                     <th>Week</th>
@@ -334,25 +371,28 @@ export default function TeacherStudentDetailPage() {
                           <span className="pill" style={getStatusBadgeStyles(status)}>{status}</span>
                         </td>
                         <td>
-                          <div className="note">{item.submittedAt || '—'}</div>
+                          <div className="note">Submitted: {formatTimestamp(item.submittedAt)}</div>
                           {Array.isArray(item?.questionGrades) && item.questionGrades.length > 0 ? (
-                            <div className="note" style={{ marginTop: 8 }}>
+                            <div className="note teacher-student-question-grades">
                               {item.questionGrades.map((questionGrade) => (
-                                <div key={`${item.assignmentId}-${questionGrade.questionId}`}>
+                                <div key={`${item.assignmentId}-${questionGrade.questionId}`} className="teacher-student-question-grade-pill">
                                   {questionGrade.questionId}: {asPoints(questionGrade.pointsAwarded, questionGrade.pointsPossible)}
                                 </div>
                               ))}
                             </div>
                           ) : null}
-                          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 12 }}>{JSON.stringify(item.submissionContent || null, null, 2)}</pre>
+                          <details className="teacher-student-details">
+                            <summary>{getSubmissionPreview(item.submissionContent)}</summary>
+                            <pre className="teacher-student-pre">{JSON.stringify(item.submissionContent || null, null, 2)}</pre>
+                          </details>
                         </td>
                         <td>
                           <div className="note">{typeof item.feedback === 'string' ? item.feedback : JSON.stringify(item.feedback || {})}</div>
-                          <div className="note">Rubric: {item.rubricNotes || '—'}</div>
+                          <div className="note teacher-student-rubric-note">Rubric: {item.rubricNotes || '—'}</div>
                         </td>
                         <td>
                           <div className="note">{item.gradedByUsername || item.gradedByUserId || '—'}</div>
-                          <div className="note">{item.gradedAt || '—'}</div>
+                          <div className="note">{formatTimestamp(item.gradedAt)}</div>
                         </td>
                         <td>
                           {canManualGrade ? (
