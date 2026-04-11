@@ -152,6 +152,44 @@ test('resolveGradeSummaryOverall prefers moduleGrades over gradeSummaryByModule 
   assert.equal(summary?.moduleGrades?.[0]?.modulePointsPossible, 20);
 });
 
+test('module breakdown infers graded status when points are present but status is missing', () => {
+  const summary = resolveGradeSummaryByModule({
+    grade_summary_by_module: [
+      {
+        module_id: 'm-3',
+        quiz: { score: 10, points_possible: 10 },
+        written_assignment: { totalScore: 19, pointsPossible: 20 },
+        trade_participation: { trade_points: 10, points_possible: 10 },
+      },
+    ],
+  });
+
+  assert.equal(summary.length, 1);
+  assert.equal(summary[0].quiz?.gradingStatus, 'graded');
+  assert.equal(summary[0].writtenAssignment?.gradingStatus, 'graded');
+  assert.equal(summary[0].tradeParticipation?.gradingStatus, 'graded');
+});
+
+test('module breakdown maps additional written question aliases for q1/q2 tiles', () => {
+  const summary = resolveGradeSummaryByModule({
+    grade_summary_by_module: [
+      {
+        module_id: 'm-4',
+        written_assignment: {
+          total_score: 19,
+          points_possible: 20,
+          q1_score: 10,
+          question_2: 9,
+        },
+      },
+    ],
+  });
+
+  assert.equal(summary.length, 1);
+  assert.equal(summary[0].writtenAssignment?.question1Score, 10);
+  assert.equal(summary[0].writtenAssignment?.question2Score, 9);
+});
+
 test('summary helper supports camelCase and snake_case keys', () => {
   const camelModules = getSummaryByModule({
     gradeSummaryByModule: [{ moduleId: 'm-1' }],
