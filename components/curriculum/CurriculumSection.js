@@ -51,6 +51,10 @@ const getAssignments = (module) => {
 };
 
 const getQuestions = (content) => {
+  if (Array.isArray(content?.prompts)) return content.prompts;
+  if (Array.isArray(content?.question_prompts)) return content.question_prompts;
+  if (Array.isArray(content?.assignmentPrompts)) return content.assignmentPrompts;
+  if (Array.isArray(content?.assignment_prompts)) return content.assignment_prompts;
   if (Array.isArray(content?.questions)) return content.questions;
   if (Array.isArray(content?.quiz_questions)) return content.quiz_questions;
   if (Array.isArray(content?.quizQuestions)) return content.quizQuestions;
@@ -183,7 +187,7 @@ const resolveLessonContentBlocks = (module) => {
 
 const getQuestionPrompt = (question) => {
   if (typeof question === 'string') return question;
-  return question?.prompt || question?.question || question?.text || 'Question';
+  return question?.prompt || question?.question || question?.text || question?.title || question?.label || 'Question';
 };
 
 const getQuestionId = (question, index) => question?.questionId || question?.id || `q-${index}`;
