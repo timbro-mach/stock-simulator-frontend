@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { formatDisplayDate, normalizeCurriculumStatus } from '../../lib/curriculum/helpers';
 import { buildAssignmentSubmissionPayload, normalizeAssignmentIdKey } from '../../lib/curriculum/submission';
 import { asLetter, asPercent, asPoints, getStatusBadgeStyles, normalizeGradingStatus } from '../../lib/teacherDashboard';
 import { getGradeItemDisplayText, getGradeItemStatus, shouldShowNoGradedItemsYet } from '../../lib/curriculum/statusDisplay';
 import { resolveProgressPercentage } from '../../lib/curriculum/grades';
+import { buildModuleLockMessage, getModuleLockState } from '../../lib/curriculum/moduleLock';
 import LessonContentRenderer from './LessonContentRenderer';
 
 const progressShell = {
@@ -359,9 +360,71 @@ export const CurriculumSummaryCard = ({ overview }) => {
   );
 };
 
+const LessonEditor = ({ moduleKey, initialContent, onCancel, onSave, status, message, actionLoading }) => {
+  const [draft, setDraft] = useState(initialContent || '');
+  const lastSeededRef = useRef(initialContent || '');
+  useEffect(() => {
+    if (lastSeededRef.current !== initialContent) {
+      lastSeededRef.current = initialContent || '';
+      setDraft(initialContent || '');
+    }
+  }, [initialContent]);
+  const isSaving = status === 'saving';
+  const isError = status === 'error';
+  const isSuccess = status === 'success';
+
+  return (
+    <div
+      data-testid={`lesson-editor-${moduleKey}`}
+      style={{ marginTop: 10, border: '1px dashed #1d4ed8', borderRadius: 8, padding: 10, background: '#f8fafc' }}
+    >
+      <p className="note" style={{ marginTop: 0, marginBottom: 6 }}>
+        <strong>Edit eText</strong> (Markdown)
+      </p>
+      <textarea
+        aria-label="Edit lesson content"
+        data-testid={`lesson-editor-textarea-${moduleKey}`}
+        rows={10}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        disabled={isSaving || actionLoading}
+        style={{ width: '100%', fontFamily: 'monospace' }}
+        placeholder="Write or paste the lesson content in Markdown..."
+      />
+      {message ? (
+        <p
+          className="note"
+          data-testid={`lesson-editor-message-${moduleKey}`}
+          style={{ marginTop: 6, marginBottom: 0, color: isError ? '#b91c1c' : (isSuccess ? '#15803d' : '#1d4ed8') }}
+        >
+          {message}
+        </p>
+      ) : null}
+      <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          data-testid={`lesson-editor-save-${moduleKey}`}
+          onClick={() => onSave(draft)}
+          disabled={isSaving || actionLoading || !draft.trim()}
+        >
+          {isSaving ? 'Saving…' : 'Save eText'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isSaving}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const AssignmentCard = ({
   assignment,
   moduleLocked,
+  moduleLockMessage,
   actionLoading,
   onSubmitItem,
   submittedMap,
@@ -374,10 +437,20 @@ const AssignmentCard = ({
   const [quizScore, setQuizScore] = useState(null);
   const assignmentType = getAssignmentType(assignment);
   const assignmentId = getAssignmentId(assignment);
-  const questions = getQuestions(assignment?.content);
+  const initialQuestions = getQuestions(assignment?.content);
+  // Cache questions per attempt so re-renders never re-derive or reorder them.
+  const cachedQuestionsRef = useRef(initialQuestions);
+  const cachedAssignmentIdRef = useRef(assignmentId);
+  if (cachedAssignmentIdRef.current !== assignmentId) {
+    cachedAssignmentIdRef.current = assignmentId;
+    cachedQuestionsRef.current = initialQuestions;
+  }
+  const questions = cachedQuestionsRef.current;
   const submitted = Boolean(submittedMap?.[assignmentId]) || String(assignment?.status || '').toLowerCase() === 'submitted';
   const [submitValidationError, setSubmitValidationError] = useState('');
   const currentSubmission = submissionState?.byAssignmentId?.[assignmentId] || null;
+  const isLocked = Boolean(moduleLocked) || Boolean(currentSubmission?.lockInfo);
+  const lockNotice = currentSubmission?.lockInfo?.message || moduleLockMessage || '';
 
   const payload = useMemo(() => {
     return buildAssignmentSubmissionPayload({
@@ -451,7 +524,7 @@ const AssignmentCard = ({
                             value={writtenAnswers[partKey] || ''}
                             onChange={(event) => onWrittenAnswersChange((previous) => ({ ...previous, [partKey]: event.target.value }))}
                             style={{ width: '100%' }}
-                            disabled={moduleLocked || actionLoading}
+                            disabled={isLocked || actionLoading}
                             placeholder="Write your response here..."
                           />
                         </div>
@@ -522,11 +595,29 @@ const AssignmentCard = ({
       {currentSubmission?.status === 'success' ? (
         <p className="note" style={{ marginTop: 8, marginBottom: 0, color: '#15803d' }}>{currentSubmission?.message || 'Submission saved.'}</p>
       ) : null}
+      {currentSubmission?.status === 'locked' ? (
+        <p
+          className="note"
+          role="alert"
+          data-testid="assignment-lock-message"
+          style={{ marginTop: 8, marginBottom: 0, color: '#b45309' }}
+        >
+          🔒 {currentSubmission?.message || 'This module is locked.'}
+        </p>
+      ) : (isLocked && lockNotice ? (
+        <p
+          className="note"
+          data-testid="assignment-lock-notice"
+          style={{ marginTop: 8, marginBottom: 0, color: '#b45309' }}
+        >
+          🔒 {lockNotice}
+        </p>
+      ) : null)}
 
       <div style={{ marginTop: 10 }}>
         <button
           onClick={handleSubmit}
-          disabled={moduleLocked || actionLoading || !assignmentId || currentSubmission?.status === 'loading'}
+          disabled={isLocked || actionLoading || !assignmentId || currentSubmission?.status === 'loading'}
         >
           {currentSubmission?.status === 'loading' ? 'Submitting…' : 'Submit'}
         </button>
@@ -535,7 +626,20 @@ const AssignmentCard = ({
   );
 };
 
-export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, gradesMessage, loading, error, onSubmitItem, actionLoading, submissionState }) => {
+export const StudentCurriculumPanel = ({
+  overview,
+  modules,
+  gradeSummary,
+  gradesMessage,
+  loading,
+  error,
+  onSubmitItem,
+  actionLoading,
+  submissionState,
+  isInstructor = false,
+  onSaveLessonContent,
+  lessonEditState,
+}) => {
   if (!overview?.curriculum_enabled) return null;
   const summaryOverall = gradeSummary?.gradeSummaryOverall ?? gradeSummary?.grade_summary_overall ?? gradeSummary ?? {};
   const percentage = summaryOverall?.percentage ?? null;
@@ -623,6 +727,12 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               const lessonContent = resolveLessonContent(module);
               const lessonContentBlocks = resolveLessonContentBlocks(module);
               const lessonContentHtml = resolveLessonContentHtml(module);
+              const lockState = getModuleLockState(module);
+              // Backend already bypasses lock for instructors/admins; treat as unlocked defensively.
+              const effectiveLocked = isInstructor ? false : lockState.locked;
+              const lockMessage = effectiveLocked
+                ? buildModuleLockMessage(module, { allModules: modules, formatDate: formatDisplayDate })
+                : '';
               const moduleSummaryById = moduleSummaryLookup.byId.get(String(moduleId ?? '').trim());
               const moduleSummaryByWeek = moduleSummaryLookup.byWeek.get(String(weekNumber ?? '').trim());
               const moduleSummary = moduleSummaryById || moduleSummaryByWeek || null;
@@ -635,21 +745,112 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
               const quizStatus = normalizeGradingStatus(quiz?.gradingStatus || quiz?.status || 'not_submitted');
               const writtenStatus = normalizeGradingStatus(writtenAssignment?.gradingStatus || writtenAssignment?.status || 'not_submitted');
               const tradeStatus = normalizeGradingStatus(tradeParticipation?.gradingStatus || tradeParticipation?.status || 'not_submitted');
+              const editState = lessonEditState?.[moduleKey] || null;
+              const isEditingLesson = Boolean(editState?.open);
+              const handleOpenLessonEditor = () => {
+                if (typeof onSaveLessonContent !== 'function') return;
+                onSaveLessonContent({
+                  type: 'open',
+                  moduleId,
+                  moduleKey,
+                  initialContent: lessonContent,
+                });
+              };
+              const handleCloseLessonEditor = () => {
+                if (typeof onSaveLessonContent !== 'function') return;
+                onSaveLessonContent({ type: 'close', moduleId, moduleKey });
+              };
+              const handleSaveLessonEditor = (draftValue) => {
+                if (typeof onSaveLessonContent !== 'function') return;
+                onSaveLessonContent({
+                  type: 'save',
+                  moduleId,
+                  moduleKey,
+                  lessonContent: draftValue,
+                });
+              };
 
               return (
-                <div key={moduleKey || String(moduleTitle)} style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: 12 }}>
+                <div
+                  key={moduleKey || String(moduleTitle)}
+                  data-testid={`curriculum-module-tile-${moduleKey || moduleTitle}`}
+                  data-locked={effectiveLocked ? 'true' : 'false'}
+                  aria-disabled={effectiveLocked ? 'true' : undefined}
+                  style={{
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 10,
+                    padding: 12,
+                    background: effectiveLocked ? '#f1f5f9' : undefined,
+                    opacity: effectiveLocked ? 0.75 : 1,
+                  }}
+                  title={effectiveLocked ? lockMessage : undefined}
+                >
                   <button
-                    style={{ width: '100%', textAlign: 'left', background: 'transparent', border: 0, padding: 0, cursor: isExpanded ? 'default' : 'pointer' }}
+                    type="button"
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      background: 'transparent',
+                      border: 0,
+                      padding: 0,
+                      cursor: effectiveLocked ? 'not-allowed' : (isExpanded ? 'default' : 'pointer'),
+                    }}
+                    disabled={effectiveLocked}
+                    aria-disabled={effectiveLocked ? 'true' : undefined}
+                    aria-label={effectiveLocked ? `Locked module: ${moduleTitle}. ${lockMessage}` : undefined}
                     onClick={() => {
+                      if (effectiveLocked) return;
                       if (!isExpanded) setExpandedModuleId(moduleKey);
                     }}
                   >
-                    <p className="em" style={{ marginBottom: 6 }}>Week {weekNumber}: {moduleTitle}</p>
+                    <p className="em" style={{ marginBottom: 6 }}>
+                      {effectiveLocked ? (
+                        <span aria-hidden="true" data-testid="module-lock-icon" style={{ marginRight: 6 }}>🔒</span>
+                      ) : null}
+                      Week {weekNumber}: {moduleTitle}
+                    </p>
                     <p className="note">{moduleDescription}</p>
                     <p className="note">Unlocks: {formatDisplayDate(unlockDate)} • Due: {formatDisplayDate(dueDate)}</p>
-                    <p className="note" style={{ marginBottom: 0 }}>Status: {module?.locked ? 'Locked' : 'Unlocked'} • {assignments.length} assignments • {isExpanded ? 'Open' : 'Click to open module'}</p>
+                    <p className="note" style={{ marginBottom: 0 }}>
+                      Status: {effectiveLocked ? 'Locked' : 'Unlocked'} • {assignments.length} assignments • {effectiveLocked ? 'Locked' : (isExpanded ? 'Open' : 'Click to open module')}
+                    </p>
                   </button>
-                  {isExpanded ? (
+                  {effectiveLocked && lockMessage ? (
+                    <p
+                      className="note"
+                      role="note"
+                      data-testid="module-lock-message"
+                      style={{ marginTop: 6, marginBottom: 0, color: '#b45309' }}
+                    >
+                      {lockMessage}
+                    </p>
+                  ) : null}
+                  {isInstructor && lockState.enforcePrerequisites ? (
+                    <p
+                      className="note"
+                      data-testid="enforce-prereq-badge"
+                      style={{ marginTop: 6, marginBottom: 0, color: '#1d4ed8' }}
+                    >
+                      <span className="pill" style={{ background: '#dbeafe', color: '#1d4ed8', padding: '2px 6px', borderRadius: 4 }}>
+                        Prerequisites enforced
+                      </span>
+                    </p>
+                  ) : null}
+                  {isInstructor && typeof onSaveLessonContent === 'function' ? (
+                    <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {!isEditingLesson ? (
+                        <button
+                          type="button"
+                          data-testid={`edit-etext-button-${moduleKey || moduleTitle}`}
+                          onClick={handleOpenLessonEditor}
+                          disabled={actionLoading}
+                        >
+                          ✏️ Edit eText
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {isExpanded && !effectiveLocked ? (
                     <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
                       <button type="button" onClick={() => setExpandedModuleId(null)}>Collapse module</button>
                     </div>
@@ -685,7 +886,18 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
                     </div>
                   </div>
 
-                  {isExpanded ? (
+                  {isEditingLesson ? (
+                    <LessonEditor
+                      moduleKey={moduleKey}
+                      initialContent={editState?.initialContent ?? lessonContent}
+                      onCancel={handleCloseLessonEditor}
+                      onSave={handleSaveLessonEditor}
+                      status={editState?.status || 'idle'}
+                      message={editState?.message || ''}
+                      actionLoading={actionLoading}
+                    />
+                  ) : null}
+                  {isExpanded && !effectiveLocked ? (
                     <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
                       <div style={detailShell}>
                         <p className="note" style={{ marginTop: 0, marginBottom: 6 }}><strong>Lesson (eText)</strong></p>
@@ -697,7 +909,8 @@ export const StudentCurriculumPanel = ({ overview, modules, gradeSummary, grades
                           <AssignmentCard
                             key={assignmentId}
                             assignment={assignment}
-                            moduleLocked={module?.locked}
+                            moduleLocked={effectiveLocked}
+                            moduleLockMessage={lockMessage}
                             actionLoading={actionLoading}
                             onSubmitItem={onSubmitItem}
                             submittedMap={submissionState?.submittedByAssignmentId}
