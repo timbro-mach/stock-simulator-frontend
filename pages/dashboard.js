@@ -2467,7 +2467,10 @@ const Dashboard = () => {
                 try {
                     const modulesUrl = `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`;
                     const modulesResponse = await axios.get(modulesUrl, {
-                        params: username ? { username } : undefined,
+                        params: {
+                            ...(username ? { username } : {}),
+                            _t: curriculumRefreshTick,
+                        },
                     });
                     modulesData = modulesResponse?.data ?? [];
                     if (!cancelled) {
@@ -2938,11 +2941,23 @@ const Dashboard = () => {
                     username,
                     updates: [{ moduleId, lessonContent }],
                 });
+                setCurriculumModules((previous) => (
+                    Array.isArray(previous)
+                        ? previous.map((module) => {
+                            const moduleIdentifier = module?.moduleId || module?.id || module?.week_number || module?.weekNumber;
+                            if (String(moduleIdentifier ?? '') !== String(moduleId)) return module;
+                            return { ...module, lesson_content: lessonContent, lessonContent };
+                        })
+                        : previous
+                ));
                 setCurriculumLessonEditState((previous) => {
                     const next = { ...previous };
                     delete next[moduleKey];
                     return next;
                 });
+                if (typeof window !== 'undefined') {
+                    pendingCurriculumScrollRestoreY.current = window.scrollY;
+                }
                 setCurriculumRefreshTick((value) => value + 1);
             } catch (error) {
                 const message = getApiErrorMessage(error, 'Unable to save lesson content.');
@@ -3027,11 +3042,35 @@ const Dashboard = () => {
                     username,
                     updates: [{ assignmentId: numericAssignmentId, content: event.content }],
                 });
+                setCurriculumModules((previous) => (
+                    Array.isArray(previous)
+                        ? previous.map((module) => {
+                            const assignments = Array.isArray(module?.assignments)
+                                ? module.assignments
+                                : (Array.isArray(module?.items) ? module.items : null);
+                            if (!assignments) return module;
+                            let touched = false;
+                            const nextAssignments = assignments.map((assignment) => {
+                                const candidate = Number(assignment?.assignmentId ?? assignment?.id);
+                                if (!Number.isFinite(candidate) || candidate !== numericAssignmentId) return assignment;
+                                touched = true;
+                                return { ...assignment, content: event.content };
+                            });
+                            if (!touched) return module;
+                            return Array.isArray(module?.assignments)
+                                ? { ...module, assignments: nextAssignments }
+                                : { ...module, items: nextAssignments };
+                        })
+                        : previous
+                ));
                 setCurriculumAssignmentEditState((previous) => {
                     const next = { ...previous };
                     delete next[assignmentKey];
                     return next;
                 });
+                if (typeof window !== 'undefined') {
+                    pendingCurriculumScrollRestoreY.current = window.scrollY;
+                }
                 setCurriculumRefreshTick((value) => value + 1);
             } catch (error) {
                 const message = getApiErrorMessage(error, 'Unable to save assignment prompts.');

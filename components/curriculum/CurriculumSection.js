@@ -372,12 +372,24 @@ const ASSIGNMENT_QUESTION_KINDS = ['qualitative', 'quantitative', 'short_answer'
 const AssignmentPromptsEditor = ({ assignmentKey, initialContent, onCancel, onSave, status, message, actionLoading }) => {
   const [draft, setDraft] = useState(() => buildInitialAssignmentDraft(initialContent));
   const lastSeededRef = useRef(initialContent);
+  const pendingFocusRef = useRef(null);
   useEffect(() => {
     if (lastSeededRef.current !== initialContent) {
       lastSeededRef.current = initialContent;
       setDraft(buildInitialAssignmentDraft(initialContent));
     }
   }, [initialContent]);
+
+  const registerFocusable = (key) => (element) => {
+    if (!element) return;
+    if (pendingFocusRef.current === key) {
+      pendingFocusRef.current = null;
+      element.focus();
+      if (typeof element.scrollIntoView === 'function') {
+        element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+  };
 
   const isSaving = status === 'saving';
   const isError = status === 'error';
@@ -409,13 +421,17 @@ const AssignmentPromptsEditor = ({ assignmentKey, initialContent, onCancel, onSa
   };
 
   const handleAddQuestion = () => {
-    setDraft((previous) => ({
-      ...previous,
-      questions: [
-        ...previous.questions,
-        { id: nextQuestionId(previous.questions), prompt: '', sections: [], points: null, kind: '', existing: false },
-      ],
-    }));
+    setDraft((previous) => {
+      const id = nextQuestionId(previous.questions);
+      pendingFocusRef.current = `question:${id}`;
+      return {
+        ...previous,
+        questions: [
+          ...previous.questions,
+          { id, prompt: '', sections: [], points: null, kind: '', existing: false },
+        ],
+      };
+    });
   };
 
   const handleRemoveQuestion = (questionId) => {
@@ -430,11 +446,13 @@ const AssignmentPromptsEditor = ({ assignmentKey, initialContent, onCancel, onSa
       ...previous,
       questions: previous.questions.map((question) => {
         if (question.id !== questionId) return question;
+        const sectionId = nextSectionId(question.sections);
+        pendingFocusRef.current = `section:${questionId}:${sectionId}`;
         return {
           ...question,
           sections: [
             ...question.sections,
-            { id: nextSectionId(question.sections), instruction: '', existing: false },
+            { id: sectionId, instruction: '', existing: false },
           ],
         };
       }),
@@ -517,6 +535,7 @@ const AssignmentPromptsEditor = ({ assignmentKey, initialContent, onCancel, onSa
             </p>
             <label className="note" style={{ display: 'block', marginTop: 4, marginBottom: 2 }}>Prompt</label>
             <textarea
+              ref={registerFocusable(`question:${question.id}`)}
               rows={2}
               value={question.prompt}
               onChange={(event) => {
@@ -576,6 +595,7 @@ const AssignmentPromptsEditor = ({ assignmentKey, initialContent, onCancel, onSa
                     {section.existing ? '' : ' (new)'}
                   </span>
                   <textarea
+                    ref={registerFocusable(`section:${question.id}:${section.id}`)}
                     rows={2}
                     value={section.instruction}
                     onChange={(event) => {
@@ -583,7 +603,7 @@ const AssignmentPromptsEditor = ({ assignmentKey, initialContent, onCancel, onSa
                       updateSection(question.id, section.id, () => ({ instruction: value }));
                     }}
                     disabled={disabled}
-                    style={{ flex: 1 }}
+                    style={{ flex: '1 1 auto', minWidth: 200, width: '100%', boxSizing: 'border-box' }}
                     placeholder="Section instruction..."
                   />
                   {!section.existing ? (
@@ -742,11 +762,17 @@ const AssignmentCard = ({
   const assignmentType = getAssignmentType(assignment);
   const assignmentId = getAssignmentId(assignment);
   const initialQuestions = getQuestions(assignment?.content);
-  // Cache questions per attempt so re-renders never re-derive or reorder them.
+  // Cache questions per attempt so re-renders never re-derive or reorder them
+  // for students; instructors bypass the cache so edits appear immediately.
   const cachedQuestionsRef = useRef(initialQuestions);
   const cachedAssignmentIdRef = useRef(assignmentId);
+  const cachedContentRef = useRef(assignment?.content);
   if (cachedAssignmentIdRef.current !== assignmentId) {
     cachedAssignmentIdRef.current = assignmentId;
+    cachedQuestionsRef.current = initialQuestions;
+    cachedContentRef.current = assignment?.content;
+  } else if (isInstructor && cachedContentRef.current !== assignment?.content) {
+    cachedContentRef.current = assignment?.content;
     cachedQuestionsRef.current = initialQuestions;
   }
   const questions = cachedQuestionsRef.current;
