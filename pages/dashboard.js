@@ -878,6 +878,7 @@ const Dashboard = () => {
     const [curriculumInstructorSubmissions, setCurriculumInstructorSubmissions] = useState([]);
     const [curriculumInstructorMessage, setCurriculumInstructorMessage] = useState('');
     const [curriculumLessonEditState, setCurriculumLessonEditState] = useState({});
+    const [curriculumAssignmentEditState, setCurriculumAssignmentEditState] = useState({});
     const pendingCurriculumScrollRestoreY = useRef(null);
     const [currentUserId, setCurrentUserId] = useState('');
 
@@ -2960,6 +2961,95 @@ const Dashboard = () => {
         }
     }, [BASE_URL, selectedCompetitionId, username]);
 
+    const handleCurriculumAssignmentEdit = useCallback(async (event) => {
+        if (!event || !event.type) return;
+        const assignmentKey = String(event.assignmentKey ?? event.assignmentId ?? '').trim();
+        if (!assignmentKey) return;
+        if (event.type === 'open') {
+            setCurriculumAssignmentEditState((previous) => ({
+                ...previous,
+                [assignmentKey]: {
+                    open: true,
+                    initialContent: event.initialContent ?? {},
+                    status: 'idle',
+                    message: '',
+                },
+            }));
+            return;
+        }
+        if (event.type === 'close') {
+            setCurriculumAssignmentEditState((previous) => {
+                const next = { ...previous };
+                delete next[assignmentKey];
+                return next;
+            });
+            return;
+        }
+        if (event.type === 'validation-error') {
+            setCurriculumAssignmentEditState((previous) => ({
+                ...previous,
+                [assignmentKey]: {
+                    ...(previous[assignmentKey] || { open: true }),
+                    open: true,
+                    status: 'error',
+                    message: event.message || 'Invalid assignment prompts.',
+                },
+            }));
+            return;
+        }
+        if (event.type === 'save') {
+            const numericAssignmentId = Number(event.assignmentId);
+            if (!Number.isFinite(numericAssignmentId)) {
+                setCurriculumAssignmentEditState((previous) => ({
+                    ...previous,
+                    [assignmentKey]: {
+                        ...(previous[assignmentKey] || {}),
+                        open: true,
+                        status: 'error',
+                        message: 'Missing assignment identifier.',
+                    },
+                }));
+                return;
+            }
+            setCurriculumAssignmentEditState((previous) => ({
+                ...previous,
+                [assignmentKey]: {
+                    ...(previous[assignmentKey] || {}),
+                    open: true,
+                    status: 'saving',
+                    message: '',
+                },
+            }));
+            setCurriculumActionLoading(true);
+            try {
+                const url = `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'assignments/content')}`;
+                await axios.patch(url, {
+                    username,
+                    updates: [{ assignmentId: numericAssignmentId, content: event.content }],
+                });
+                setCurriculumAssignmentEditState((previous) => {
+                    const next = { ...previous };
+                    delete next[assignmentKey];
+                    return next;
+                });
+                setCurriculumRefreshTick((value) => value + 1);
+            } catch (error) {
+                const message = getApiErrorMessage(error, 'Unable to save assignment prompts.');
+                setCurriculumAssignmentEditState((previous) => ({
+                    ...previous,
+                    [assignmentKey]: {
+                        ...(previous[assignmentKey] || {}),
+                        open: true,
+                        status: 'error',
+                        message,
+                    },
+                }));
+            } finally {
+                setCurriculumActionLoading(false);
+            }
+        }
+    }, [BASE_URL, selectedCompetitionId, username]);
+
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const restoreTarget = pendingCurriculumScrollRestoreY.current;
@@ -4159,6 +4249,8 @@ const Dashboard = () => {
                                     isInstructor={canManageCurriculumGrades}
                                     lessonEditState={curriculumLessonEditState}
                                     onSaveLessonContent={canManageCurriculumGrades ? handleCurriculumLessonEdit : undefined}
+                                    assignmentEditState={curriculumAssignmentEditState}
+                                    onEditAssignmentPrompts={canManageCurriculumGrades ? handleCurriculumAssignmentEdit : undefined}
                                 />
                             )}
                             {curriculumOverview?.curriculum_enabled && (

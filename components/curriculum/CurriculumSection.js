@@ -5,6 +5,13 @@ import { asLetter, asPercent, asPoints, getStatusBadgeStyles, normalizeGradingSt
 import { getGradeItemDisplayText, getGradeItemStatus, shouldShowNoGradedItemsYet } from '../../lib/curriculum/statusDisplay';
 import { resolveProgressPercentage } from '../../lib/curriculum/grades';
 import { buildModuleLockMessage, getModuleLockState } from '../../lib/curriculum/moduleLock';
+import {
+  buildAssignmentPayloadContent,
+  buildInitialAssignmentDraft,
+  nextQuestionId,
+  nextSectionId,
+  validateAssignmentDraft,
+} from '../../lib/curriculum/assignmentPrompts';
 import LessonContentRenderer from './LessonContentRenderer';
 
 const progressShell = {
@@ -360,6 +367,300 @@ export const CurriculumSummaryCard = ({ overview }) => {
   );
 };
 
+const ASSIGNMENT_QUESTION_KINDS = ['qualitative', 'quantitative', 'short_answer', 'essay'];
+
+const AssignmentPromptsEditor = ({ assignmentKey, initialContent, onCancel, onSave, status, message, actionLoading }) => {
+  const [draft, setDraft] = useState(() => buildInitialAssignmentDraft(initialContent));
+  const lastSeededRef = useRef(initialContent);
+  useEffect(() => {
+    if (lastSeededRef.current !== initialContent) {
+      lastSeededRef.current = initialContent;
+      setDraft(buildInitialAssignmentDraft(initialContent));
+    }
+  }, [initialContent]);
+
+  const isSaving = status === 'saving';
+  const isError = status === 'error';
+  const isSuccess = status === 'success';
+  const disabled = isSaving || actionLoading;
+
+  const updateQuestion = (questionId, updater) => {
+    setDraft((previous) => ({
+      ...previous,
+      questions: previous.questions.map((question) => (
+        question.id === questionId ? { ...question, ...(typeof updater === 'function' ? updater(question) : updater) } : question
+      )),
+    }));
+  };
+
+  const updateSection = (questionId, sectionId, updater) => {
+    setDraft((previous) => ({
+      ...previous,
+      questions: previous.questions.map((question) => {
+        if (question.id !== questionId) return question;
+        return {
+          ...question,
+          sections: question.sections.map((section) => (
+            section.id === sectionId ? { ...section, ...(typeof updater === 'function' ? updater(section) : updater) } : section
+          )),
+        };
+      }),
+    }));
+  };
+
+  const handleAddQuestion = () => {
+    setDraft((previous) => ({
+      ...previous,
+      questions: [
+        ...previous.questions,
+        { id: nextQuestionId(previous.questions), prompt: '', sections: [], points: null, kind: '', existing: false },
+      ],
+    }));
+  };
+
+  const handleRemoveQuestion = (questionId) => {
+    setDraft((previous) => ({
+      ...previous,
+      questions: previous.questions.filter((question) => question.id !== questionId || question.existing),
+    }));
+  };
+
+  const handleAddSection = (questionId) => {
+    setDraft((previous) => ({
+      ...previous,
+      questions: previous.questions.map((question) => {
+        if (question.id !== questionId) return question;
+        return {
+          ...question,
+          sections: [
+            ...question.sections,
+            { id: nextSectionId(question.sections), instruction: '', existing: false },
+          ],
+        };
+      }),
+    }));
+  };
+
+  const handleRemoveSection = (questionId, sectionId) => {
+    setDraft((previous) => ({
+      ...previous,
+      questions: previous.questions.map((question) => {
+        if (question.id !== questionId) return question;
+        return {
+          ...question,
+          sections: question.sections.filter((section) => section.id !== sectionId || section.existing),
+        };
+      }),
+    }));
+  };
+
+  const handleAddRubricHint = () => {
+    setDraft((previous) => ({ ...previous, rubricHints: [...previous.rubricHints, ''] }));
+  };
+
+  const handleRemoveRubricHint = (index) => {
+    setDraft((previous) => ({
+      ...previous,
+      rubricHints: previous.rubricHints.filter((_, entryIndex) => entryIndex !== index),
+    }));
+  };
+
+  const handleUpdateRubricHint = (index, value) => {
+    setDraft((previous) => ({
+      ...previous,
+      rubricHints: previous.rubricHints.map((hint, entryIndex) => (entryIndex === index ? value : hint)),
+    }));
+  };
+
+  const handleSave = () => {
+    const validationError = validateAssignmentDraft(draft);
+    if (validationError) {
+      onSave({ validationError });
+      return;
+    }
+    onSave({ content: buildAssignmentPayloadContent(draft) });
+  };
+
+  return (
+    <div
+      data-testid={`assignment-editor-${assignmentKey}`}
+      style={{ marginTop: 10, border: '1px dashed #1d4ed8', borderRadius: 8, padding: 10, background: '#f8fafc' }}
+    >
+      <p className="note" style={{ marginTop: 0, marginBottom: 6 }}>
+        <strong>Edit Assignment Prompts</strong>
+      </p>
+      <label className="note" style={{ display: 'block', marginTop: 4, marginBottom: 4 }}>
+        <strong>Instructions</strong>
+      </label>
+      <textarea
+        aria-label="Assignment instructions"
+        data-testid={`assignment-editor-instructions-${assignmentKey}`}
+        rows={3}
+        value={draft.instructions}
+        onChange={(event) => setDraft((previous) => ({ ...previous, instructions: event.target.value }))}
+        disabled={disabled}
+        style={{ width: '100%', fontFamily: 'inherit' }}
+        placeholder="Overall assignment instructions..."
+      />
+
+      <p className="note" style={{ marginTop: 10, marginBottom: 4 }}><strong>Questions</strong></p>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {draft.questions.map((question) => (
+          <div
+            key={question.id}
+            data-testid={`assignment-editor-question-${assignmentKey}-${question.id}`}
+            style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: 8, background: '#ffffff' }}
+          >
+            <p className="note" style={{ margin: 0, marginBottom: 4 }}>
+              <strong>ID:</strong> <code>{question.id}</code>
+              {question.existing ? <span className="note" style={{ marginLeft: 6 }}>(preserved)</span> : null}
+            </p>
+            <label className="note" style={{ display: 'block', marginTop: 4, marginBottom: 2 }}>Prompt</label>
+            <textarea
+              rows={2}
+              value={question.prompt}
+              onChange={(event) => {
+                const { value } = event.target;
+                updateQuestion(question.id, () => ({ prompt: value }));
+              }}
+              disabled={disabled}
+              style={{ width: '100%' }}
+              placeholder="Question prompt..."
+            />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+              <label className="note" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                Points
+                <input
+                  type="number"
+                  min="0"
+                  value={question.points ?? ''}
+                  onChange={(event) => {
+                    const { value } = event.target;
+                    updateQuestion(question.id, () => ({ points: value === '' ? null : Number(value) }));
+                  }}
+                  disabled={disabled}
+                  style={{ width: 70 }}
+                />
+              </label>
+              <label className="note" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                Kind
+                <select
+                  value={question.kind || ''}
+                  onChange={(event) => {
+                    const { value } = event.target;
+                    updateQuestion(question.id, () => ({ kind: value }));
+                  }}
+                  disabled={disabled}
+                >
+                  <option value="">(unset)</option>
+                  {ASSIGNMENT_QUESTION_KINDS.map((kindOption) => (
+                    <option key={kindOption} value={kindOption}>{kindOption}</option>
+                  ))}
+                </select>
+              </label>
+              {!question.existing ? (
+                <button type="button" onClick={() => handleRemoveQuestion(question.id)} disabled={disabled}>
+                  Remove question
+                </button>
+              ) : null}
+            </div>
+            <p className="note" style={{ marginTop: 8, marginBottom: 4 }}><strong>Sections</strong></p>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {question.sections.map((section) => (
+                <div
+                  key={section.id}
+                  style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}
+                >
+                  <span className="note" style={{ paddingTop: 4, minWidth: 80 }}>
+                    <code>{section.id}</code>
+                    {section.existing ? '' : ' (new)'}
+                  </span>
+                  <textarea
+                    rows={2}
+                    value={section.instruction}
+                    onChange={(event) => {
+                      const { value } = event.target;
+                      updateSection(question.id, section.id, () => ({ instruction: value }));
+                    }}
+                    disabled={disabled}
+                    style={{ flex: 1 }}
+                    placeholder="Section instruction..."
+                  />
+                  {!section.existing ? (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSection(question.id, section.id)}
+                      disabled={disabled}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              <div>
+                <button type="button" onClick={() => handleAddSection(question.id)} disabled={disabled}>
+                  + Add section
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <button
+          type="button"
+          data-testid={`assignment-editor-add-question-${assignmentKey}`}
+          onClick={handleAddQuestion}
+          disabled={disabled}
+        >
+          + Add question
+        </button>
+      </div>
+
+      <p className="note" style={{ marginTop: 10, marginBottom: 4 }}><strong>Rubric Hints</strong> <span className="note">(optional)</span></p>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {draft.rubricHints.map((hint, hintIndex) => (
+          <div key={`rubric-${hintIndex}`} style={{ display: 'flex', gap: 6 }}>
+            <input
+              type="text"
+              value={hint}
+              onChange={(event) => handleUpdateRubricHint(hintIndex, event.target.value)}
+              disabled={disabled}
+              style={{ flex: 1 }}
+              placeholder="Hint for rubric..."
+            />
+            <button type="button" onClick={() => handleRemoveRubricHint(hintIndex)} disabled={disabled}>×</button>
+          </div>
+        ))}
+        <div>
+          <button type="button" onClick={handleAddRubricHint} disabled={disabled}>+ Add hint</button>
+        </div>
+      </div>
+
+      {message ? (
+        <p
+          className="note"
+          data-testid={`assignment-editor-message-${assignmentKey}`}
+          style={{ marginTop: 8, marginBottom: 0, color: isError ? '#b91c1c' : (isSuccess ? '#15803d' : '#1d4ed8') }}
+        >
+          {message}
+        </p>
+      ) : null}
+      <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          data-testid={`assignment-editor-save-${assignmentKey}`}
+          onClick={handleSave}
+          disabled={disabled}
+        >
+          {isSaving ? 'Saving…' : 'Save Prompts'}
+        </button>
+        <button type="button" onClick={onCancel} disabled={isSaving}>Cancel</button>
+      </div>
+    </div>
+  );
+};
+
 const LessonEditor = ({ moduleKey, initialContent, onCancel, onSave, status, message, actionLoading }) => {
   const [draft, setDraft] = useState(initialContent || '');
   const lastSeededRef = useRef(initialContent || '');
@@ -433,6 +734,9 @@ const AssignmentCard = ({
   writtenAnswers,
   onQuizAnswersChange,
   onWrittenAnswersChange,
+  isInstructor = false,
+  assignmentEditEntry,
+  onEditAssignmentPrompts,
 }) => {
   const [quizScore, setQuizScore] = useState(null);
   const assignmentType = getAssignmentType(assignment);
@@ -622,6 +926,52 @@ const AssignmentCard = ({
           {currentSubmission?.status === 'loading' ? 'Submitting…' : 'Submit'}
         </button>
       </div>
+
+      {isInstructor && isWrittenAssignment(assignment) && typeof onEditAssignmentPrompts === 'function' ? (
+        <div style={{ marginTop: 10 }}>
+          {!assignmentEditEntry?.open ? (
+            <button
+              type="button"
+              data-testid={`edit-assignment-prompts-button-${assignmentId}`}
+              onClick={() => onEditAssignmentPrompts({
+                type: 'open',
+                assignmentId,
+                assignmentKey: assignmentId,
+                initialContent: assignment?.content || {},
+              })}
+              disabled={actionLoading}
+            >
+              ✏️ Edit Assignment Prompts
+            </button>
+          ) : (
+            <AssignmentPromptsEditor
+              assignmentKey={assignmentId}
+              initialContent={assignmentEditEntry?.initialContent ?? assignment?.content ?? {}}
+              onCancel={() => onEditAssignmentPrompts({ type: 'close', assignmentId, assignmentKey: assignmentId })}
+              onSave={({ validationError, content }) => {
+                if (validationError) {
+                  onEditAssignmentPrompts({
+                    type: 'validation-error',
+                    assignmentId,
+                    assignmentKey: assignmentId,
+                    message: validationError,
+                  });
+                  return;
+                }
+                onEditAssignmentPrompts({
+                  type: 'save',
+                  assignmentId,
+                  assignmentKey: assignmentId,
+                  content,
+                });
+              }}
+              status={assignmentEditEntry?.status || 'idle'}
+              message={assignmentEditEntry?.message || ''}
+              actionLoading={actionLoading}
+            />
+          )}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -639,6 +989,8 @@ export const StudentCurriculumPanel = ({
   isInstructor = false,
   onSaveLessonContent,
   lessonEditState,
+  onEditAssignmentPrompts,
+  assignmentEditState,
 }) => {
   if (!overview?.curriculum_enabled) return null;
   const summaryOverall = gradeSummary?.gradeSummaryOverall ?? gradeSummary?.grade_summary_overall ?? gradeSummary ?? {};
@@ -931,6 +1283,9 @@ export const StudentCurriculumPanel = ({
                                 return { ...previous, [assignmentId]: nextValue };
                               });
                             }}
+                            isInstructor={isInstructor}
+                            assignmentEditEntry={assignmentEditState?.[assignmentId]}
+                            onEditAssignmentPrompts={isInstructor ? onEditAssignmentPrompts : undefined}
                           />
                         );
                       }) : <p className="note">No assignments in this module yet.</p>}
