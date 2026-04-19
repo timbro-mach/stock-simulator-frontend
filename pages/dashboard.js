@@ -34,6 +34,7 @@ import {
     resolveGradeSummaryOverall,
 } from '../lib/curriculum/grades';
 import { refetchCurriculumGradeQueries } from '../lib/curriculum/queryKeys';
+import { parseLockedSubmissionError } from '../lib/curriculum/moduleLock';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -876,6 +877,7 @@ const Dashboard = () => {
     });
     const [curriculumInstructorSubmissions, setCurriculumInstructorSubmissions] = useState([]);
     const [curriculumInstructorMessage, setCurriculumInstructorMessage] = useState('');
+    const [curriculumLessonEditState, setCurriculumLessonEditState] = useState({});
     const pendingCurriculumScrollRestoreY = useRef(null);
     const [currentUserId, setCurrentUserId] = useState('');
 
@@ -2462,7 +2464,10 @@ const Dashboard = () => {
                 let instructorSubmissionsData = [];
 
                 try {
-                    const modulesResponse = await axios.get(`${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`);
+                    const modulesUrl = `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules')}`;
+                    const modulesResponse = await axios.get(modulesUrl, {
+                        params: username ? { username } : undefined,
+                    });
                     modulesData = modulesResponse?.data ?? [];
                     if (!cancelled) {
                         setCurriculumDebugState((previous) => ({
@@ -2827,24 +2832,133 @@ const Dashboard = () => {
                 refetchStudentGradesSummary: async () => setCurriculumRefreshTick((value) => value + 1),
             });
         } catch (error) {
-            console.error('Error submitting curriculum item:', error);
-            const errorMessage = getApiErrorMessage(error, `Could not submit assignment: ${item?.title || 'Unknown assignment'}`);
-            setCurriculumSubmissionState((previous) => ({
-                ...previous,
-                byAssignmentId: {
-                    ...(previous.byAssignmentId || {}),
-                    [assignmentId]: {
-                        status: 'error',
-                        message: errorMessage,
-                        result: null,
+            const lockInfo = parseLockedSubmissionError(error);
+            if (lockInfo) {
+                // 423 Locked: do not retry, surface module-lock message and link to prerequisite.
+                const lockMessage = lockInfo.message || 'This module is locked. Complete the prerequisite to submit.';
+                setCurriculumSubmissionState((previous) => ({
+                    ...previous,
+                    byAssignmentId: {
+                        ...(previous.byAssignmentId || {}),
+                        [assignmentId]: {
+                            status: 'locked',
+                            message: lockMessage,
+                            result: null,
+                            lockInfo,
+                        },
                     },
-                },
-                latestMessage: errorMessage,
-            }));
+                    latestMessage: lockMessage,
+                }));
+            } else {
+                console.error('Error submitting curriculum item:', error);
+                const errorMessage = getApiErrorMessage(error, `Could not submit assignment: ${item?.title || 'Unknown assignment'}`);
+                setCurriculumSubmissionState((previous) => ({
+                    ...previous,
+                    byAssignmentId: {
+                        ...(previous.byAssignmentId || {}),
+                        [assignmentId]: {
+                            status: 'error',
+                            message: errorMessage,
+                            result: null,
+                        },
+                    },
+                    latestMessage: errorMessage,
+                }));
+            }
         } finally {
             setCurriculumActionLoading(false);
         }
     };
+
+    const handleCurriculumLessonEdit = useCallback(async (event) => {
+        if (!event || !event.type) return;
+        const moduleKey = String(event.moduleKey ?? event.moduleId ?? '').trim();
+        if (!moduleKey) return;
+        if (event.type === 'open') {
+            setCurriculumLessonEditState((previous) => ({
+                ...previous,
+                [moduleKey]: {
+                    open: true,
+                    initialContent: event.initialContent ?? '',
+                    status: 'idle',
+                    message: '',
+                },
+            }));
+            return;
+        }
+        if (event.type === 'close') {
+            setCurriculumLessonEditState((previous) => {
+                const next = { ...previous };
+                delete next[moduleKey];
+                return next;
+            });
+            return;
+        }
+        if (event.type === 'save') {
+            const moduleId = event.moduleId;
+            const lessonContent = String(event.lessonContent ?? '').trim();
+            if (!moduleId) {
+                setCurriculumLessonEditState((previous) => ({
+                    ...previous,
+                    [moduleKey]: {
+                        ...(previous[moduleKey] || {}),
+                        open: true,
+                        status: 'error',
+                        message: 'Missing module identifier.',
+                    },
+                }));
+                return;
+            }
+            if (!lessonContent) {
+                setCurriculumLessonEditState((previous) => ({
+                    ...previous,
+                    [moduleKey]: {
+                        ...(previous[moduleKey] || {}),
+                        open: true,
+                        status: 'error',
+                        message: 'Lesson content cannot be empty.',
+                    },
+                }));
+                return;
+            }
+            setCurriculumLessonEditState((previous) => ({
+                ...previous,
+                [moduleKey]: {
+                    ...(previous[moduleKey] || {}),
+                    open: true,
+                    status: 'saving',
+                    message: '',
+                },
+            }));
+            setCurriculumActionLoading(true);
+            try {
+                const url = `${BASE_URL}${buildCurriculumPath(selectedCompetitionId, 'modules/lesson-content')}`;
+                await axios.patch(url, {
+                    username,
+                    updates: [{ moduleId, lessonContent }],
+                });
+                setCurriculumLessonEditState((previous) => {
+                    const next = { ...previous };
+                    delete next[moduleKey];
+                    return next;
+                });
+                setCurriculumRefreshTick((value) => value + 1);
+            } catch (error) {
+                const message = getApiErrorMessage(error, 'Unable to save lesson content.');
+                setCurriculumLessonEditState((previous) => ({
+                    ...previous,
+                    [moduleKey]: {
+                        ...(previous[moduleKey] || {}),
+                        open: true,
+                        status: 'error',
+                        message,
+                    },
+                }));
+            } finally {
+                setCurriculumActionLoading(false);
+            }
+        }
+    }, [BASE_URL, selectedCompetitionId, username]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -4042,6 +4156,9 @@ const Dashboard = () => {
                                     onSubmitItem={handleSubmitCurriculumItem}
                                     actionLoading={curriculumActionLoading}
                                     submissionState={curriculumSubmissionState}
+                                    isInstructor={canManageCurriculumGrades}
+                                    lessonEditState={curriculumLessonEditState}
+                                    onSaveLessonContent={canManageCurriculumGrades ? handleCurriculumLessonEdit : undefined}
                                 />
                             )}
                             {curriculumOverview?.curriculum_enabled && (
