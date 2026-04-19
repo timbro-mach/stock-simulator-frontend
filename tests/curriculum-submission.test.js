@@ -81,3 +81,34 @@ test('normalizes assignment IDs to strings for submission map keys', () => {
   assert.equal(normalizeAssignmentIdKey(42), '42');
   assert.equal(normalizeAssignmentIdKey('  abc  '), 'abc');
 });
+
+test('builds multipart written payload from sections shape', () => {
+  const payload = buildAssignmentSubmissionPayload({
+    assignmentType: 'assignment',
+    questions: [
+      {
+        id: 'a1',
+        sections: [
+          { id: 'a', instruction: 'First section' },
+          { id: 'b', instruction: 'Second section' },
+        ],
+      },
+    ],
+    writtenAnswers: {
+      'a1-part-a': 'Answer A',
+      'a1-part-b': 'Answer B',
+    },
+  });
+
+  assert.deepEqual(payload, {
+    answers: [
+      {
+        questionId: 'a1',
+        parts: [
+          { partId: 'a', response: 'Answer A' },
+          { partId: 'b', response: 'Answer B' },
+        ],
+      },
+    ],
+  });
+});

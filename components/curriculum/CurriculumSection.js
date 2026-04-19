@@ -836,7 +836,9 @@ const AssignmentCard = ({
           const prompt = getQuestionPrompt(question);
 
           if (isWrittenAssignment(assignment)) {
-            const parts = Array.isArray(question?.parts) ? question.parts : [];
+            const parts = Array.isArray(question?.sections)
+              ? question.sections
+              : (Array.isArray(question?.parts) ? question.parts : []);
             return (
               <div key={questionId}>
                 <p className="note" style={{ marginBottom: 4 }}><strong>Prompt {questionIndex + 1}:</strong> {prompt}</p>
@@ -845,10 +847,10 @@ const AssignmentCard = ({
                     {parts.map((part, partIndex) => {
                       const partId = part?.partId || part?.id || `part-${partIndex}`;
                       const partKey = `${questionId}-part-${partId}`;
-                      const partPrompt = part?.prompt || part?.question || part?.text || `Part ${String.fromCharCode(97 + partIndex)}`;
+                      const partPrompt = part?.instruction || part?.prompt || part?.question || part?.text || `Part ${String.fromCharCode(97 + partIndex)}`;
                       return (
                         <div key={partKey}>
-                          <p className="note" style={{ marginBottom: 4 }}><strong>{String.fromCharCode(97 + partIndex)}.</strong> {partPrompt}</p>
+                          <p className="note" style={{ marginBottom: 4 }}><strong>{partId}.</strong> {partPrompt}</p>
                           <textarea
                             rows={3}
                             value={writtenAnswers[partKey] || ''}
