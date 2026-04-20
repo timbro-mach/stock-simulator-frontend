@@ -836,6 +836,10 @@ const Dashboard = () => {
     // =========================================
     const [featuredCompetitions, setFeaturedCompetitions] = useState([]);
     const [allCompetitions, setAllCompetitions] = useState([]); // NEW: For admin panel
+    const [organizerLookupCode, setOrganizerLookupCode] = useState('');
+    const [organizerLookupCompetition, setOrganizerLookupCompetition] = useState(null);
+    const [organizerLookupLoading, setOrganizerLookupLoading] = useState(false);
+    const [organizerLookupError, setOrganizerLookupError] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [modalCompetition, setModalCompetition] = useState(null);
     const [showTradeBlotterModal, setShowTradeBlotterModal] = useState(false);
@@ -1991,12 +1995,40 @@ const Dashboard = () => {
         }
     };
 
+    const loadOrganizerCompetition = useCallback(async () => {
+        const code = organizerLookupCode.trim();
+        if (!code) {
+            setOrganizerLookupError('Enter a competition code.');
+            setOrganizerLookupCompetition(null);
+            return;
+        }
+        setOrganizerLookupLoading(true);
+        setOrganizerLookupError('');
+        try {
+            const response = await axios.get(`${BASE_URL}/competition/by_code/${encodeURIComponent(code)}`);
+            const record = response?.data?.competition || response?.data || null;
+            const normalized = normalizeCompetitionEntry(record);
+            if (!normalized) {
+                setOrganizerLookupCompetition(null);
+                setOrganizerLookupError('Competition not found.');
+                return;
+            }
+            setOrganizerLookupCompetition(normalized);
+        } catch (error) {
+            setOrganizerLookupCompetition(null);
+            setOrganizerLookupError(getApiErrorMessage(error, 'Failed to load competition.'));
+        } finally {
+            setOrganizerLookupLoading(false);
+        }
+    }, [BASE_URL, organizerLookupCode]);
+
     const handleCompetitionDatesUpdated = useCallback((competitionCode, updatedCompetition) => {
         if (updatedCompetition) {
             const normalized = normalizeCompetitionEntry(updatedCompetition);
             if (normalized) {
                 setAllCompetitions((prev) => prev.map((entry) => (entry.code === competitionCode ? { ...entry, ...normalized } : entry)));
                 setFeaturedCompetitions((prev) => prev.map((entry) => (entry.code === competitionCode ? { ...entry, ...normalized } : entry)));
+                setOrganizerLookupCompetition((prev) => (prev && prev.code === competitionCode ? { ...prev, ...normalized } : prev));
                 return;
             }
         }
@@ -4123,6 +4155,75 @@ const Dashboard = () => {
 
 
 
+
+                    {/* Organizer Tools — edit competition dates by code */}
+                    {!showTrading && (
+                        <div className="card section">
+                            <h2>🗓️ Competition Organizer Tools</h2>
+                            <p className="note">
+                                Enter a competition code to edit its start and end dates. You must be the organizer (creator) or an admin.
+                            </p>
+                            <div className="section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                <input
+                                    type="text"
+                                    placeholder="Competition Code"
+                                    value={organizerLookupCode}
+                                    onChange={(e) => setOrganizerLookupCode(e.target.value)}
+                                    disabled={organizerLookupLoading}
+                                    autoComplete="off"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={loadOrganizerCompetition}
+                                    disabled={organizerLookupLoading}
+                                >
+                                    {organizerLookupLoading ? 'Loading...' : 'Load'}
+                                </button>
+                                {organizerLookupCompetition ? (
+                                    <button
+                                        type="button"
+                                        className="logout-button"
+                                        onClick={() => {
+                                            setOrganizerLookupCompetition(null);
+                                            setOrganizerLookupError('');
+                                            setOrganizerLookupCode('');
+                                        }}
+                                        disabled={organizerLookupLoading}
+                                    >
+                                        Clear
+                                    </button>
+                                ) : null}
+                            </div>
+                            {organizerLookupError ? (
+                                <p className="note" style={{ color: '#b91c1c' }} role="alert">{organizerLookupError}</p>
+                            ) : null}
+                            {organizerLookupCompetition ? (
+                                canEditCompetitionDates({
+                                    isAdmin,
+                                    username,
+                                    currentUserId,
+                                    competition: organizerLookupCompetition,
+                                }) ? (
+                                    <div className="section">
+                                        <p>
+                                            <strong>{organizerLookupCompetition.name}</strong> (Code: {organizerLookupCompetition.code})
+                                        </p>
+                                        <CompetitionDateEditor
+                                            competition={organizerLookupCompetition}
+                                            username={username}
+                                            isAdmin={isAdmin}
+                                            currentUserId={currentUserId}
+                                            onUpdated={(updated) => handleCompetitionDatesUpdated(organizerLookupCompetition.code, updated)}
+                                        />
+                                    </div>
+                                ) : (
+                                    <p className="note" style={{ color: '#b91c1c' }}>
+                                        You are not the organizer of this competition, so you cannot edit its dates.
+                                    </p>
+                                )
+                            ) : null}
+                        </div>
+                    )}
 
                     {/* Featured Competitions (Dashboard mode only) */}
                     {!showTrading && (
