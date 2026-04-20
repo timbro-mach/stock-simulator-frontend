@@ -58,22 +58,13 @@ const getAssignments = (module) => {
   return [];
 };
 
-const hasSectionsOrParts = (list) => (
-  Array.isArray(list)
-  && list.some((item) => Array.isArray(item?.sections) || Array.isArray(item?.parts))
-);
-
 const getQuestions = (content) => {
-  // Prefer the canonical `questions` shape whenever present so section-level
-  // prompts written by the Edit Assignment Prompts editor survive older
-  // `prompts` arrays that may still be serialized alongside them.
-  const canonical = Array.isArray(content?.questions) ? content.questions : null;
-  const legacyPrompts = Array.isArray(content?.prompts) ? content.prompts : null;
-  if (canonical && (hasSectionsOrParts(canonical) || !hasSectionsOrParts(legacyPrompts))) {
-    return canonical;
-  }
-  if (legacyPrompts) return legacyPrompts;
-  if (canonical) return canonical;
+  // Prefer the canonical `questions` shape whenever it is populated; the Edit
+  // Assignment Prompts flow writes there and it's the source of truth for
+  // section-level prompts. Fall back to legacy aliases only when `questions`
+  // is missing or empty.
+  if (Array.isArray(content?.questions) && content.questions.length > 0) return content.questions;
+  if (Array.isArray(content?.prompts) && content.prompts.length > 0) return content.prompts;
   if (Array.isArray(content?.question_prompts)) return content.question_prompts;
   if (Array.isArray(content?.assignmentPrompts)) return content.assignmentPrompts;
   if (Array.isArray(content?.assignment_prompts)) return content.assignment_prompts;
@@ -88,6 +79,8 @@ const getQuestions = (content) => {
     const values = Object.values(content.questions);
     if (values.length > 0) return values;
   }
+  if (Array.isArray(content?.questions)) return content.questions;
+  if (Array.isArray(content?.prompts)) return content.prompts;
   return [];
 };
 
@@ -397,10 +390,9 @@ const AssignmentPromptsEditor = ({ assignmentKey, initialContent, onCancel, onSa
     if (!element) return;
     if (pendingFocusRef.current === key) {
       pendingFocusRef.current = null;
-      element.focus();
-      if (typeof element.scrollIntoView === 'function') {
-        element.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      }
+      // focus() alone nudges the new textarea into view without the jarring
+      // window-scroll that scrollIntoView triggers on large pages.
+      element.focus({ preventScroll: false });
     }
   };
 
@@ -775,16 +767,19 @@ const AssignmentCard = ({
   const assignmentType = getAssignmentType(assignment);
   const assignmentId = getAssignmentId(assignment);
   const initialQuestions = getQuestions(assignment?.content);
-  // Cache questions per attempt so re-renders never re-derive or reorder them
-  // for students; instructors bypass the cache so edits appear immediately.
+  // Cache questions per assignment to keep rendering stable across re-renders,
+  // but refresh whenever the content reference changes so freshly edited
+  // prompts/sections show up immediately for everyone (students and
+  // instructors alike). Answers are keyed by question/section id, not index,
+  // so refreshing the question list does not misalign any in-progress work.
   const cachedQuestionsRef = useRef(initialQuestions);
   const cachedAssignmentIdRef = useRef(assignmentId);
   const cachedContentRef = useRef(assignment?.content);
-  if (cachedAssignmentIdRef.current !== assignmentId) {
+  if (
+    cachedAssignmentIdRef.current !== assignmentId
+    || cachedContentRef.current !== assignment?.content
+  ) {
     cachedAssignmentIdRef.current = assignmentId;
-    cachedQuestionsRef.current = initialQuestions;
-    cachedContentRef.current = assignment?.content;
-  } else if (isInstructor && cachedContentRef.current !== assignment?.content) {
     cachedContentRef.current = assignment?.content;
     cachedQuestionsRef.current = initialQuestions;
   }

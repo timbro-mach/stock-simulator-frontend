@@ -2696,10 +2696,20 @@ const Dashboard = () => {
         username,
     ]);
 
+    const hasOpenCurriculumEditor = useMemo(() => (
+        Object.values(curriculumLessonEditState || {}).some((entry) => entry?.open)
+        || Object.values(curriculumAssignmentEditState || {}).some((entry) => entry?.open)
+    ), [curriculumLessonEditState, curriculumAssignmentEditState]);
+    const hasOpenCurriculumEditorRef = useRef(hasOpenCurriculumEditor);
+    useEffect(() => {
+        hasOpenCurriculumEditorRef.current = hasOpenCurriculumEditor;
+    }, [hasOpenCurriculumEditor]);
+
     useEffect(() => {
         if (!isLoggedIn || !showTrading || !selectedCompetitionCode || !username || !curriculumOverview?.curriculum_enabled) return undefined;
 
         const handleFocusRefresh = () => {
+            if (hasOpenCurriculumEditorRef.current) return;
             setCurriculumRefreshTick((value) => value + 1);
         };
 
@@ -2710,9 +2720,9 @@ const Dashboard = () => {
         window.addEventListener('focus', handleFocusRefresh);
         document.addEventListener('visibilitychange', handleVisibilityRefresh);
         const pollTimer = window.setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                setCurriculumRefreshTick((value) => value + 1);
-            }
+            if (document.visibilityState !== 'visible') return;
+            if (hasOpenCurriculumEditorRef.current) return;
+            setCurriculumRefreshTick((value) => value + 1);
         }, 30000);
 
         return () => {
