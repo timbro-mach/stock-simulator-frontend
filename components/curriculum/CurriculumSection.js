@@ -1076,10 +1076,17 @@ export const StudentCurriculumPanel = ({
     return { byId, byWeek };
   }, [normalizedModuleSummaries]);
 
+  const hasModulesToShow = Array.isArray(modules) && modules.length > 0;
+  const isInitialLoading = loading && !hasModulesToShow;
+  const isBackgroundRefreshing = loading && hasModulesToShow;
+
   return (
     <div className="card section">
       <h3>Curriculum</h3>
-      {loading ? <p className="note">Loading curriculum...</p> : null}
+      {isInitialLoading ? <p className="note">Loading curriculum...</p> : null}
+      {isBackgroundRefreshing ? (
+        <p className="note" style={{ color: '#1d4ed8' }} data-testid="curriculum-refreshing">Refreshing…</p>
+      ) : null}
       {error ? <p className="note" style={{ color: '#b91c1c' }}>{error}</p> : null}
       {gradesMessage && !showNoGradedItemsYet ? <p className="note" style={{ color: '#b45309' }}>{gradesMessage}</p> : null}
       {submissionState?.latestMessage ? (
@@ -1095,7 +1102,7 @@ export const StudentCurriculumPanel = ({
         </p>
       ) : null}
 
-      {!loading && (
+      {!isInitialLoading && (
         <>
           <p className="note">Progress: {progressPercentage === null ? '—' : `${Math.round(Number(progressPercentage))}%`}</p>
           <div style={progressShell}><div style={progressFill(progressPercentage)} /></div>
