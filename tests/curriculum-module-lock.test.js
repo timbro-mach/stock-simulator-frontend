@@ -100,6 +100,27 @@ test('parseLockedSubmissionError extracts 423 payload', () => {
   });
 });
 
+test('getModuleLockState locks module when unlocksAt is in the future and no explicit flag is provided', () => {
+  const futureDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  const state = getModuleLockState({ unlocksAt: futureDate });
+  assert.equal(state.timeUnlocked, false);
+  assert.equal(state.locked, true);
+});
+
+test('getModuleLockState unlocks module when unlocksAt is in the past and no explicit flag is provided', () => {
+  const pastDate = new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString();
+  const state = getModuleLockState({ unlocksAt: pastDate });
+  assert.equal(state.timeUnlocked, true);
+  assert.equal(state.locked, false);
+});
+
+test('getModuleLockState honors unlockDate alias for backend field naming', () => {
+  const futureDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
+  const state = getModuleLockState({ unlock_date: futureDate });
+  assert.equal(state.unlocksAt, futureDate);
+  assert.equal(state.locked, true);
+});
+
 test('parseLockedSubmissionError returns null for non-423 errors', () => {
   assert.equal(parseLockedSubmissionError({ response: { status: 500, data: {} } }), null);
   assert.equal(parseLockedSubmissionError({}), null);
