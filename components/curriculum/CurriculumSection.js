@@ -58,12 +58,25 @@ const getAssignments = (module) => {
   return [];
 };
 
+const hasSectionsOrParts = (list) => (
+  Array.isArray(list)
+  && list.some((item) => Array.isArray(item?.sections) || Array.isArray(item?.parts))
+);
+
 const getQuestions = (content) => {
-  if (Array.isArray(content?.prompts)) return content.prompts;
+  // Prefer the canonical `questions` shape whenever present so section-level
+  // prompts written by the Edit Assignment Prompts editor survive older
+  // `prompts` arrays that may still be serialized alongside them.
+  const canonical = Array.isArray(content?.questions) ? content.questions : null;
+  const legacyPrompts = Array.isArray(content?.prompts) ? content.prompts : null;
+  if (canonical && (hasSectionsOrParts(canonical) || !hasSectionsOrParts(legacyPrompts))) {
+    return canonical;
+  }
+  if (legacyPrompts) return legacyPrompts;
+  if (canonical) return canonical;
   if (Array.isArray(content?.question_prompts)) return content.question_prompts;
   if (Array.isArray(content?.assignmentPrompts)) return content.assignmentPrompts;
   if (Array.isArray(content?.assignment_prompts)) return content.assignment_prompts;
-  if (Array.isArray(content?.questions)) return content.questions;
   if (Array.isArray(content?.quiz_questions)) return content.quiz_questions;
   if (Array.isArray(content?.quizQuestions)) return content.quizQuestions;
   if (Array.isArray(content?.question_bank)) return content.question_bank;
