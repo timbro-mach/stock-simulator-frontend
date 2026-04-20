@@ -844,21 +844,36 @@ const AssignmentCard = ({
           const prompt = getQuestionPrompt(question);
 
           if (isWrittenAssignment(assignment)) {
-            const parts = Array.isArray(question?.sections)
-              ? question.sections
-              : (Array.isArray(question?.parts) ? question.parts : []);
+            const sections = Array.isArray(question?.sections) ? question.sections : [];
+            const legacyParts = sections.length === 0 && Array.isArray(question?.parts) ? question.parts : [];
             return (
               <div key={questionId}>
                 <p className="note" style={{ marginBottom: 4 }}><strong>Prompt {questionIndex + 1}:</strong> {prompt}</p>
-                {parts.length > 0 ? (
+                {sections.length > 0 ? (
+                  <ol
+                    data-testid={`assignment-sections-${questionId}`}
+                    style={{ listStyle: 'none', paddingLeft: 16, margin: '0 0 6px', display: 'grid', gap: 4 }}
+                  >
+                    {sections.map((section, sectionIndex) => {
+                      const sectionId = section?.id || section?.partId || String.fromCharCode(97 + sectionIndex);
+                      const sectionInstruction = section?.instruction || section?.prompt || section?.text || '';
+                      return (
+                        <li key={`${questionId}-section-${sectionId}`} className="note" style={{ margin: 0 }}>
+                          <strong>{sectionId}.</strong> {sectionInstruction}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : null}
+                {legacyParts.length > 0 ? (
                   <div style={{ display: 'grid', gap: 6 }}>
-                    {parts.map((part, partIndex) => {
+                    {legacyParts.map((part, partIndex) => {
                       const partId = part?.partId || part?.id || `part-${partIndex}`;
                       const partKey = `${questionId}-part-${partId}`;
-                      const partPrompt = part?.instruction || part?.prompt || part?.question || part?.text || `Part ${String.fromCharCode(97 + partIndex)}`;
+                      const partPrompt = part?.prompt || part?.question || part?.text || `Part ${String.fromCharCode(97 + partIndex)}`;
                       return (
                         <div key={partKey}>
-                          <p className="note" style={{ marginBottom: 4 }}><strong>{partId}.</strong> {partPrompt}</p>
+                          <p className="note" style={{ marginBottom: 4 }}><strong>{String.fromCharCode(97 + partIndex)}.</strong> {partPrompt}</p>
                           <textarea
                             rows={3}
                             value={writtenAnswers[partKey] || ''}

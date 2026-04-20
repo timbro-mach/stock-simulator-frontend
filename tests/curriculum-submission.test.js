@@ -82,7 +82,7 @@ test('normalizes assignment IDs to strings for submission map keys', () => {
   assert.equal(normalizeAssignmentIdKey('  abc  '), 'abc');
 });
 
-test('builds multipart written payload from sections shape', () => {
+test('sections-shaped questions submit as a single response keyed by questionId', () => {
   const payload = buildAssignmentSubmissionPayload({
     assignmentType: 'assignment',
     questions: [
@@ -95,8 +95,7 @@ test('builds multipart written payload from sections shape', () => {
       },
     ],
     writtenAnswers: {
-      'a1-part-a': 'Answer A',
-      'a1-part-b': 'Answer B',
+      a1: 'Combined answer covering both sections',
     },
   });
 
@@ -104,10 +103,7 @@ test('builds multipart written payload from sections shape', () => {
     answers: [
       {
         questionId: 'a1',
-        parts: [
-          { partId: 'a', response: 'Answer A' },
-          { partId: 'b', response: 'Answer B' },
-        ],
+        response: 'Combined answer covering both sections',
       },
     ],
   });
