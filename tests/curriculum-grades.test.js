@@ -152,6 +152,42 @@ test('resolveGradeSummaryOverall prefers moduleGrades over gradeSummaryByModule 
   assert.equal(summary?.moduleGrades?.[0]?.modulePointsPossible, 20);
 });
 
+test('trade participation is not marked graded when tradePoints is zero and no submission signal exists', () => {
+  const summary = resolveGradeSummaryByModule({
+    grade_summary_by_module: [
+      {
+        module_id: 'm-trade-zero',
+        trade_participation: { trade_points: 0, points_possible: 10 },
+      },
+    ],
+  });
+
+  assert.equal(summary.length, 1);
+  assert.equal(summary[0].tradeParticipation?.gradingStatus, 'not_submitted');
+});
+
+test('trade participation is marked graded when user actually placed trades this week', () => {
+  const submittedSummary = resolveGradeSummaryByModule({
+    grade_summary_by_module: [
+      {
+        module_id: 'm-trade-submitted',
+        trade_participation: { trade_points: 0, points_possible: 10, submittedAt: '2026-04-18T12:00:00Z' },
+      },
+    ],
+  });
+  const tradeCountSummary = resolveGradeSummaryByModule({
+    grade_summary_by_module: [
+      {
+        module_id: 'm-trade-count',
+        trade_participation: { trade_points: 0, points_possible: 10, trade_count: 3 },
+      },
+    ],
+  });
+
+  assert.equal(submittedSummary[0].tradeParticipation?.gradingStatus, 'submitted');
+  assert.equal(tradeCountSummary[0].tradeParticipation?.gradingStatus, 'graded');
+});
+
 test('module breakdown infers graded status when points are present but status is missing', () => {
   const summary = resolveGradeSummaryByModule({
     grade_summary_by_module: [
