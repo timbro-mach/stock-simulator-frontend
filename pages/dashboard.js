@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { getApiBaseUrl, getApiErrorMessage } from '../lib/api';
 import { normalizeChartPoints, toTimestamp } from '../lib/chartData';
 import Leaderboard from '../components/Leaderboard';
+import CompetitionDateEditor from '../components/CompetitionDateEditor';
+import { canEditCompetitionDates } from '../lib/competitionDates';
 import {
     CurriculumSummaryCard,
     GradeSummaryCard,
@@ -1988,6 +1990,18 @@ const Dashboard = () => {
             setIsLoading(false);
         }
     };
+
+    const handleCompetitionDatesUpdated = useCallback((competitionCode, updatedCompetition) => {
+        if (updatedCompetition) {
+            const normalized = normalizeCompetitionEntry(updatedCompetition);
+            if (normalized) {
+                setAllCompetitions((prev) => prev.map((entry) => (entry.code === competitionCode ? { ...entry, ...normalized } : entry)));
+                setFeaturedCompetitions((prev) => prev.map((entry) => (entry.code === competitionCode ? { ...entry, ...normalized } : entry)));
+                return;
+            }
+        }
+        fetchFeaturedCompetitions();
+    }, [fetchFeaturedCompetitions]);
 
     const toggleCompetitionOpen = async (competitionCode, currentStatus) => {
         setIsLoading(true);
@@ -4058,8 +4072,7 @@ const Dashboard = () => {
                                         <div key={comp.code} style={{ marginBottom: '10px' }}>
                                             <p>
                                                 <strong>{comp.name}</strong> (Code: {comp.code})<br />
-                                                Open: {comp.is_open ? '✅' : '❌'} | Featured: {comp.featured ? '⭐' : '☆'}<br />
-                                                {comp.start_date && comp.end_date ? `${new Date(comp.start_date).toLocaleDateString()} → ${new Date(comp.end_date).toLocaleDateString()}` : 'No dates set'}
+                                                Open: {comp.is_open ? '✅' : '❌'} | Featured: {comp.featured ? '⭐' : '☆'}
                                                 {comp.curriculum_enabled ? (
                                                     <>
                                                         <br />
@@ -4067,6 +4080,13 @@ const Dashboard = () => {
                                                     </>
                                                 ) : null}
                                             </p>
+                                            <CompetitionDateEditor
+                                                competition={comp}
+                                                username={username}
+                                                isAdmin={isAdmin}
+                                                currentUserId={currentUserId}
+                                                onUpdated={(updated) => handleCompetitionDatesUpdated(comp.code, updated)}
+                                            />
                                             <div style={{ display: 'flex', gap: 8 }}>
                                                 <button onClick={() => toggleCompetitionOpen(comp.code, comp.is_open)} disabled={isLoading}>
                                                     {comp.is_open ? 'Close Competition' : 'Open Competition'}
@@ -4232,6 +4252,23 @@ const Dashboard = () => {
                             </div>
 
                             {renderAccountDetails()}
+                            {selectedCompetitionRecord && canEditCompetitionDates({
+                                isAdmin,
+                                username,
+                                currentUserId,
+                                competition: selectedCompetitionRecord,
+                            }) ? (
+                                <div className="card section">
+                                    <h3>Competition Settings</h3>
+                                    <CompetitionDateEditor
+                                        competition={selectedCompetitionRecord}
+                                        username={username}
+                                        isAdmin={isAdmin}
+                                        currentUserId={currentUserId}
+                                        onUpdated={(updated) => handleCompetitionDatesUpdated(selectedCompetitionRecord.code, updated)}
+                                    />
+                                </div>
+                            ) : null}
                             {renderPortfolioBox()}
                             {renderTradeBox()}
                             <CurriculumSummaryCard overview={curriculumOverview} />
