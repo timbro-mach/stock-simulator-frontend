@@ -2720,16 +2720,10 @@ const Dashboard = () => {
 
         window.addEventListener('focus', handleFocusRefresh);
         document.addEventListener('visibilitychange', handleVisibilityRefresh);
-        const pollTimer = window.setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                setCurriculumRefreshTick((value) => value + 1);
-            }
-        }, 30000);
 
         return () => {
             window.removeEventListener('focus', handleFocusRefresh);
             document.removeEventListener('visibilitychange', handleVisibilityRefresh);
-            window.clearInterval(pollTimer);
         };
     }, [curriculumOverview?.curriculum_enabled, isLoggedIn, selectedCompetitionCode, showTrading, username]);
 
