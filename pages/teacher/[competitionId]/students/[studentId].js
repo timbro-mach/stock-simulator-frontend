@@ -76,24 +76,163 @@ const mapValidationMessage = (message) => {
   return found || message || 'Unable to submit grade.';
 };
 
-const formatTimestamp = (value) => {
-  if (!value) return '—';
+const formatSubmittedAt = (value) => {
+  if (!value) return null;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString();
+  if (Number.isNaN(date.getTime())) return null;
+  const datePart = date.toLocaleDateString(undefined, { dateStyle: 'medium' });
+  const timePart = date.toLocaleTimeString(undefined, { timeStyle: 'short' });
+  return `${datePart}, ${timePart}`;
 };
 
-const getSubmissionPreview = (submissionContent) => {
-  if (submissionContent == null) return 'No submission payload';
-  if (typeof submissionContent === 'string') {
-    return submissionContent.length > 160 ? `${submissionContent.slice(0, 160)}…` : submissionContent;
+const getFeedback = (item) => (item && typeof item.feedback === 'object' && item.feedback !== null ? item.feedback : {});
+
+const getSubmissionAnswers = (item) => {
+  const content = item?.submissionContent;
+  if (content == null) return { status: 'empty', answers: [] };
+  if (Array.isArray(content.answers)) return { status: 'ok', answers: content.answers };
+  return { status: 'malformed', answers: [] };
+};
+
+const SECTION_ORDER = ['pending', 'graded', 'not_submitted'];
+
+const groupItemsByStatus = (items) => {
+  const groups = { pending: [], graded: [], not_submitted: [] };
+  for (const item of items) {
+    const status = normalizeGradingStatus(item?.gradingStatus);
+    if (status === 'graded') groups.graded.push(item);
+    else if (status === 'not_submitted') groups.not_submitted.push(item);
+    else groups.pending.push(item);
   }
-  try {
-    const compact = JSON.stringify(submissionContent);
-    return compact.length > 160 ? `${compact.slice(0, 160)}…` : compact;
-  } catch (error) {
-    return 'Submission payload available';
-  }
+  return groups;
+};
+
+const SECTION_META = {
+  pending: { label: 'Needs grading', defaultOpen: true },
+  graded: { label: 'Graded', defaultOpen: false },
+  not_submitted: { label: 'Not submitted', defaultOpen: false },
+};
+
+const SubmissionRow = ({ item, onOpenGradeModal }) => {
+  const status = normalizeGradingStatus(item?.gradingStatus);
+  const feedback = getFeedback(item);
+  const pendingManualGrade = feedback.pendingManualGrade === true;
+  const lateSubmission = feedback.lateSubmission === true;
+  const canManualGrade = canShowManualGradeAction(item);
+  const questionGrades = Array.isArray(item?.questionGrades) ? item.questionGrades : [];
+  const { status: payloadStatus, answers } = getSubmissionAnswers(item);
+  const submittedLabel = formatSubmittedAt(item?.submittedAt);
+  const gradedLabel = formatSubmittedAt(item?.gradedAt);
+  const gradedBy = item?.gradedByUsername || item?.gradedByUserId || '';
+  const instructorComment = typeof feedback.instructorComment === 'string' ? feedback.instructorComment.trim() : '';
+  const comments = typeof feedback.comments === 'string' ? feedback.comments.trim() : '';
+  const rubricNotes = typeof item?.rubricNotes === 'string' ? item.rubricNotes.trim() : '';
+
+  return (
+    <div className="teacher-student-row">
+      <div className="teacher-student-row-head">
+        <div className="teacher-student-week-badge">
+          {Number.isFinite(Number(item?.moduleWeek)) ? `W${item.moduleWeek}` : '—'}
+        </div>
+        <div className="teacher-student-row-title-block">
+          <div className="teacher-student-row-title">{item?.title || 'Untitled'}</div>
+          {item?.moduleTitle ? (
+            <div className="note teacher-student-row-subtitle">{item.moduleTitle}</div>
+          ) : null}
+          <div className="teacher-student-row-pills">
+            <span className="pill" style={getStatusBadgeStyles(status)}>{status.replace('_', ' ')}</span>
+            {pendingManualGrade ? (
+              <span className="pill teacher-student-pill-warn">Needs grading</span>
+            ) : null}
+            {lateSubmission ? (
+              <span className="pill teacher-student-pill-late">Late</span>
+            ) : null}
+            {item?.assignmentType ? (
+              <span className="note teacher-student-row-type">{item.assignmentType}</span>
+            ) : null}
+          </div>
+        </div>
+        <div className="teacher-student-row-score">
+          <div className="teacher-student-row-points">{asPoints(item?.pointsEarned, item?.pointsPossible)}</div>
+          <div className="note">{asPercent(item?.percentage)}</div>
+        </div>
+        <div className="teacher-student-row-actions">
+          {canManualGrade ? (
+            <button type="button" onClick={() => onOpenGradeModal(item)}>Manual Grade</button>
+          ) : null}
+        </div>
+      </div>
+
+      {submittedLabel ? (
+        <div className="note teacher-student-row-subline">Submitted {submittedLabel}</div>
+      ) : null}
+
+      {payloadStatus === 'ok' && answers.length > 0 ? (
+        <div className="teacher-student-answers">
+          {answers.map((answer, idx) => {
+            const pointsPossibleKey = `question${idx + 1}PointsPossible`;
+            const feedbackPointsPossible = feedback?.[pointsPossibleKey];
+            const matchedGrade = questionGrades.find(
+              (grade) => grade?.questionId && answer?.questionId && grade.questionId === answer.questionId,
+            );
+            const pointsAwarded = matchedGrade && Number.isFinite(Number(matchedGrade.pointsAwarded))
+              ? Number(matchedGrade.pointsAwarded)
+              : null;
+            const pointsPossible = matchedGrade && Number.isFinite(Number(matchedGrade.pointsPossible))
+              ? Number(matchedGrade.pointsPossible)
+              : (Number.isFinite(Number(feedbackPointsPossible)) ? Number(feedbackPointsPossible) : null);
+            const response = typeof answer?.response === 'string' ? answer.response : '';
+            return (
+              <div key={answer?.questionId || `q-${idx}`} className="teacher-student-answer">
+                <div className="teacher-student-answer-head">
+                  <strong>Question {idx + 1}</strong>
+                  <span className="note">
+                    {pointsAwarded !== null ? pointsAwarded : '—'}
+                    {' / '}
+                    {pointsPossible !== null ? pointsPossible : '?'}
+                  </span>
+                </div>
+                {response ? (
+                  <div className="teacher-student-answer-body">{response}</div>
+                ) : (
+                  <div className="note">No response provided.</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : payloadStatus === 'malformed' ? (
+        <div className="teacher-student-row-subline">
+          <div className="note">Unable to display submission.</div>
+          <details className="teacher-student-details">
+            <summary>View raw</summary>
+            <pre className="teacher-student-pre">{JSON.stringify(item?.submissionContent ?? null, null, 2)}</pre>
+          </details>
+        </div>
+      ) : null}
+
+      {(instructorComment || comments || rubricNotes) ? (
+        <div className="teacher-student-row-feedback">
+          {instructorComment ? (
+            <div><span className="note">Instructor comment:</span> {instructorComment}</div>
+          ) : null}
+          {comments && comments !== instructorComment ? (
+            <div><span className="note">Comments:</span> {comments}</div>
+          ) : null}
+          {rubricNotes ? (
+            <div><span className="note">Rubric:</span> {rubricNotes}</div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {(gradedBy || gradedLabel) ? (
+        <div className="note teacher-student-row-subline">
+          {gradedBy ? `Graded by ${gradedBy}` : 'Graded'}
+          {gradedLabel ? ` · ${gradedLabel}` : ''}
+        </div>
+      ) : null}
+    </div>
+  );
 };
 
 export default function TeacherStudentDetailPage() {
@@ -338,73 +477,58 @@ export default function TeacherStudentDetailPage() {
               <button type="button" onClick={openTradesModal}>View Trade Blotter</button>
             </div>
 
-            <div style={{ overflowX: 'auto' }} className="teacher-student-table-wrap">
-              <table className="teacher-student-table">
-                <thead>
-                  <tr>
-                    <th>Week</th>
-                    <th>Module</th>
-                    <th>Type</th>
-                    <th>Title</th>
-                    <th>Points</th>
-                    <th>Percentage</th>
-                    <th>Status</th>
-                    <th>Submission</th>
-                    <th>Feedback</th>
-                    <th>Graded By</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const status = normalizeGradingStatus(item.gradingStatus);
-                    const canManualGrade = canShowManualGradeAction(item);
-                    return (
-                      <tr key={`${item.assignmentId}-${item.moduleId}`}>
-                        <td>{item.moduleWeek}</td>
-                        <td>{item.moduleTitle}</td>
-                        <td>{item.assignmentType}</td>
-                        <td>{item.title}</td>
-                        <td>{asPoints(item.pointsEarned, item.pointsPossible)}</td>
-                        <td>{asPercent(item.percentage)}</td>
-                        <td>
-                          <span className="pill" style={getStatusBadgeStyles(status)}>{status}</span>
-                        </td>
-                        <td>
-                          <div className="note">Submitted: {formatTimestamp(item.submittedAt)}</div>
-                          {Array.isArray(item?.questionGrades) && item.questionGrades.length > 0 ? (
-                            <div className="note teacher-student-question-grades">
-                              {item.questionGrades.map((questionGrade) => (
-                                <div key={`${item.assignmentId}-${questionGrade.questionId}`} className="teacher-student-question-grade-pill">
-                                  {questionGrade.questionId}: {asPoints(questionGrade.pointsAwarded, questionGrade.pointsPossible)}
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                          <details className="teacher-student-details">
-                            <summary>{getSubmissionPreview(item.submissionContent)}</summary>
-                            <pre className="teacher-student-pre">{JSON.stringify(item.submissionContent || null, null, 2)}</pre>
-                          </details>
-                        </td>
-                        <td>
-                          <div className="note">{typeof item.feedback === 'string' ? item.feedback : JSON.stringify(item.feedback || {})}</div>
-                          <div className="note teacher-student-rubric-note">Rubric: {item.rubricNotes || '—'}</div>
-                        </td>
-                        <td>
-                          <div className="note">{item.gradedByUsername || item.gradedByUserId || '—'}</div>
-                          <div className="note">{formatTimestamp(item.gradedAt)}</div>
-                        </td>
-                        <td>
-                          {canManualGrade ? (
-                            <button type="button" onClick={() => openGradeModal(item)}>Manual Grade</button>
-                          ) : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {(() => {
+              const groups = groupItemsByStatus(items);
+              return SECTION_ORDER.map((sectionKey) => {
+                const sectionItems = groups[sectionKey];
+                if (sectionItems.length === 0) return null;
+                const meta = SECTION_META[sectionKey];
+                return (
+                  <details
+                    key={sectionKey}
+                    className="teacher-student-section"
+                    open={meta.defaultOpen || undefined}
+                  >
+                    <summary className="teacher-student-section-summary">
+                      {meta.label} <span className="note">({sectionItems.length})</span>
+                    </summary>
+                    {sectionKey === 'not_submitted' ? (
+                      <ul className="teacher-student-notsubmitted-list">
+                        {sectionItems.map((item) => (
+                          <li
+                            key={`${item.assignmentId}-${item.moduleId}`}
+                            className="teacher-student-notsubmitted-item"
+                          >
+                            <span className="teacher-student-week-badge">
+                              {Number.isFinite(Number(item.moduleWeek)) ? `W${item.moduleWeek}` : '—'}
+                            </span>
+                            <span className="teacher-student-notsubmitted-title">
+                              {item.title || 'Untitled'}
+                              {item.moduleTitle ? (
+                                <span className="note"> · {item.moduleTitle}</span>
+                              ) : null}
+                              {item.assignmentType ? (
+                                <span className="note"> · {item.assignmentType}</span>
+                              ) : null}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="teacher-student-rows">
+                        {sectionItems.map((item) => (
+                          <SubmissionRow
+                            key={`${item.assignmentId}-${item.moduleId}`}
+                            item={item}
+                            onOpenGradeModal={openGradeModal}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </details>
+                );
+              });
+            })()}
           </>
         ) : null}
       </div>
