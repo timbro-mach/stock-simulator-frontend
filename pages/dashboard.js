@@ -4515,6 +4515,9 @@ const Dashboard = () => {
                                 autoComplete="off"
                                 disabled={isLoading}
                             />
+                            <p className="note" style={{ marginTop: -6, marginBottom: 8 }}>
+                                Usernames are not case-sensitive.
+                            </p>
                             <input
                                 type="email"
                                 placeholder="Enter email"
@@ -4583,9 +4586,13 @@ const Dashboard = () => {
                                 </p>
                             </div>
 
+                            <label htmlFor="login-username" className="note" style={{ display: 'block', marginBottom: 4 }}>
+                                Username or email
+                            </label>
                             <input
+                                id="login-username"
                                 type="text"
-                                placeholder="Enter username"
+                                placeholder="Username or email"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 autoComplete="off"
@@ -4616,6 +4623,8 @@ const Dashboard = () => {
                             </p>
                             <p className="note">
                                 <Link href="/forgot-password">Forgot password?</Link>
+                                {' · '}
+                                <Link href="/forgot-username">Forgot username?</Link>
                             </p>
                         </form>
                     )}
