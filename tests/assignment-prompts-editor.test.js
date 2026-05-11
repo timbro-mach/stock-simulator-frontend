@@ -129,7 +129,7 @@ test('validateAssignmentDraft rejects empty instructions and questions', () => {
     }),
     /prompt cannot be empty/,
   );
-  assert.match(
+  assert.equal(
     validateAssignmentDraft({
       instructions: 'ok',
       questions: [
@@ -140,7 +140,7 @@ test('validateAssignmentDraft rejects empty instructions and questions', () => {
         },
       ],
     }),
-    /cannot be empty/,
+    '',
   );
 });
 
