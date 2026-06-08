@@ -1821,7 +1821,14 @@ const Dashboard = () => {
         try {
             const res = await axios.post(`${BASE_URL}/login`, { username, password });
             if (res.data.username) {
-                localStorage.setItem('username', username);
+                // Persist the canonical username returned by the server, not the raw
+                // value the user typed. Logging in by email (or with different casing)
+                // would otherwise store an identifier that other endpoints, which match
+                // on username only, can't resolve — leaving the dashboard unable to load
+                // the user's competitions.
+                const resolvedUsername = res.data.username;
+                localStorage.setItem('username', resolvedUsername);
+                setUsername(resolvedUsername);
                 setIsLoggedIn(true);
                 if (res.data.is_admin !== undefined) setIsAdmin(res.data.is_admin);
                 if (res.data.teams) setTeams(res.data.teams);
